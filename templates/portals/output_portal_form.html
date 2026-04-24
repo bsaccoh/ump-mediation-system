@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - UMP Mediation{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            <div class="card mb-3">
+                <div class="card-header"><i class="bi bi-info-circle"></i> Basic Information</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+                            {{ form.name }}
+                            {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">Portal Type <span class="text-danger">*</span></label>
+                            {{ form.portal_type }}
+                            {% if form.portal_type.errors %}<div class="text-danger small mt-1">{{ form.portal_type.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">Stream Type</label>
+                            {{ form.stream_type }}
+                            {% if form.stream_type.errors %}<div class="text-danger small mt-1">{{ form.stream_type.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">Output Format</label>
+                            {{ form.output_format }}
+                            {% if form.output_format.errors %}<div class="text-danger small mt-1">{{ form.output_format.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-9 d-flex align-items-center gap-2 pt-4">
+                            <div class="form-check form-switch">
+                                {{ form.is_active }}
+                                <label class="form-check-label fw-semibold ms-1">Active</label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Description</label>
+                            {{ form.description }}
+                            {% if form.description.errors %}<div class="text-danger small mt-1">{{ form.description.errors }}</div>{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Connection fields — hidden for LOCAL type -->
+            <div class="card mb-3" id="connectionCard">
+                <div class="card-header"><i class="bi bi-hdd-network"></i> Connection Details</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label fw-semibold">Host</label>
+                            {{ form.host }}
+                            {% if form.host.errors %}<div class="text-danger small mt-1">{{ form.host.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Port</label>
+                            {{ form.port }}
+                            {% if form.port.errors %}<div class="text-danger small mt-1">{{ form.port.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Username</label>
+                            {{ form.username }}
+                            {% if form.username.errors %}<div class="text-danger small mt-1">{{ form.username.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Password</label>
+                            {{ form.password }}
+                            {% if form.password.errors %}<div class="text-danger small mt-1">{{ form.password.errors }}</div>{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header"><i class="bi bi-folder2-open"></i> Directory</div>
+                <div class="card-body">
+                    <label class="form-label fw-semibold">Directory Path</label>
+                    {{ form.directory }}
+                    {% if form.directory.errors %}<div class="text-danger small mt-1">{{ form.directory.errors }}</div>{% endif %}
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg"></i> Save
+                </button>
+                <a href="{% url 'portals:output_portal_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-lg"></i> Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const typeSelect = document.getElementById('{{ form.portal_type.id_for_label }}');
+    const connCard = document.getElementById('connectionCard');
+
+    function toggle() {
+        const isLocal = typeSelect.value === 'LOCAL';
+        connCard.style.display = isLocal ? 'none' : '';
+    }
+
+    typeSelect.addEventListener('change', toggle);
+    toggle();
+})();
+</script>
+{% endblock %}

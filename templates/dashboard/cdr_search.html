@@ -1,0 +1,657 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}CDR Search - UMP Mediation{% endblock %}
+{% block page_title %}CDR Search{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-search"></i> Unified CDR Search</span>
+
+    </div>
+    <div class="card-body">
+        <form id="searchForm" autocomplete="off">
+            {% csrf_token %}
+
+            <!-- Row 1: Stream selector + common filters -->
+            <div class="row g-2">
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">Stream</label>
+                    <select name="stream" id="streamSelect" class="form-select form-select-sm" onchange="onStreamChange()">
+                        <option value="MSC" selected>MSC (Voice/SMS)</option>
+                        <option value="PGW">PGW (4G Data)</option>
+                        <option value="SGSN">SGSN (2G/3G Data)</option>
+                        <option value="SGW">SGW (4G S-GW)</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">Calling / MSISDN</label>
+                    <input type="text" name="calling_number" class="form-control form-control-sm" placeholder="e.g. 23276...">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold" id="labelCalled">Called Number</label>
+                    <input type="text" name="called_number" id="inputCalled" class="form-control form-control-sm" placeholder="e.g. 23290...">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">IMSI</label>
+                    <input type="text" name="imsi" class="form-control form-control-sm" placeholder="IMSI">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">IMEI</label>
+                    <input type="text" name="imei" class="form-control form-control-sm" placeholder="IMEI">
+                </div>
+                <div class="col-md-2">
+                    <!-- PGW: APN filter (hidden for MSC) -->
+                    <div id="filterAPN" style="display:none;">
+                        <label class="form-label small fw-bold">APN</label>
+                        <input type="text" name="apn" class="form-control form-control-sm" placeholder="e.g. internet">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 2: Stream-specific + dates -->
+            <div class="row g-2 mt-1">
+                <!-- MSC filters -->
+                <div class="col-md-2" id="filterServiceType">
+                    <label class="form-label small fw-bold">Service Type</label>
+                    <select name="service_type" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="VOICE">Voice</option>
+                        <option value="SMS">SMS</option>
+                        <option value="DATA">Data</option>
+                        <option value="SUPPLEMENTARY">Supplementary</option>
+                    </select>
+                </div>
+                <div class="col-md-2" id="filterRecordType">
+                    <label class="form-label small fw-bold">Record Type</label>
+                    <div class="dropdown" id="recordTypeDropdown">
+                        <button class="form-select form-select-sm text-start" type="button"
+                                data-bs-toggle="dropdown" data-bs-auto-close="outside" id="recordTypeBtn">
+                            All
+                        </button>
+                        <!-- MSC record types -->
+                        <ul class="dropdown-menu px-2 py-1" style="min-width:200px; max-height:260px; overflow-y:auto; font-size:0.85rem;" id="mscRecordTypes">
+                            <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="MOC"> MOC (Outgoing Call)</label></li>
+                            <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="MTC"> MTC (Incoming Call)</label></li>
+                            <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="CF"> CF (Call Forward)</label></li>
+                            <li><hr class="dropdown-divider my-1"></li>
+                            <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="SMSMO"> SMS-MO (Outgoing)</label></li>
+                            <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="SMSMT"> SMS-MT (Incoming)</label></li>
+                            <li><hr class="dropdown-divider my-1"></li>
+                            <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="GWOUT"> GWOUT (Gateway Out)</label></li>
+                            <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="GWIN"> GWIN (Gateway In)</label></li>
+                            <li><hr class="dropdown-divider my-1"></li>
+                            <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="EXT"> EXT</label></li>
+                            <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="MTRF"> MTRF</label></li>
+                            <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="EMERG"> EMERG</label></li>
+                            <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="LOCUPD"> LOCUPD</label></li>
+                            <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="SS"> SS (Supplementary)</label></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- PGW filters (hidden by default) -->
+                <div class="col-md-2" id="filterRatType" style="display:none;">
+                    <label class="form-label small fw-bold">RAT Type</label>
+                    <select name="rat_type" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="6">6 - EUTRAN (4G/LTE)</option>
+                        <option value="1">1 - UTRAN (3G)</option>
+                        <option value="2">2 - GERAN (2G)</option>
+                        <option value="10">10 - NR (5G)</option>
+                        <option value="8">8 - EUTRAN NB-IoT</option>
+                        <option value="9">9 - LTE-M</option>
+                    </select>
+                </div>
+
+                <!-- SGSN filters (hidden by default) -->
+                <div class="col-md-2" id="filterSgsnRatType" style="display:none;">
+                    <label class="form-label small fw-bold">RAT Type</label>
+                    <select name="rat_type" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="GERAN">GERAN (2G)</option>
+                        <option value="UTRAN">UTRAN (3G)</option>
+                        <option value="2">2 - GERAN</option>
+                        <option value="1">1 - UTRAN</option>
+                    </select>
+                </div>
+                <div class="col-md-2" id="filterSgsnRecordType" style="display:none;">
+                    <label class="form-label small fw-bold">Record Type</label>
+                    <select name="record_type" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="SGSN-CDR">SGSN-CDR (Data Session)</option>
+                    </select>
+                </div>
+
+                <!-- SGW filters (hidden by default) -->
+                <div class="col-md-2" id="filterSgwRatType" style="display:none;">
+                    <label class="form-label small fw-bold">RAT Type</label>
+                    <select name="rat_type" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="6">6 - EUTRAN (4G/LTE)</option>
+                        <option value="1">1 - UTRAN (3G)</option>
+                        <option value="2">2 - GERAN (2G)</option>
+                        <option value="10">10 - NR (5G)</option>
+                    </select>
+                </div>
+                <div class="col-md-2" id="filterSgwRecordType" style="display:none;">
+                    <label class="form-label small fw-bold">Record Type</label>
+                    <select name="record_type" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="SGW-CDR">SGW-CDR</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">Source</label>
+                    <select name="source_id" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        {% for src in sources %}
+                        <option value="{{ src.id }}">{{ src.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">Start Date</label>
+                    <input type="date" name="start_date" class="form-control form-control-sm" autocomplete="new-password">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">End Date</label>
+                    <input type="date" name="end_date" class="form-control form-control-sm" autocomplete="new-password">
+                </div>
+                <div class="col-md-2 d-flex align-items-end gap-1">
+                    <button type="submit" class="btn btn-primary btn-sm flex-fill">
+                        <i class="bi bi-search"></i> Search
+                    </button>
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick="exportCSV()" id="btnExport" style="display:none;">
+                        <i class="bi bi-download"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearForm()">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Stats Bar (MSC) -->
+<div id="statsMSC" class="row mb-3" style="display:none;">
+    <div class="col-md-4"><div class="card stat-card py-2"><div class="value text-primary" id="statTotal">0</div><div class="label">Records Found</div></div></div>
+    <div class="col-md-4"><div class="card stat-card py-2"><div class="value text-success" id="statDuration">0</div><div class="label">Total Duration (s)</div></div></div>
+    <div class="col-md-4"><div class="card stat-card py-2"><div class="value text-info" id="statAvgDuration">0</div><div class="label">Avg Duration (s)</div></div></div>
+</div>
+
+<!-- Stats Bar (PGW) -->
+<div id="statsPGW" class="row mb-3" style="display:none;">
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="value text-primary" id="statTotalPGW">0</div><div class="label">Records Found</div></div></div>
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="value text-success" id="statDataMB">0</div><div class="label">Total Data (MB)</div></div></div>
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="value text-warning" id="statUpload">0</div><div class="label">Upload</div></div></div>
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="value text-info" id="statDownload">0</div><div class="label">Download</div></div></div>
+</div>
+
+<!-- Stats Bar (SGSN) -->
+<div id="statsSGSN" class="row mb-3" style="display:none;">
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="value text-primary" id="statTotalSGSN">0</div><div class="label">Records Found</div></div></div>
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="value text-success" id="statDataMBSGSN">0</div><div class="label">Total Data (MB)</div></div></div>
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="value text-warning" id="statUploadSGSN">0</div><div class="label">Upload</div></div></div>
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="value text-info" id="statDownloadSGSN">0</div><div class="label">Download</div></div></div>
+</div>
+
+<!-- Stats Bar (SGW) -->
+<div id="statsSGW" class="row mb-3" style="display:none;">
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="value text-primary" id="statTotalSGW">0</div><div class="label">Records Found</div></div></div>
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="value text-success" id="statDataMBSGW">0</div><div class="label">Total Data (MB)</div></div></div>
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="value text-warning" id="statUploadSGW">0</div><div class="label">Upload</div></div></div>
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="value text-info" id="statDownloadSGW">0</div><div class="label">Download</div></div></div>
+</div>
+
+<!-- Message -->
+<div id="messageBox" class="alert alert-info" style="display:none;"></div>
+
+<!-- Results Table -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0" id="resultsTable">
+                <thead class="table-light" id="tableHead">
+                    <!-- Populated by JS based on stream -->
+                </thead>
+                <tbody id="resultsBody">
+                    <tr><td colspan="11" class="text-center py-4 text-muted">Select a stream and click Search</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center" id="paginationBar" style="display:none !important;">
+        <small class="text-muted">Showing <span id="pagShowing"></span> of <span id="pagTotal"></span> records</small>
+        <nav><ul class="pagination pagination-sm mb-0" id="pagNumbers"></ul></nav>
+    </div>
+</div>
+
+<script>
+let currentPage = 1;
+const perPage = 20;
+
+function getCSRFToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+}
+function getStream() {
+    return document.getElementById('streamSelect').value;
+}
+
+function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return '0';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1073741824) return (bytes / 1048576).toFixed(2) + ' MB';
+    return (bytes / 1073741824).toFixed(2) + ' GB';
+}
+
+// --- Stream change: toggle filters + table headers ---
+function onStreamChange() {
+    const stream = getStream();
+
+    // MSC-specific filters
+    document.getElementById('filterServiceType').style.display = stream === 'MSC' ? '' : 'none';
+    document.getElementById('filterRecordType').style.display = stream === 'MSC' ? '' : 'none';
+
+    // PGW-specific filters
+    document.getElementById('filterRatType').style.display = stream === 'PGW' ? '' : 'none';
+    document.getElementById('filterAPN').style.display = (stream === 'PGW' || stream === 'SGSN' || stream === 'SGW') ? '' : 'none';
+
+    // SGSN-specific filters
+    document.getElementById('filterSgsnRatType').style.display = stream === 'SGSN' ? '' : 'none';
+    document.getElementById('filterSgsnRecordType').style.display = stream === 'SGSN' ? '' : 'none';
+
+    // SGW-specific filters
+    document.getElementById('filterSgwRatType').style.display = stream === 'SGW' ? '' : 'none';
+    document.getElementById('filterSgwRecordType').style.display = stream === 'SGW' ? '' : 'none';
+
+    // Called Number label
+    const labelCalled = document.getElementById('labelCalled');
+    const inputCalled = document.getElementById('inputCalled');
+    if (stream === 'PGW' || stream === 'SGSN' || stream === 'SGW') {
+        labelCalled.textContent = 'Called / APN';
+        inputCalled.placeholder = 'e.g. internet';
+    } else {
+        labelCalled.textContent = 'Called Number';
+        inputCalled.placeholder = 'e.g. 23290...';
+    }
+
+    // Update table headers
+    updateTableHeaders(stream);
+}
+
+function updateTableHeaders(stream) {
+    const thead = document.getElementById('tableHead');
+    if (stream === 'MSC') {
+        thead.innerHTML = `<tr>
+            <th>Record Type</th><th>Service</th><th>Direction</th>
+            <th>Calling</th><th>Called</th><th>IMSI</th>
+            <th>Start Time</th><th>Duration</th><th>MSC</th>
+            <th>Status</th><th></th>
+        </tr>`;
+    } else if (stream === 'PGW') {
+        thead.innerHTML = `<tr>
+            <th>Type</th><th>MSISDN</th><th>APN</th>
+            <th>IMSI</th><th>Start Time</th><th>Duration</th>
+            <th>Upload</th><th>Download</th><th>Total MB</th>
+            <th>RAT</th><th>Technology</th><th>Status</th><th></th>
+        </tr>`;
+    } else if (stream === 'SGSN') {
+        thead.innerHTML = `<tr>
+            <th>Type</th><th>Service</th><th>MSISDN</th><th>APN</th>
+            <th>IMSI</th><th>Start Time</th><th>Duration</th>
+            <th>Upload</th><th>Download</th><th>MB</th>
+            <th>RAT</th><th>LAC</th><th>RAC</th><th>Status</th><th></th>
+        </tr>`;
+    } else {
+        thead.innerHTML = `<tr>
+            <th>Type</th><th>MSISDN</th><th>APN</th>
+            <th>IMSI</th><th>Start Time</th><th>Duration</th>
+            <th>Upload</th><th>Download</th><th>Total MB</th>
+            <th>RAT</th><th>Technology</th><th>Status</th><th></th>
+        </tr>`;
+    }
+}
+
+// --- Record Type multi-select helpers ---
+function getSelectedRecordTypes() {
+    return Array.from(document.querySelectorAll('.rt-check:checked')).map(cb => cb.value);
+}
+function updateRecordTypeLabel() {
+    const selected = getSelectedRecordTypes();
+    const btn = document.getElementById('recordTypeBtn');
+    if (selected.length === 0) btn.textContent = 'All';
+    else if (selected.length <= 2) btn.textContent = selected.join(', ');
+    else btn.textContent = selected.slice(0, 2).join(', ') + ' +' + (selected.length - 2);
+}
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('rt-check')) updateRecordTypeLabel();
+});
+
+// --- Clear ---
+function clearForm() {
+    const form = document.getElementById('searchForm');
+    form.reset();
+    form.querySelectorAll('input:not([name=csrfmiddlewaretoken]), select:not([name=stream])').forEach(el => { el.value = ''; });
+    document.querySelectorAll('.rt-check').forEach(cb => { cb.checked = false; });
+    updateRecordTypeLabel();
+    onStreamChange();
+
+    document.getElementById('resultsBody').innerHTML = '<tr><td colspan="13" class="text-center py-4 text-muted">Select a stream and click Search</td></tr>';
+    document.getElementById('statsMSC').style.display = 'none';
+    document.getElementById('statsPGW').style.display = 'none';
+    document.getElementById('statsSGSN').style.display = 'none';
+    document.getElementById('statsSGW').style.display = 'none';
+    document.getElementById('messageBox').style.display = 'none';
+    document.getElementById('paginationBar').style.cssText = 'display:none !important';
+    document.getElementById('btnExport').style.display = 'none';
+    sessionStorage.removeItem('cdr_search_state');
+}
+
+// --- Save/Restore state ---
+function saveSearchState() {
+    const form = document.getElementById('searchForm');
+    const state = { page: currentPage, stream: getStream(), record_types: getSelectedRecordTypes() };
+    form.querySelectorAll('input:not([type=hidden]):not([type=checkbox]), select').forEach(el => {
+        if (el.name) state[el.name] = el.value;
+    });
+    sessionStorage.setItem('cdr_search_state', JSON.stringify(state));
+}
+
+function restoreSearchState() {
+    const saved = sessionStorage.getItem('cdr_search_state');
+    if (!saved) return false;
+    try {
+        const state = JSON.parse(saved);
+        const form = document.getElementById('searchForm');
+        let hasFilter = false;
+        // Restore stream first
+        if (state.stream) {
+            document.getElementById('streamSelect').value = state.stream;
+            onStreamChange();
+        }
+        form.querySelectorAll('input:not([type=hidden]):not([type=checkbox]), select').forEach(el => {
+            if (el.name && state[el.name] !== undefined) {
+                el.value = state[el.name];
+                if (state[el.name] && el.name !== 'stream') hasFilter = true;
+            }
+        });
+        if (state.record_types && state.record_types.length > 0) {
+            document.querySelectorAll('.rt-check').forEach(cb => {
+                cb.checked = state.record_types.includes(cb.value);
+            });
+            updateRecordTypeLabel();
+            hasFilter = true;
+        }
+        if (state.page) currentPage = state.page;
+        return hasFilter;
+    } catch (e) { return false; }
+}
+
+// --- Search ---
+document.getElementById('searchForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    currentPage = 1;
+    doSearch();
+});
+
+function doSearch() {
+    const form = document.getElementById('searchForm');
+    const stream = getStream();
+
+    const params = new URLSearchParams();
+    params.append('csrfmiddlewaretoken', getCSRFToken());
+    params.append('page', currentPage);
+    params.append('per_page', perPage);
+    params.append('stream', stream);
+
+    form.querySelectorAll('input:not([type=hidden]):not([type=checkbox]), select').forEach(el => {
+        if (el.name && el.value && el.name !== 'csrfmiddlewaretoken') {
+            params.append(el.name, el.value.trim());
+        }
+    });
+
+    // MSC record types
+    if (stream === 'MSC') {
+        const selectedTypes = getSelectedRecordTypes();
+        if (selectedTypes.length > 0) params.append('record_type', selectedTypes.join(','));
+    }
+
+    saveSearchState();
+
+    const colCount = stream === 'MSC' ? 11 : 13;
+    document.getElementById('resultsBody').innerHTML = `<tr><td colspan="${colCount}" class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Searching ${stream}...</td></tr>`;
+
+    fetch("{% url 'dashboard:cdr_search_api' %}", {
+        method: 'POST',
+        body: params,
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': getCSRFToken()
+        }
+    })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(data => {
+        if (!data.success) {
+            document.getElementById('resultsBody').innerHTML = `<tr><td colspan="${colCount}" class="text-center py-3 text-danger">${data.message}</td></tr>`;
+            return;
+        }
+
+        // Stats
+        const s = data.stats;
+        document.getElementById('statsMSC').style.display = 'none';
+        document.getElementById('statsPGW').style.display = 'none';
+        document.getElementById('statsSGSN').style.display = 'none';
+        document.getElementById('statsSGW').style.display = 'none';
+        if (stream === 'MSC') {
+            document.getElementById('statTotal').textContent = (s.total_records || 0).toLocaleString();
+            document.getElementById('statDuration').textContent = (s.total_duration || 0).toLocaleString();
+            document.getElementById('statAvgDuration').textContent = s.avg_duration || 0;
+            document.getElementById('statsMSC').style.display = data.records.length > 0 ? 'flex' : 'none';
+        } else if (stream === 'PGW') {
+            document.getElementById('statTotalPGW').textContent = (s.total_records || 0).toLocaleString();
+            document.getElementById('statDataMB').textContent = (s.total_data_mb || 0) + ' MB';
+            document.getElementById('statUpload').textContent = formatBytes(s.total_data_up);
+            document.getElementById('statDownload').textContent = formatBytes(s.total_data_down);
+            document.getElementById('statsPGW').style.display = data.records.length > 0 ? 'flex' : 'none';
+        } else if (stream === 'SGSN') {
+            document.getElementById('statTotalSGSN').textContent = (s.total_records || 0).toLocaleString();
+            document.getElementById('statDataMBSGSN').textContent = (s.total_data_mb || 0) + ' MB';
+            document.getElementById('statUploadSGSN').textContent = formatBytes(s.total_data_up);
+            document.getElementById('statDownloadSGSN').textContent = formatBytes(s.total_data_down);
+            document.getElementById('statsSGSN').style.display = data.records.length > 0 ? 'flex' : 'none';
+        } else {
+            document.getElementById('statTotalSGW').textContent = (s.total_records || 0).toLocaleString();
+            document.getElementById('statDataMBSGW').textContent = (s.total_data_mb || 0) + ' MB';
+            document.getElementById('statUploadSGW').textContent = formatBytes(s.total_data_up);
+            document.getElementById('statDownloadSGW').textContent = formatBytes(s.total_data_down);
+            document.getElementById('statsSGW').style.display = data.records.length > 0 ? 'flex' : 'none';
+        }
+
+        document.getElementById('btnExport').style.display = (s.total_records || 0) > 0 ? 'inline-block' : 'none';
+
+        // Message
+        const msgBox = document.getElementById('messageBox');
+        if (data.message) { msgBox.textContent = data.message; msgBox.style.display = 'block'; }
+        else { msgBox.style.display = 'none'; }
+
+        // Records
+        const tbody = document.getElementById('resultsBody');
+        if (data.records.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="${colCount}" class="text-center py-4 text-muted">No records found</td></tr>`;
+            document.getElementById('paginationBar').style.cssText = 'display:none !important';
+            return;
+        }
+
+        let html = '';
+        if (stream === 'MSC') {
+            data.records.forEach(r => {
+                html += `<tr>
+                    <td>${r.record_type || '-'}</td>
+                    <td>${r.service_type || '-'}</td>
+                    <td>${r.call_direction || '-'}</td>
+                    <td>${r.calling_number || '-'}</td>
+                    <td>${r.called_number || '-'}</td>
+                    <td>${r.imsi || '-'}</td>
+                    <td>${r.start_time || '-'}</td>
+                    <td>${r.duration != null ? r.duration + 's' : '-'}</td>
+                    <td>${r.msc_id || '-'}</td>
+                    <td>${r.status || '-'}</td>
+                    <td><a href="/record/msc/${r.id}/" class="btn btn-sm btn-outline-secondary py-0 px-1"><i class="bi bi-eye"></i></a></td>
+                </tr>`;
+            });
+        } else if (stream === 'PGW') {
+            data.records.forEach(r => {
+                html += `<tr>
+                    <td>${r.record_type || 'PGW-CDR'}</td>
+                    <td>${r.calling_number || '-'}</td>
+                    <td>${r.apn || '-'}</td>
+                    <td>${r.imsi || '-'}</td>
+                    <td>${r.start_time || '-'}</td>
+                    <td>${r.duration || 0}s</td>
+                    <td>${formatBytes(r.data_volume_up)}</td>
+                    <td>${formatBytes(r.data_volume_down)}</td>
+                    <td>${r.data_volume_mb || 0}</td>
+                    <td>${r.rat_type || '-'}</td>
+                    <td>${r.rat_type_name || '-'}</td>
+                    <td>${r.status || '-'}</td>
+                    <td><a href="/record/pgw/${r.id}/" class="btn btn-sm btn-outline-secondary py-0 px-1"><i class="bi bi-eye"></i></a></td>
+                </tr>`;
+            });
+        } else if (stream === 'SGSN') {
+            data.records.forEach(r => {
+                html += `<tr>
+                    <td><span class="badge bg-${r.service_type === 'SMS' ? 'success' : 'info'}">${r.record_type || 'SGSN-CDR'}</span></td>
+                    <td><small>${r.service_type || 'DATA'}</small></td>
+                    <td>${r.calling_number || '-'}</td>
+                    <td>${r.apn || '-'}</td>
+                    <td><small>${r.imsi || '-'}</small></td>
+                    <td><small>${r.start_time || '-'}</small></td>
+                    <td>${r.duration || 0}s</td>
+                    <td><small>${formatBytes(r.data_volume_up)}</small></td>
+                    <td><small>${formatBytes(r.data_volume_down)}</small></td>
+                    <td>${r.data_volume_mb || 0}</td>
+                    <td><small>${r.rat_type || '-'}</small></td>
+                    <td><small>${r.lac || '-'}</small></td>
+                    <td><small>${r.rac || '-'}</small></td>
+                    <td><span class="badge bg-${r.status === 'VALID' ? 'success' : r.status === 'INVALID' ? 'danger' : 'warning'}">${r.status}</span></td>
+                    <td><a href="/record/sgsn/${r.id}/" class="btn btn-sm btn-outline-secondary py-0 px-1"><i class="bi bi-eye"></i></a></td>
+                </tr>`;
+            });
+        } else {
+            data.records.forEach(r => {
+                html += `<tr>
+                    <td>${r.record_type || 'SGW-CDR'}</td>
+                    <td>${r.calling_number || '-'}</td>
+                    <td>${r.apn || '-'}</td>
+                    <td>${r.imsi || '-'}</td>
+                    <td>${r.start_time || '-'}</td>
+                    <td>${r.duration || 0}s</td>
+                    <td><small>${formatBytes(r.data_volume_up)}</small></td>
+                    <td><small>${formatBytes(r.data_volume_down)}</small></td>
+                    <td>${r.data_volume_mb || 0}</td>
+                    <td>${r.rat_type || '-'}</td>
+                    <td>${r.rat_type_name || '-'}</td>
+                    <td><span class="badge bg-${r.status === 'VALID' ? 'success' : r.status === 'INVALID' ? 'danger' : 'warning'}">${r.status}</span></td>
+                    <td><a href="/record/sgw/${r.id}/" class="btn btn-sm btn-outline-secondary py-0 px-1"><i class="bi bi-eye"></i></a></td>
+                </tr>`;
+            });
+        }
+        tbody.innerHTML = html;
+
+        // Pagination
+        const pag = data.pagination;
+        const pagBar = document.getElementById('paginationBar');
+        if (pag.pages > 1) {
+            pagBar.style.cssText = 'display:flex !important';
+            const start = (pag.page - 1) * pag.per_page + 1;
+            const end = Math.min(pag.page * pag.per_page, pag.total);
+            document.getElementById('pagShowing').textContent = start + '-' + end;
+            document.getElementById('pagTotal').textContent = pag.total.toLocaleString();
+            buildPagination(pag.page, pag.pages);
+        } else if (pag.total > 0) {
+            pagBar.style.cssText = 'display:flex !important';
+            document.getElementById('pagShowing').textContent = '1-' + pag.total;
+            document.getElementById('pagTotal').textContent = pag.total.toLocaleString();
+            document.getElementById('pagNumbers').innerHTML = '';
+        } else {
+            pagBar.style.cssText = 'display:none !important';
+        }
+    })
+    .catch(err => {
+        console.error('Search error:', err);
+        document.getElementById('resultsBody').innerHTML = `<tr><td colspan="${colCount}" class="text-center py-3 text-danger">Search error: ${err.message}</td></tr>`;
+    });
+}
+
+function goToPage(page) {
+    currentPage = page;
+    saveSearchState();
+    doSearch();
+    document.getElementById('resultsTable').scrollIntoView({ behavior: 'smooth' });
+}
+
+function buildPagination(current, totalPages) {
+    const ul = document.getElementById('pagNumbers');
+    let html = '';
+    html += `<li class="page-item ${current <= 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="event.preventDefault(); goToPage(${current - 1})"><i class="bi bi-chevron-left"></i></a></li>`;
+    if (current > 3) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); goToPage(1)">1</a></li>`;
+        if (current > 4) html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+    }
+    for (let i = Math.max(1, current - 2); i <= Math.min(totalPages, current + 2); i++) {
+        html += `<li class="page-item ${i === current ? 'active' : ''}"><a class="page-link" href="#" onclick="event.preventDefault(); goToPage(${i})">${i}</a></li>`;
+    }
+    if (current < totalPages - 2) {
+        if (current < totalPages - 3) html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); goToPage(${totalPages})">${totalPages.toLocaleString()}</a></li>`;
+    }
+    html += `<li class="page-item ${current >= totalPages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="event.preventDefault(); goToPage(${current + 1})"><i class="bi bi-chevron-right"></i></a></li>`;
+    ul.innerHTML = html;
+}
+
+// --- Export ---
+function exportCSV() {
+    const form = document.getElementById('searchForm');
+    const stream = getStream();
+    const params = new URLSearchParams();
+    params.append('csrfmiddlewaretoken', getCSRFToken());
+    params.append('stream', stream);
+
+    form.querySelectorAll('input:not([type=hidden]):not([type=checkbox]), select').forEach(el => {
+        if (el.name && el.value) params.append(el.name, el.value.trim());
+    });
+    if (stream === 'MSC') {
+        const selectedTypes = getSelectedRecordTypes();
+        if (selectedTypes.length > 0) params.append('record_type', selectedTypes.join(','));
+    }
+
+    const hiddenForm = document.createElement('form');
+    hiddenForm.method = 'POST';
+    hiddenForm.action = "{% url 'dashboard:cdr_export' %}";
+    hiddenForm.style.display = 'none';
+    for (const [key, val] of params.entries()) {
+        const input = document.createElement('input');
+        input.type = 'hidden'; input.name = key; input.value = val;
+        hiddenForm.appendChild(input);
+    }
+    document.body.appendChild(hiddenForm);
+    hiddenForm.submit();
+    document.body.removeChild(hiddenForm);
+}
+
+// --- Init ---
+document.addEventListener('DOMContentLoaded', function() {
+    // Always clear date fields first to prevent browser auto-fill
+    document.querySelectorAll('input[type="date"]').forEach(el => { el.value = ''; });
+    onStreamChange();
+    updateTableHeaders(getStream());
+    if (restoreSearchState()) {
+        doSearch();
+    }
+});
+</script>
+{% endblock %}

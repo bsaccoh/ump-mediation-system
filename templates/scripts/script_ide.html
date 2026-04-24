@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}GDC Scripts - UMP Mediation{% endblock %}
+{% block page_title %}GDC Scripts{% endblock %}
+
+{% block extra_css %}
+<!-- CodeMirror CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/eclipse.min.css">
+
+<style>
+    /* Full height layout minus topbar/padding */
+    .ide-container {
+        display: flex;
+        height: calc(100vh - 140px);
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    /* Left Sidebar: Script List */
+    .ide-sidebar {
+        width: 250px;
+        background: #f8f9fa;
+        border-right: 1px solid #ddd;
+        display: flex;
+        flex-direction: column;
+    }
+    .ide-sidebar-header {
+        padding: 10px;
+        border-bottom: 1px solid #ddd;
+    }
+    .ide-sidebar-content {
+        flex: 1;
+        overflow-y: auto;
+    }
+    
+    /* Accordion Styling */
+    .ide-accordion-btn {
+        width: 100%;
+        text-align: left;
+        background: none;
+        border: none;
+        padding: 6px 12px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #333;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .ide-accordion-btn:hover {
+        background: #e9ecef;
+    }
+    .ide-accordion-btn .bi-chevron-down {
+        transition: transform 0.2s;
+        font-size: 0.7rem;
+    }
+    .ide-accordion-btn.collapsed .bi-chevron-down {
+        transform: rotate(-90deg);
+    }
+    .ide-script-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .ide-script-item {
+        display: block;
+        padding: 5px 12px 5px 24px;
+        font-size: 0.8rem;
+        color: #555;
+        text-decoration: none;
+        border-left: 3px solid transparent;
+    }
+    .ide-script-item:hover {
+        background: #e9ecef;
+        color: #000;
+    }
+    .ide-script-item.active {
+        background: #e0eaf5;
+        color: #0d47a1;
+        border-left-color: #0d47a1;
+        font-weight: 600;
+    }
+
+    /* Right Editor Area */
+    .ide-editor {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+    }
+    
+    /* Toolbar */
+    .ide-toolbar {
+        padding: 8px 15px;
+        background: #f1f3f5;
+        border-bottom: 1px solid #ddd;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .ide-toolbar .script-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-right: auto;
+    }
+    .ide-toolbar .btn {
+        font-size: 0.8rem;
+        padding: 4px 10px;
+    }
+
+    /* Form Area */
+    .ide-form-area {
+        padding: 15px;
+        background: #fff;
+        border-bottom: 1px solid #ddd;
+    }
+
+    /* CodeMirror Customization */
+    .CodeMirror {
+        flex: 1;
+        height: auto;
+        font-size: 13px;
+        font-family: 'Consolas', 'Courier New', monospace;
+    }
+    .CodeMirror-gutters {
+        background: #f8f9fa;
+        border-right: 1px solid #ddd;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ide-container">
+    
+    <!-- Left Sidebar: Script Explorer -->
+    <div class="ide-sidebar">
+        <div class="ide-sidebar-header">
+            <div class="input-group input-group-sm">
+                <input type="text" id="scriptSearch" class="form-control" placeholder="Search...">
+                <button class="btn btn-outline-secondary" type="button"><i class="bi bi-x"></i></button>
+            </div>
+        </div>
+        <div class="ide-sidebar-content" id="scriptAccordion">
+            {% for category, scripts in grouped_scripts.items %}
+            <div>
+                <button class="ide-accordion-btn" type="button" data-bs-toggle="collapse" data-bs-target="#cat-{{ forloop.counter }}" aria-expanded="true">
+                    <span><i class="bi bi-folder2 me-1 text-warning"></i> {{ category }}</span>
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+                <div id="cat-{{ forloop.counter }}" class="collapse show">
+                    <ul class="ide-script-list">
+                        {% for script in scripts %}
+                        <li>
+                            <a href="{% url 'scripts:script_ide_edit' script.id %}" class="ide-script-item {% if selected_script and selected_script.id == script.id %}active{% endif %}">
+                                <i class="bi bi-file-earmark-code text-secondary me-1"></i> {{ script.name }}
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Right Area: Editor -->
+    <div class="ide-editor">
+        <form method="post" id="ideForm" style="display:flex; flex-direction:column; height:100%;">
+            {% csrf_token %}
+            <input type="hidden" name="action" id="formAction" value="save">
+            
+            <div class="ide-toolbar">
+                <div class="script-title">
+                    {% if selected_script %}
+                        {{ selected_script.name }}
+                        {% if selected_script.status == 'ACTIVE' %}
+                            <span class="badge bg-success ms-2" style="font-size:0.7rem; vertical-align:middle;">ACTIVE</span>
+                        {% endif %}
+                    {% else %}
+                        New Script
+                    {% endif %}
+                </div>
+                
+                {% if selected_script %}
+                    <button type="button" class="btn btn-outline-secondary" onclick="location.reload();">
+                        <i class="bi bi-arrow-counterclockwise"></i> Revert
+                    </button>
+                    <button type="button" class="btn btn-outline-danger" onclick="deleteScript();">
+                        <i class="bi bi-trash"></i> Delete
+                    </button>
+                {% endif %}
+                <button type="submit" class="btn btn-primary" onclick="document.getElementById('formAction').value='save';">
+                    <i class="bi bi-save"></i> Save
+                </button>
+            </div>
+
+            <div class="ide-form-area">
+                <div class="row g-2 mb-2">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-0 fw-semibold">Name *</label>
+                        {{ form.name }}
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label small mb-0 fw-semibold">Description</label>
+                        {{ form.description }}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small mb-0 fw-semibold text-muted">Last Changed</label>
+                        <input type="text" class="form-control form-control-sm bg-light" readonly value="{% if selected_script %}{{ selected_script.updated_at|date:'Y-m-d H:i:s T' }}{% else %}N/A{% endif %}">
+                    </div>
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-0 fw-semibold">Language</label>
+                        {{ form.script_type }}
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-0 fw-semibold">Script Type *</label>
+                        {{ form.category }}
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-0 fw-semibold">Status</label>
+                        {{ form.status }}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small mb-0 fw-semibold text-muted">Build Time</label>
+                        <input type="text" class="form-control form-control-sm bg-light" readonly value="N/A">
+                    </div>
+                </div>
+                <!-- Hidden tags field to satisfy form validation if needed -->
+                <div style="display:none;">{{ form.tags }}</div>
+            </div>
+
+            <!-- The content textarea that CodeMirror will replace -->
+            {{ form.content }}
+            
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- CodeMirror JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/shell/shell.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/sql/sql.min.js"></script>
+
+<script>
+    // Initialize CodeMirror
+    const textarea = document.getElementById('id_content');
+    if (textarea) {
+        const editor = CodeMirror.fromTextArea(textarea, {
+            lineNumbers: true,
+            theme: 'eclipse',
+            mode: 'python', // Default, we can dynamically change it based on script_type dropdown
+            indentUnit: 4,
+            matchBrackets: true
+        });
+
+        // Dynamic mode switching
+        const typeSelect = document.getElementById('id_script_type');
+        if (typeSelect) {
+            function updateMode() {
+                const val = typeSelect.value;
+                if (val === 'PYTHON') editor.setOption('mode', 'python');
+                else if (val === 'SHELL') editor.setOption('mode', 'shell');
+                else if (val === 'SQL') editor.setOption('mode', 'sql');
+                else editor.setOption('mode', 'text/plain');
+            }
+            typeSelect.addEventListener('change', updateMode);
+            updateMode(); // Initial set
+        }
+
+        // Search filtering for left sidebar
+        const searchInput = document.getElementById('scriptSearch');
+        const clearBtn = searchInput.nextElementSibling;
+        
+        function filterScripts() {
+            const query = searchInput.value.toLowerCase();
+            document.querySelectorAll('.ide-script-list li').forEach(li => {
+                const text = li.textContent.toLowerCase();
+                li.style.display = text.includes(query) ? '' : 'none';
+            });
+            // Hide empty categories
+            document.querySelectorAll('.ide-sidebar-content > div').forEach(group => {
+                const visibleItems = group.querySelectorAll('li[style=""]').length;
+                group.style.display = visibleItems > 0 ? '' : 'none';
+            });
+        }
+        
+        searchInput.addEventListener('input', filterScripts);
+        clearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            filterScripts();
+        });
+    }
+
+    function deleteScript() {
+        if (confirm('Are you sure you want to delete this script?')) {
+            document.getElementById('formAction').value = 'delete';
+            document.getElementById('ideForm').submit();
+        }
+    }
+</script>
+{% endblock %}

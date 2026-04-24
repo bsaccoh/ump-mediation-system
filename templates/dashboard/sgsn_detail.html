@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}SGSN #{{ record.pk }} - UMP Mediation{% endblock %}
+{% block page_title %}SGSN Record Detail{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>
+            <i class="bi bi-hdd-network"></i>
+            <span class="badge bg-info">{{ record.record_type }}</span>
+            <span class="badge bg-{% if record.service_type == 'SMS' %}success{% else %}primary{% endif %}">{{ record.service_type }}</span>
+            <span class="badge bg-{% if record.status == 'VALID' %}success{% elif record.status == 'INVALID' %}danger{% else %}warning{% endif %}">{{ record.status }}</span>
+            {% if record.is_roaming %}<span class="badge bg-warning text-dark">ROAMING</span>{% endif %}
+        </span>
+        <span class="text-muted">Record #{{ record.pk }}</span>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <!-- Subscriber -->
+            <div class="col-md-6">
+                <h6 class="text-muted border-bottom pb-1 mb-2"><i class="bi bi-sim"></i> Subscriber</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted" style="width:40%">MSISDN</td><td><code>{{ record.calling_number|default:"-" }}</code></td></tr>
+                    <tr><td class="text-muted">IMSI</td><td><code>{{ record.imsi|default:"-" }}</code></td></tr>
+                    <tr><td class="text-muted">IMEI</td><td><code>{{ record.imei|default:"-" }}</code></td></tr>
+                    <tr><td class="text-muted">Charging ID</td><td>{{ record.charging_id|default:"-" }}</td></tr>
+                    <tr>
+                        <td class="text-muted">Prepaid Flag</td>
+                        <td>
+                            {% with flag=record.raw_data.PREPAID_FLAG %}
+                            {% if flag == '1' %}<span class="badge bg-success">PREPAID</span>
+                            {% elif flag == '0' %}<span class="badge bg-secondary">POSTPAID</span>
+                            {% else %}-{% endif %}
+                            {% endwith %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Subscriber Category</td>
+                        <td>
+                            {% with cat=record.raw_data.SUBSCRIBER_CATEGORY %}
+                            {% if cat == '1' %}<span class="badge bg-success">PREPAID</span>
+                            {% elif cat == '0' %}<span class="badge bg-secondary">POSTPAID</span>
+                            {% elif cat == '2' %}<span class="badge bg-warning text-dark">UNKNOWN</span>
+                            {% else %}-{% endif %}
+                            {% endwith %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Session -->
+            <div class="col-md-6">
+                <h6 class="text-muted border-bottom pb-1 mb-2"><i class="bi bi-globe"></i> GPRS Session</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted" style="width:40%">APN</td><td><strong>{{ record.apn|default:"-" }}</strong></td></tr>
+                    <tr><td class="text-muted">PDP Type</td><td>{{ record.pdp_type|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">RAT Type</td><td>{{ record.rat_type|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">Cause for Closing</td><td>{{ record.cause_for_closing|default:"-" }}</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="row mt-2">
+            <!-- Timing -->
+            <div class="col-md-6">
+                <h6 class="text-muted border-bottom pb-1 mb-2"><i class="bi bi-clock"></i> Time & Duration</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted" style="width:40%">Start Time</td><td>{{ record.start_time|date:"Y-m-d H:i:s"|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">End Time</td><td>{{ record.end_time|date:"Y-m-d H:i:s"|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">Duration</td><td>{% if record.duration is not None %}<strong>{{ record.duration }}s</strong>{% else %}-{% endif %}</td></tr>
+                </table>
+            </div>
+
+            <!-- Data Volumes -->
+            <div class="col-md-6">
+                <h6 class="text-muted border-bottom pb-1 mb-2"><i class="bi bi-bar-chart"></i> Data Volumes</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted" style="width:40%">Upload</td><td><strong>{{ record.data_volume_up|intcomma }} bytes</strong></td></tr>
+                    <tr><td class="text-muted">Download</td><td><strong>{{ record.data_volume_down|intcomma }} bytes</strong></td></tr>
+                    <tr><td class="text-muted">Total</td><td><strong>{{ record.data_volume_total|intcomma }} bytes ({{ record.data_volume_mb }} MB)</strong></td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="row mt-2">
+            <!-- Network -->
+            <div class="col-md-6">
+                <h6 class="text-muted border-bottom pb-1 mb-2"><i class="bi bi-diagram-3"></i> Network Nodes</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted" style="width:40%">SGSN Address</td><td><code>{{ record.sgsn_address|default:"-" }}</code></td></tr>
+                    <tr><td class="text-muted">GGSN Address</td><td><code>{{ record.ggsn_address|default:"-" }}</code></td></tr>
+                    <tr><td class="text-muted">Node ID</td><td>{{ record.node_id|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">Serving PLMN</td><td>{{ record.serving_plmn|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">Cell ID</td><td>{{ record.cell_id|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">LAC</td><td>{{ record.lac|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">RAC</td><td>{{ record.rac|default:"-" }}</td></tr>
+                </table>
+            </div>
+
+            <!-- File Info -->
+            <div class="col-md-6">
+                <h6 class="text-muted border-bottom pb-1 mb-2"><i class="bi bi-file-earmark"></i> File Info</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted" style="width:40%">Source File</td><td>{% if record.file %}<a href="{% url 'collection:file_detail' record.file.pk %}">{{ record.file.filename|truncatechars:40 }}</a>{% else %}-{% endif %}</td></tr>
+                    <tr><td class="text-muted">Data Source</td><td>{{ record.source.name|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">Created</td><td>{{ record.created_at|date:"Y-m-d H:i:s" }}</td></tr>
+                </table>
+
+                <h6 class="text-muted border-bottom pb-1 mb-2 mt-3"><i class="bi bi-code-square"></i> Raw Data</h6>
+                {% if record.raw_data %}
+                <pre class="bg-light p-2 rounded" style="max-height:200px; overflow-y:auto; font-size:0.75rem;">{{ record.raw_data|pprint }}</pre>
+                {% else %}
+                <p class="text-muted">No raw data available</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex gap-2">
+    <a href="{% url 'sgsn:sgsn_search' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back to SGSN Search
+    </a>
+</div>
+{% endblock %}

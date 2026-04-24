@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Upload CDR File{% endblock %}
+{% block page_title %}Upload CDR File{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-upload"></i> Upload CDR File</div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" action="{% url 'collection:upload' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Upload Mode</label>
+                        <div class="mb-2">
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="upload_mode" id="modeFiles" value="files" checked>
+                                <label class="form-check-label" for="modeFiles">Multiple Files</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="upload_mode" id="modeFolder" value="folder">
+                                <label class="form-check-label" for="modeFolder">Entire Folder</label>
+                            </div>
+                        </div>
+                        <label class="form-label fw-bold">Select CDR File(s) / Folder</label>
+                        <input type="file" name="files" id="fileInput" class="form-control" required multiple
+                               accept=".dat,.bin,.cdr,.csv,.txt,.asn,.ber,.unl,.add">
+                        <small class="text-muted">Supported: .dat, .bin, .cdr, .csv, .txt, .asn, .ber</small>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Input Source</label>
+                            <select name="source_id" class="form-select">
+                                <option value="">-- Select Source --</option>
+                                {% for src in sources %}
+                                <option value="{{ src.id }}">{{ src.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Decoder Type</label>
+                            <select name="decoder_type" class="form-select">
+                                <option value="AUTO">Auto-detect</option>
+                                <option value="MSC">MSC (Huawei ASN.1/BER)</option>
+                                <option value="PGW">PGW (3GPP PS Domain)</option>
+                                <option value="SGSN">SGSN (3GPP PS Domain)</option>
+                                <option value="SGW">SGW (3GPP PS Domain)</option>
+                                <option value="CSV">Pre-decoded CSV</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-cloud-upload"></i> Upload & Process
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">Filename Detection</div>
+            <div class="card-body">
+                <small>
+                    <p>Files are auto-detected by name:</p>
+                    <ul class="mb-0">
+                        <li><code>bFTMSX*.dat</code> → MSC</li>
+                        <li><code>*pgw*.dat</code> → PGW</li>
+                        <li><code>*sgsn*.dat</code> → SGSN</li>
+                        <li><code>*sgw*.dat</code> → SGW</li>
+                    </ul>
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const fileInput = document.getElementById('fileInput');
+        const modeFiles = document.getElementById('modeFiles');
+        const modeFolder = document.getElementById('modeFolder');
+
+        function updateInputMode() {
+            if (modeFolder.checked) {
+                fileInput.setAttribute('webkitdirectory', '');
+                fileInput.setAttribute('directory', '');
+            } else {
+                fileInput.removeAttribute('webkitdirectory');
+                fileInput.removeAttribute('directory');
+            }
+            // Clear input when switching modes to avoid confusion
+            fileInput.value = '';
+        }
+
+        modeFiles.addEventListener('change', updateInputMode);
+        modeFolder.addEventListener('change', updateInputMode);
+    });
+</script>
+{% endblock %}

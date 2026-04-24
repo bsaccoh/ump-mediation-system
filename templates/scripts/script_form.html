@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - Scripts{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .editor-wrap { position: relative; }
+    .line-nums { position: absolute; top: 0; left: 0; width: 40px; background: #2d2d2d; color: #888; text-align: right; padding: 0.5rem 6px; font-size: 0.82rem; line-height: 1.5; border-radius: 4px 0 0 4px; user-select: none; pointer-events: none; overflow: hidden; }
+    #id_content { padding-left: 50px !important; background: #1e1e1e; color: #d4d4d4; border: 1px solid #555; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+            <li class="breadcrumb-item"><a href="{% url 'scripts:script_list' %}">Scripts</a></li>
+            <li class="breadcrumb-item active">{{ title }}</li>
+        </ol>
+    </nav>
+</div>
+
+<form method="post">
+{% csrf_token %}
+<div class="row g-3">
+
+    <!-- Left column: meta -->
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header"><i class="bi bi-info-circle"></i> Script Info</div>
+            <div class="card-body">
+                {% for field in form %}
+                {% if field.name != 'content' %}
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">
+                        {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
+                    </label>
+                    {{ field }}
+                    {% if field.help_text %}
+                    <div class="form-text">{{ field.help_text }}</div>
+                    {% endif %}
+                    {% for err in field.errors %}
+                    <div class="text-danger small">{{ err }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Right column: code editor -->
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="bi bi-code-square"></i> Script Content
+                <span class="badge bg-secondary ms-auto" id="lineCount">0 lines</span>
+            </div>
+            <div class="card-body p-2">
+                <div class="editor-wrap">
+                    <div class="line-nums" id="lineNums">1</div>
+                    {{ form.content }}
+                </div>
+                {% for err in form.content.errors %}
+                <div class="text-danger small mt-1">{{ err }}</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Actions -->
+<div class="d-flex gap-2 mt-3">
+    <button type="submit" class="btn btn-primary">
+        <i class="bi bi-check-circle"></i> {{ btn_label }}
+    </button>
+    <a href="{% url 'scripts:script_list' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-x"></i> Cancel
+    </a>
+    {% if script %}
+    <div class="ms-auto">
+        <button type="button" class="btn btn-outline-danger btn-sm"
+                data-bs-toggle="modal" data-bs-target="#delModalInline">
+            <i class="bi bi-trash"></i> Delete Script
+        </button>
+    </div>
+    {% endif %}
+</div>
+</form>
+
+{% if script %}
+<div class="modal fade" id="delModalInline" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white py-2">
+                <h6 class="modal-title mb-0">Delete Script</h6>
+                <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body small">
+                Permanently delete <strong>{{ script.name }}</strong>?
+            </div>
+            <div class="modal-footer py-1">
+                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="post" action="{% url 'scripts:script_delete' script.pk %}">
+                    {% csrf_token %}
+                    <button class="btn btn-sm btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const editor   = document.getElementById('id_content');
+    const lineNums = document.getElementById('lineNums');
+    const lineCount= document.getElementById('lineCount');
+
+    function updateLines() {
+        const lines = editor.value.split('\n').length;
+        lineCount.textContent = lines + ' line' + (lines !== 1 ? 's' : '');
+        let nums = '';
+        for (let i = 1; i <= lines; i++) nums += i + '\n';
+        lineNums.textContent = nums;
+    }
+
+    editor.addEventListener('input', updateLines);
+    editor.addEventListener('scroll', () => { lineNums.scrollTop = editor.scrollTop; });
+
+    // Tab key inserts 4 spaces
+    editor.addEventListener('keydown', e => {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            const s = editor.selectionStart;
+            editor.value = editor.value.substring(0, s) + '    ' + editor.value.substring(editor.selectionEnd);
+            editor.selectionStart = editor.selectionEnd = s + 4;
+            updateLines();
+        }
+    });
+
+    updateLines();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% block title %}MCC/MNC — Reference Data{% endblock %}
+{% block page_title %}MCC / MNC{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-globe"></i> MCC / MNC Lookup Table</span>
+        <span class="badge bg-secondary" id="totalBadge">{{ total }} entries</span>
+    </div>
+    <div class="card-body pb-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <input type="text" id="searchInput" class="form-control form-control-sm"
+                       placeholder="Search MCC, MNC, ISO, country, operator, dial code…" oninput="loadData()">
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary btn-sm" onclick="openModal()">
+                    <i class="bi bi-plus-lg"></i> Add Entry
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('importFile').click()">
+                    <i class="bi bi-upload"></i> Import CSV
+                </button>
+                <input type="file" id="importFile" accept=".csv" style="display:none" onchange="importCSV(this)">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="alertBox" class="alert" style="display:none;"></div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>MCC</th>
+                        <th>MNC</th>
+                        <th>PLMN</th>
+                        <th>ISO</th>
+                        <th>Dial Code</th>
+                        <th>Country</th>
+                        <th>Operator</th>
+                        <th>Home</th>
+                        <th>Status</th>
+                        <th width="70"></th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="10" class="text-center py-4 text-muted">
+                        <div class="spinner-border spinner-border-sm"></div> Loading…
+                    </td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center" id="pagBar" style="display:none !important;">
+        <small class="text-muted">Showing <span id="pagShowing"></span> of <span id="pagTotal"></span></small>
+        <nav><ul class="pagination pagination-sm mb-0" id="pagNums"></ul></nav>
+    </div>
+</div>
+
+<!-- Add / Edit Modal -->
+<div class="modal fade" id="entryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Add MCC/MNC Entry</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="entryId">
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">MCC <span class="text-danger">*</span></label>
+                        <input type="text" id="fMcc" class="form-control form-control-sm" placeholder="e.g. 619" maxlength="3">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">MNC <span class="text-danger">*</span></label>
+                        <input type="text" id="fMnc" class="form-control form-control-sm" placeholder="e.g. 01" maxlength="3">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">ISO Code</label>
+                        <input type="text" id="fIso" class="form-control form-control-sm" placeholder="e.g. SL" maxlength="5">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Dial Code</label>
+                        <input type="text" id="fDialCode" class="form-control form-control-sm" placeholder="e.g. +232" maxlength="10">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Home Network?</label>
+                        <select id="fIsHome" class="form-select form-select-sm">
+                            <option value="false">No</option>
+                            <option value="true">Yes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Status</label>
+                        <select id="fEnabled" class="form-select form-select-sm">
+                            <option value="true">Enabled</option>
+                            <option value="false">Disabled</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Country <span class="text-danger">*</span></label>
+                        <input type="text" id="fCountry" class="form-control form-control-sm" placeholder="e.g. Sierra Leone">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Operator <span class="text-danger">*</span></label>
+                        <input type="text" id="fOperator" class="form-control form-control-sm" placeholder="e.g. Africell">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold">Notes</label>
+                        <input type="text" id="fNotes" class="form-control form-control-sm" placeholder="Optional notes">
+                    </div>
+                </div>
+                <div id="modalError" class="alert alert-danger mt-2" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="saveEntry()">
+                    <i class="bi bi-save"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentPage = 1;
+const perPage = 25;
+
+function getCSRF() { return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''; }
+
+function showAlert(msg, type = 'success') {
+    const box = document.getElementById('alertBox');
+    box.className = `alert alert-${type}`;
+    box.textContent = msg;
+    box.style.display = 'block';
+    setTimeout(() => { box.style.display = 'none'; }, 4000);
+}
+
+function loadData() {
+    const q = document.getElementById('searchInput').value;
+    fetch(`{% url 'reference:mcc_mnc_api' %}?q=${encodeURIComponent(q)}&page=${currentPage}`)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('totalBadge').textContent = data.total.toLocaleString() + ' entries';
+            const tbody = document.getElementById('tableBody');
+            if (!data.records.length) {
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">No entries found</td></tr>';
+                document.getElementById('pagBar').style.cssText = 'display:none !important';
+                return;
+            }
+            tbody.innerHTML = data.records.map(r => `<tr>
+                <td><strong>${r.mcc}</strong></td>
+                <td>${r.mnc}</td>
+                <td><code>${r.mcc}${r.mnc}</code></td>
+                <td><span class="badge bg-light text-dark border">${r.iso || '-'}</span></td>
+                <td><code>${r.dial_code || '-'}</code></td>
+                <td>${r.country}</td>
+                <td>${r.operator}</td>
+                <td>${r.is_home
+                    ? '<span class="badge bg-success">Home</span>'
+                    : '<span class="badge bg-light text-dark">Visitor</span>'}</td>
+                <td>${r.enabled
+                    ? '<span class="badge bg-success">Active</span>'
+                    : '<span class="badge bg-secondary">Disabled</span>'}</td>
+                <td class="text-end">
+                    <button class="btn btn-xs btn-outline-primary py-0 px-1 me-1"
+                        onclick='editEntry(${JSON.stringify(r).replace(/"/g,"&quot;")})'><i class="bi bi-pencil"></i></button>
+                    <button class="btn btn-xs btn-outline-danger py-0 px-1"
+                        onclick="deleteEntry(${r.id})"><i class="bi bi-trash"></i></button>
+                </td>
+            </tr>`).join('');
+            buildPagination(data.page, data.pages, data.total);
+        });
+}
+
+function buildPagination(page, pages, total) {
+    const bar = document.getElementById('pagBar');
+    if (pages <= 1) { bar.style.cssText = 'display:none !important'; return; }
+    bar.style.cssText = 'display:flex !important';
+    const start = (page - 1) * perPage + 1;
+    const end = Math.min(page * perPage, total);
+    document.getElementById('pagShowing').textContent = `${start}–${end}`;
+    document.getElementById('pagTotal').textContent = total.toLocaleString();
+    let html = `<li class="page-item ${page <= 1 ? 'disabled' : ''}">
+        <a class="page-link" href="#" onclick="event.preventDefault(); goPage(${page - 1})">‹</a></li>`;
+    if (page > 3) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); goPage(1)">1</a></li>`;
+        if (page > 4) html += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
+    }
+    for (let i = Math.max(1, page - 2); i <= Math.min(pages, page + 2); i++)
+        html += `<li class="page-item ${i === page ? 'active' : ''}">
+            <a class="page-link" href="#" onclick="event.preventDefault(); goPage(${i})">${i}</a></li>`;
+    if (page < pages - 2) {
+        if (page < pages - 3) html += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); goPage(${pages})">${pages}</a></li>`;
+    }
+    html += `<li class="page-item ${page >= pages ? 'disabled' : ''}">
+        <a class="page-link" href="#" onclick="event.preventDefault(); goPage(${page + 1})">›</a></li>`;
+    document.getElementById('pagNums').innerHTML = html;
+}
+
+function goPage(p) { currentPage = p; loadData(); }
+
+function openModal(r = null) {
+    document.getElementById('entryId').value = r?.id || '';
+    document.getElementById('fMcc').value = r?.mcc || '';
+    document.getElementById('fMnc').value = r?.mnc || '';
+    document.getElementById('fIso').value = r?.iso || '';
+    document.getElementById('fDialCode').value = r?.dial_code || '';
+    document.getElementById('fCountry').value = r?.country || '';
+    document.getElementById('fOperator').value = r?.operator || '';
+    document.getElementById('fIsHome').value = r?.is_home ? 'true' : 'false';
+    document.getElementById('fEnabled').value = r?.enabled === false ? 'false' : 'true';
+    document.getElementById('fNotes').value = r?.notes || '';
+    document.getElementById('modalTitle').textContent = r ? 'Edit MCC/MNC Entry' : 'Add MCC/MNC Entry';
+    document.getElementById('modalError').style.display = 'none';
+    new bootstrap.Modal(document.getElementById('entryModal')).show();
+}
+
+function editEntry(r) { openModal(r); }
+
+function saveEntry() {
+    const params = new URLSearchParams({
+        csrfmiddlewaretoken: getCSRF(),
+        id: document.getElementById('entryId').value,
+        mcc: document.getElementById('fMcc').value.trim(),
+        mnc: document.getElementById('fMnc').value.trim(),
+        iso: document.getElementById('fIso').value.trim(),
+        dial_code: document.getElementById('fDialCode').value.trim(),
+        country: document.getElementById('fCountry').value.trim(),
+        operator: document.getElementById('fOperator').value.trim(),
+        is_home: document.getElementById('fIsHome').value,
+        enabled: document.getElementById('fEnabled').value,
+        notes: document.getElementById('fNotes').value.trim(),
+    });
+    fetch("{% url 'reference:mcc_mnc_save' %}", {
+        method: 'POST', body: params, headers: { 'X-CSRFToken': getCSRF() }
+    })
+    .then(r => r.json()).then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('entryModal')).hide();
+            showAlert('Entry saved successfully.');
+            loadData();
+        } else {
+            document.getElementById('modalError').textContent = data.error;
+            document.getElementById('modalError').style.display = 'block';
+        }
+    });
+}
+
+function deleteEntry(id) {
+    if (!confirm('Delete this entry?')) return;
+    fetch(`{% url 'reference:mcc_mnc_delete' 0 %}`.replace('/0/', `/${id}/`),
+        { method: 'POST', headers: { 'X-CSRFToken': getCSRF() } })
+        .then(r => r.json())
+        .then(d => { if (d.success) { showAlert('Deleted.'); loadData(); } });
+}
+
+function importCSV(input) {
+    const file = input.files[0]; if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('csrfmiddlewaretoken', getCSRF());
+    fetch("{% url 'reference:csv_import' 'mcc_mnc' %}", { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+            showAlert(d.success ? d.message : d.error, d.success ? 'success' : 'danger');
+            if (d.success) loadData();
+        });
+    input.value = '';
+}
+
+document.addEventListener('DOMContentLoaded', loadData);
+</script>
+{% endblock %}

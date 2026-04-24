@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Resources - UMP Mediation{% endblock %}
+{% block page_title %}Resources{% endblock %}
+
+{% block content %}
+<!-- Summary stat cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="value text-primary">{{ total }}</div>
+            <div class="label">Total Resources</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="value text-success">{{ online }}</div>
+            <div class="label">Online</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="value text-danger">{{ offline }}</div>
+            <div class="label">Offline</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="value text-warning">{{ degraded }}</div>
+            <div class="label">Degraded</div>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <p class="text-muted mb-0">System resources monitored by the mediation platform.</p>
+    <a href="{% url 'portals:resource_create' %}" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> Add Resource
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-server"></i>
+        <span>Resources</span>
+        <span class="badge bg-secondary ms-auto">{{ resources|length }}</span>
+    </div>
+    <div class="card-body p-0">
+        {% if resources %}
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Host</th>
+                        <th>Status</th>
+                        <th>Monitored</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for resource in resources %}
+                <tr>
+                    <td class="fw-semibold">{{ resource.name }}</td>
+                    <td><span class="badge bg-secondary">{{ resource.resource_type }}</span></td>
+                    <td class="text-muted">{{ resource.host|default:'-' }}</td>
+                    <td>
+                        {% if resource.status == 'ONLINE' %}
+                        <span class="badge bg-success">Online</span>
+                        {% elif resource.status == 'OFFLINE' %}
+                        <span class="badge bg-danger">Offline</span>
+                        {% elif resource.status == 'DEGRADED' %}
+                        <span class="badge bg-warning text-dark">Degraded</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Maintenance</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if resource.is_monitored %}
+                        <i class="bi bi-eye-fill text-success" title="Monitored"></i>
+                        {% else %}
+                        <i class="bi bi-eye-slash text-muted" title="Not monitored"></i>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <a href="{% url 'portals:resource_edit' resource.pk %}"
+                           class="btn btn-sm btn-outline-primary" title="Edit">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <button type="button" class="btn btn-sm btn-outline-danger"
+                                data-bs-toggle="modal"
+                                data-bs-target="#deleteModal{{ resource.pk }}"
+                                title="Delete">
+                            <i class="bi bi-trash"></i>
+                        </button>
+
+                        <!-- Delete confirm modal -->
+                        <div class="modal fade" id="deleteModal{{ resource.pk }}" tabindex="-1">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Confirm Delete</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        Are you sure you want to delete
+                                        <strong>{{ resource.name }}</strong>?
+                                        This action cannot be undone.
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                        <form method="post" action="{% url 'portals:resource_delete' resource.pk %}" class="d-inline">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-danger">
+                                                <i class="bi bi-trash"></i> Delete
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-server fs-1 d-block mb-2"></i>
+            No resources configured yet.
+            <a href="{% url 'portals:resource_create' %}">Add one now.</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

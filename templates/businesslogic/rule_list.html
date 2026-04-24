@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Business Logic - UMP Mediation{% endblock %}
+{% block page_title %}Business Logic{% endblock %}
+
+{% block extra_css %}
+<style>
+    .priority-bar { display: inline-block; width: 60px; height: 6px; border-radius: 3px; background: #e9ecef; position: relative; vertical-align: middle; }
+    .priority-bar .fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 3px; transition: width 0.3s; }
+    .priority-low .fill { width: 25%; background: #6c757d; }
+    .priority-normal .fill { width: 50%; background: #0d6efd; }
+    .priority-high .fill { width: 80%; background: #fd7e14; }
+    .priority-critical .fill { width: 100%; background: #dc3545; }
+    .rule-type-icon { width: 28px; height: 28px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.8rem; color: #fff; flex-shrink: 0; }
+    .type-validation { background: #0d6efd; }
+    .type-transformation { background: #6f42c1; }
+    .type-enrichment { background: #20c997; }
+    .type-filtering { background: #fd7e14; }
+    .type-rating { background: #e91e8e; }
+    .type-aggregation { background: #0dcaf0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Stat Cards -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card stat-card">
+            <div class="value text-primary">{{ total }}</div>
+            <div class="label">Total Rules</div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card stat-card">
+            <div class="value text-success">{{ active }}</div>
+            <div class="label">Active</div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card stat-card">
+            <div class="value text-info">{{ testing }}</div>
+            <div class="label">Testing</div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card stat-card">
+            <div class="value text-warning">{{ draft }}</div>
+            <div class="label">Draft</div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card stat-card">
+            <div class="value text-secondary">{{ inactive }}</div>
+            <div class="label">Inactive</div>
+        </div>
+    </div>
+</div>
+
+<!-- Toolbar -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-center">
+            <div class="col-auto">
+                <input type="text" name="q" value="{{ search }}" class="form-control form-control-sm" placeholder="Search rules…" style="width:180px;">
+            </div>
+            <div class="col-auto">
+                <select name="type" class="form-select form-select-sm" style="width:160px;">
+                    <option value="">All Types</option>
+                    {% for val, label in rule_types %}
+                    <option value="{{ val }}" {% if type_filter == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <select name="stream" class="form-select form-select-sm" style="width:150px;">
+                    <option value="">All Streams</option>
+                    {% for val, label in stream_choices %}
+                    <option value="{{ val }}" {% if stream_filter == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <select name="status" class="form-select form-select-sm" style="width:130px;">
+                    <option value="">All Statuses</option>
+                    {% for val, label in status_choices %}
+                    <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-search"></i> Filter</button>
+                <a href="{% url 'businesslogic:rule_list' %}" class="btn btn-sm btn-outline-secondary ms-1"><i class="bi bi-x"></i> Clear</a>
+            </div>
+            <div class="col-auto ms-auto">
+                <a href="{% url 'businesslogic:rule_create' %}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-plus-circle"></i> New Rule
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Rules Table -->
+<div class="card">
+    <div class="card-header d-flex align-items-center">
+        <i class="bi bi-lightbulb me-2"></i> Business Rules
+        <span class="badge bg-secondary ms-2">{{ rules|length }}</span>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover table-sm mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Rule</th>
+                    <th>Type</th>
+                    <th>Stream</th>
+                    <th>Status</th>
+                    <th>Priority</th>
+                    <th>Tags</th>
+                    <th>Last Execution</th>
+                    <th>Updated</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for rule in rules %}
+            {% with last=rule.executions.first %}
+            <tr>
+                <td>
+                    <a href="{% url 'businesslogic:rule_detail' rule.pk %}" class="fw-semibold text-decoration-none">
+                        {{ rule.name }}
+                    </a>
+                    {% if rule.description %}
+                    <div class="text-muted small">{{ rule.description|truncatechars:60 }}</div>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="rule-type-icon
+                        {% if rule.rule_type == 'VALIDATION' %}type-validation
+                        {% elif rule.rule_type == 'TRANSFORMATION' %}type-transformation
+                        {% elif rule.rule_type == 'ENRICHMENT' %}type-enrichment
+                        {% elif rule.rule_type == 'FILTERING' %}type-filtering
+                        {% elif rule.rule_type == 'RATING' %}type-rating
+                        {% else %}type-aggregation{% endif %}"
+                        title="{{ rule.get_rule_type_display }}">
+                        {% if rule.rule_type == 'VALIDATION' %}<i class="bi bi-check-circle"></i>
+                        {% elif rule.rule_type == 'TRANSFORMATION' %}<i class="bi bi-arrow-repeat"></i>
+                        {% elif rule.rule_type == 'ENRICHMENT' %}<i class="bi bi-plus-circle"></i>
+                        {% elif rule.rule_type == 'FILTERING' %}<i class="bi bi-funnel"></i>
+                        {% elif rule.rule_type == 'RATING' %}<i class="bi bi-currency-dollar"></i>
+                        {% else %}<i class="bi bi-collection"></i>{% endif %}
+                    </span>
+                    <span class="ms-1 small">{{ rule.get_rule_type_display }}</span>
+                </td>
+                <td>
+                    <span class="badge bg-light text-dark border">{{ rule.get_stream_display }}</span>
+                </td>
+                <td>
+                    <span class="badge
+                        {% if rule.status == 'ACTIVE' %}bg-success
+                        {% elif rule.status == 'TESTING' %}bg-info
+                        {% elif rule.status == 'INACTIVE' %}bg-secondary
+                        {% else %}bg-warning text-dark{% endif %}">
+                        {{ rule.get_status_display }}
+                    </span>
+                </td>
+                <td>
+                    <div class="priority-bar
+                        {% if rule.priority <= 10 %}priority-low
+                        {% elif rule.priority <= 50 %}priority-normal
+                        {% elif rule.priority <= 80 %}priority-high
+                        {% else %}priority-critical{% endif %}"
+                        title="{{ rule.get_priority_display }}">
+                        <div class="fill"></div>
+                    </div>
+                    <span class="ms-1 small text-muted">{{ rule.get_priority_display }}</span>
+                </td>
+                <td>
+                    {% for tag in rule.tag_list %}
+                    <span class="badge bg-light text-dark border" style="font-size:0.7rem;">{{ tag }}</span>
+                    {% endfor %}
+                </td>
+                <td class="small text-muted">
+                    {% if last %}
+                        <span class="badge
+                            {% if last.result == 'APPLIED' %}bg-success
+                            {% elif last.result == 'FAILED' %}bg-danger
+                            {% else %}bg-secondary{% endif %}"
+                            style="font-size:0.7rem;">{{ last.result }}</span>
+                        {{ last.executed_at|date:"Y-m-d H:i" }}
+                    {% else %}—{% endif %}
+                </td>
+                <td class="text-muted small">{{ rule.updated_at|date:"Y-m-d" }}</td>
+                <td class="text-end">
+                    <div class="btn-group btn-group-sm">
+                        <!-- Toggle -->
+                        <button class="btn btn-outline-success btn-toggle"
+                                data-url="{% url 'businesslogic:rule_toggle' rule.pk %}"
+                                title="Toggle Active/Inactive">
+                            <i class="bi bi-power"></i>
+                        </button>
+                        <!-- Edit -->
+                        <a class="btn btn-outline-primary" href="{% url 'businesslogic:rule_edit' rule.pk %}" title="Edit">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <!-- Delete -->
+                        <button class="btn btn-outline-danger" title="Delete"
+                                data-bs-toggle="modal" data-bs-target="#delModal{{ rule.pk }}">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+
+                    <!-- Delete Modal -->
+                    <div class="modal fade" id="delModal{{ rule.pk }}" tabindex="-1">
+                        <div class="modal-dialog modal-sm">
+                            <div class="modal-content">
+                                <div class="modal-header bg-danger text-white py-2">
+                                    <h6 class="modal-title mb-0"><i class="bi bi-exclamation-triangle"></i> Delete Rule</h6>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body small">
+                                    Delete <strong>{{ rule.name }}</strong> and all its execution history?
+                                </div>
+                                <div class="modal-footer py-1">
+                                    <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                    <form method="post" action="{% url 'businesslogic:rule_delete' rule.pk %}">
+                                        {% csrf_token %}
+                                        <button class="btn btn-sm btn-danger">Delete</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            {% endwith %}
+            {% empty %}
+            <tr>
+                <td colspan="9" class="text-center py-5 text-muted">
+                    <i class="bi bi-lightbulb fs-2 d-block mb-2 opacity-25"></i>
+                    No business rules yet. <a href="{% url 'businesslogic:rule_create' %}">Create your first rule</a>.
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.btn-toggle').forEach(btn => {
+    btn.addEventListener('click', function () {
+        const url = this.dataset.url;
+        fetch(url, {
+            method: 'POST',
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+        })
+        .then(r => r.json())
+        .then(data => {
+            // Reload to reflect change
+            location.reload();
+        })
+        .catch(err => alert('Toggle failed: ' + err));
+    });
+});
+</script>
+{% endblock %}

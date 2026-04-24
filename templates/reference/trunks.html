@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block title %}Trunk Groups — Reference Data{% endblock %}
+{% block page_title %}Trunk Groups{% endblock %}
+
+{% block content %}
+<!-- Stats strip -->
+<div class="row g-2 mb-3">
+    {% for sw, cnt in switch_counts.items %}
+    <div class="col-auto">
+        <div class="card border-0 shadow-sm text-center px-3 py-2">
+            <div class="fw-bold text-primary" style="font-size:1.3rem;">{{ cnt }}</div>
+            <div class="text-muted" style="font-size:0.75rem;">{{ sw }}</div>
+        </div>
+    </div>
+    {% endfor %}
+    <div class="col-auto">
+        <div class="card border-0 shadow-sm text-center px-3 py-2">
+            <div class="fw-bold text-dark" style="font-size:1.3rem;">{{ total }}</div>
+            <div class="text-muted" style="font-size:0.75rem;">Total Trunks</div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-diagram-3"></i> Trunk Group Reference</span>
+        <span class="badge bg-secondary" id="totalBadge">{{ total }} entries</span>
+    </div>
+    <div class="card-body pb-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search trunk ID, operator, switch…" oninput="loadData()">
+            </div>
+            <div class="col-md-2">
+                <select id="filterSwitch" class="form-select form-select-sm" onchange="loadData()">
+                    <option value="">All Switches</option>
+                    {% for sw in switch_ids %}
+                    <option value="{{ sw }}">{{ sw }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select id="filterDirection" class="form-select form-select-sm" onchange="loadData()">
+                    <option value="">All Directions</option>
+                    {% for val, label in directions %}
+                    <option value="{{ val }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select id="filterType" class="form-select form-select-sm" onchange="loadData()">
+                    <option value="">All Types</option>
+                    {% for val, label in trunk_types %}
+                    <option value="{{ val }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto ms-auto">
+                <button class="btn btn-primary btn-sm" onclick="openModal()"><i class="bi bi-plus-lg"></i> Add Trunk</button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('importFile').click()"><i class="bi bi-upload"></i> Import CSV</button>
+                <input type="file" id="importFile" accept=".csv" style="display:none" onchange="importCSV(this)">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="alertBox" class="alert" style="display:none;"></div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Switch</th><th>Trunk ID</th><th>Type</th><th>Direction</th>
+                        <th>Partner / Operator</th><th>Description</th><th>Status</th><th width="80"></th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="8" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm"></div> Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center" id="pagBar" style="display:none !important;">
+        <small class="text-muted">Showing <span id="pagShowing"></span> of <span id="pagTotal"></span></small>
+        <nav><ul class="pagination pagination-sm mb-0" id="pagNums"></ul></nav>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="entryModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Add Trunk Group</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="entryId">
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Switch ID</label>
+                        <input type="text" id="fSwitchId" class="form-control form-control-sm" placeholder="e.g. FTHMSC1">
+                        <div class="form-text">MSC/switch this trunk belongs to.</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Trunk ID <span class="text-danger">*</span></label>
+                        <input type="text" id="fTrunkId" class="form-control form-control-sm" placeholder="e.g. AFRICELL">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Trunk Type</label>
+                        <select id="fTrunkType" class="form-select form-select-sm">
+                            {% for val, label in trunk_types %}
+                            <option value="{{ val }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Direction</label>
+                        <select id="fDirection" class="form-select form-select-sm">
+                            {% for val, label in directions %}
+                            <option value="{{ val }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Partner / Operator</label>
+                        <input type="text" id="fPartner" class="form-control form-control-sm" placeholder="e.g. Africell SL">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Country</label>
+                        <input type="text" id="fCountry" class="form-control form-control-sm" placeholder="e.g. Sierra Leone">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Number Prefix</label>
+                        <input type="text" id="fPrefix" class="form-control form-control-sm" placeholder="e.g. 23276">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Status</label>
+                        <select id="fEnabled" class="form-select form-select-sm">
+                            <option value="true">Enabled</option>
+                            <option value="false">Disabled</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold">Description / Notes</label>
+                        <textarea id="fDescription" class="form-control form-control-sm" rows="2" placeholder="e.g. INTERNATIONAL OFFNET | COMMERCIAL"></textarea>
+                    </div>
+                </div>
+                <div id="modalError" class="alert alert-danger mt-2" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="saveEntry()"><i class="bi bi-save"></i> Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentPage = 1;
+const DIR_COLORS  = {INCOMING:'info', OUTGOING:'warning', BOTH:'success'};
+const DIR_ICONS   = {INCOMING:'bi-arrow-down-circle', OUTGOING:'bi-arrow-up-circle', BOTH:'bi-arrow-left-right'};
+const TYPE_COLORS = {INTERCONNECT:'primary', ROAMING:'purple', INTERNAL:'secondary', GATEWAY:'dark', OTHER:'light'};
+
+function getCSRF(){ return document.cookie.match(/csrftoken=([^;]+)/)?.[1]||''; }
+function showAlert(msg, type='success'){
+    const b=document.getElementById('alertBox');
+    b.className=`alert alert-${type}`;b.textContent=msg;b.style.display='block';
+    setTimeout(()=>b.style.display='none',4000);
+}
+
+function loadData(){
+    const q   = document.getElementById('searchInput').value;
+    const dir = document.getElementById('filterDirection').value;
+    const tt  = document.getElementById('filterType').value;
+    const sw  = document.getElementById('filterSwitch').value;
+    fetch(`{% url 'reference:trunk_api' %}?q=${encodeURIComponent(q)}&direction=${dir}&trunk_type=${tt}&switch_id=${sw}&page=${currentPage}`)
+        .then(r=>r.json()).then(data=>{
+            document.getElementById('totalBadge').textContent = data.total+' entries';
+            const tbody = document.getElementById('tableBody');
+            if(!data.records.length){
+                tbody.innerHTML='<tr><td colspan="8" class="text-center py-4 text-muted">No entries found</td></tr>';
+                document.getElementById('pagBar').style.cssText='display:none !important';return;
+            }
+            tbody.innerHTML = data.records.map(r=>{
+                const dc = DIR_COLORS[r.direction]||'secondary';
+                const di = DIR_ICONS[r.direction]||'bi-question';
+                const tc = TYPE_COLORS[r.trunk_type]||'secondary';
+                const descHtml = r.description ? `<small class="text-muted">${r.description}</small>` : '<span class="text-muted">—</span>';
+                return `<tr>
+                    <td><span class="badge bg-light text-dark border"><code>${r.switch_id||'—'}</code></span></td>
+                    <td><strong><code>${r.trunk_id}</code></strong></td>
+                    <td><span class="badge bg-${tc}">${r.trunk_type}</span></td>
+                    <td><span class="badge bg-${dc}"><i class="bi ${di}"></i> ${r.direction}</span></td>
+                    <td>${r.partner||'<span class="text-muted">—</span>'}</td>
+                    <td>${descHtml}</td>
+                    <td>${r.enabled?'<span class="badge bg-success">Active</span>':'<span class="badge bg-secondary">Disabled</span>'}</td>
+                    <td class="text-end">
+                        <button class="btn btn-xs btn-outline-primary py-0 px-1 me-1" onclick='editEntry(${JSON.stringify(r).replace(/'/g,"\\'")})'><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-xs btn-outline-danger py-0 px-1" onclick="deleteEntry(${r.id})"><i class="bi bi-trash"></i></button>
+                    </td>
+                </tr>`;
+            }).join('');
+            buildPagination(data.page,data.pages,data.total);
+        });
+}
+
+function buildPagination(page,pages,total){
+    const bar=document.getElementById('pagBar');
+    if(pages<=1){bar.style.cssText='display:none !important';return;}
+    bar.style.cssText='display:flex !important';
+    document.getElementById('pagShowing').textContent=`${(page-1)*25+1}–${Math.min(page*25,total)}`;
+    document.getElementById('pagTotal').textContent=total;
+    let html=`<li class="page-item ${page<=1?'disabled':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${page-1})">‹</a></li>`;
+    for(let i=Math.max(1,page-2);i<=Math.min(pages,page+2);i++)
+        html+=`<li class="page-item ${i===page?'active':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${i})">${i}</a></li>`;
+    html+=`<li class="page-item ${page>=pages?'disabled':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${page+1})">›</a></li>`;
+    document.getElementById('pagNums').innerHTML=html;
+}
+function goPage(p){currentPage=p;loadData();}
+
+function openModal(r=null){
+    document.getElementById('entryId').value=r?.id||'';
+    document.getElementById('fSwitchId').value=r?.switch_id||'';
+    document.getElementById('fTrunkId').value=r?.trunk_id||'';
+    document.getElementById('fTrunkType').value=r?.trunk_type||'INTERCONNECT';
+    document.getElementById('fDirection').value=r?.direction||'BOTH';
+    document.getElementById('fPartner').value=r?.partner||'';
+    document.getElementById('fCountry').value=r?.country||'';
+    document.getElementById('fPrefix').value=r?.prefix||'';
+    document.getElementById('fEnabled').value=r?.enabled===false?'false':'true';
+    document.getElementById('fDescription').value=r?.description||'';
+    document.getElementById('modalTitle').textContent=r?'Edit Trunk Group':'Add Trunk Group';
+    document.getElementById('modalError').style.display='none';
+    new bootstrap.Modal(document.getElementById('entryModal')).show();
+}
+function editEntry(r){openModal(r);}
+
+function saveEntry(){
+    const params=new URLSearchParams({
+        csrfmiddlewaretoken:getCSRF(),
+        id:document.getElementById('entryId').value,
+        switch_id:document.getElementById('fSwitchId').value.trim(),
+        trunk_id:document.getElementById('fTrunkId').value.trim(),
+        trunk_type:document.getElementById('fTrunkType').value,
+        direction:document.getElementById('fDirection').value,
+        partner:document.getElementById('fPartner').value.trim(),
+        country:document.getElementById('fCountry').value.trim(),
+        prefix:document.getElementById('fPrefix').value.trim(),
+        enabled:document.getElementById('fEnabled').value,
+        description:document.getElementById('fDescription').value.trim(),
+    });
+    fetch("{% url 'reference:trunk_save' %}",{method:'POST',body:params,headers:{'X-CSRFToken':getCSRF()}})
+        .then(r=>r.json()).then(data=>{
+            if(data.success){
+                bootstrap.Modal.getInstance(document.getElementById('entryModal')).hide();
+                showAlert('Saved successfully.');loadData();
+            } else {
+                document.getElementById('modalError').textContent=data.error;
+                document.getElementById('modalError').style.display='block';
+            }
+        });
+}
+
+function deleteEntry(id){
+    if(!confirm('Delete this trunk group?'))return;
+    fetch(`{% url 'reference:trunk_delete' 0 %}`.replace('/0/',`/${id}/`),{method:'POST',headers:{'X-CSRFToken':getCSRF()}})
+        .then(r=>r.json()).then(d=>{if(d.success){showAlert('Deleted.');loadData();}});
+}
+
+function importCSV(input){
+    const file=input.files[0];if(!file)return;
+    const fd=new FormData();fd.append('file',file);fd.append('csrfmiddlewaretoken',getCSRF());
+    fetch("{% url 'reference:csv_import' 'trunks' %}",{method:'POST',body:fd})
+        .then(r=>r.json()).then(d=>{
+            showAlert(d.success?d.message:d.error,d.success?'success':'danger');
+            if(d.success)loadData();
+        });
+    input.value='';
+}
+
+document.addEventListener('DOMContentLoaded', loadData);
+</script>
+{% endblock %}

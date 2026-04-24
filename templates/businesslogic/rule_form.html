@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - UMP Mediation{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-section { background: #f8f9fa; border-radius: 8px; padding: 1.2rem; margin-bottom: 1rem; }
+    .form-section h6 { color: #1a237e; margin-bottom: 0.8rem; font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-9">
+        <div class="card">
+            <div class="card-header d-flex align-items-center">
+                <i class="bi bi-lightbulb me-2"></i> {{ title }}
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+
+                    <!-- Basic Info -->
+                    <div class="form-section">
+                        <h6><i class="bi bi-info-circle me-1"></i> Basic Information</h6>
+                        <div class="row g-3">
+                            <div class="col-md-8">
+                                <label class="form-label small fw-semibold">Rule Name</label>
+                                {{ form.name }}
+                                {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>{% endif %}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-semibold">Rule Type</label>
+                                {{ form.rule_type }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-semibold">Target Stream</label>
+                                {{ form.stream }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-semibold">Status</label>
+                                {{ form.status }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-semibold">Priority</label>
+                                {{ form.priority }}
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-semibold">Description</label>
+                                {{ form.description }}
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-semibold">Tags</label>
+                                {{ form.tags }}
+                                <div class="form-text">Comma-separated, e.g. roaming, validation, critical</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Condition & Action -->
+                    <div class="form-section">
+                        <h6><i class="bi bi-braces me-1"></i> Condition & Action</h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Condition <span class="text-muted fw-normal">(when to trigger)</span></label>
+                                {{ form.condition }}
+                                <div class="form-text">JSON expression or rule definition</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Action <span class="text-muted fw-normal">(what to do)</span></label>
+                                {{ form.action }}
+                                <div class="form-text">JSON expression or action definition</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle me-1"></i> {{ btn_label }}
+                        </button>
+                        <a href="{% url 'businesslogic:rule_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

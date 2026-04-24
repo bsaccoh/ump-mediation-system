@@ -1,0 +1,504 @@
+{% extends "base.html" %}
+
+{% block title %}Input Portals IDE - UMP Mediation{% endblock %}
+
+{% block content %}
+<style>
+    /* IDE Layout */
+    .ide-container {
+        display: flex;
+        height: calc(100vh - 140px); /* Adjust based on topbar and margins */
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        overflow: hidden;
+        margin-top: -0.5rem;
+    }
+    .ide-sidebar {
+        width: 250px;
+        background: #f8f9fa;
+        border-right: 1px solid #dee2e6;
+        display: flex;
+        flex-direction: column;
+    }
+    .ide-sidebar-header {
+        padding: 0.75rem 1rem;
+        background: #e9ecef;
+        border-bottom: 1px solid #dee2e6;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    .ide-list-container {
+        flex: 1;
+        overflow-y: auto;
+    }
+    .ide-list-item {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem 1rem;
+        color: #495057;
+        text-decoration: none;
+        border-bottom: 1px solid #f1f3f5;
+        font-size: 0.85rem;
+    }
+    .ide-list-item:hover {
+        background: #e9ecef;
+        color: #212529;
+    }
+    .ide-list-item.active {
+        background: #e7f5ff;
+        color: #0b7285;
+        font-weight: 600;
+        border-left: 3px solid #1c7ed6;
+    }
+    .ide-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+        overflow-y: auto;
+    }
+    .ide-main-header {
+        padding: 0.75rem 1.5rem;
+        border-bottom: 1px solid #dee2e6;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #fdfdfd;
+    }
+    .ide-content {
+        padding: 1.5rem;
+        flex: 1;
+    }
+
+    /* Customizing Django forms */
+    .form-group label {
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: #495057;
+        margin-bottom: 0.25rem;
+    }
+    .form-group {
+        margin-bottom: 1rem;
+    }
+    .help-text {
+        font-size: 0.75rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+</style>
+
+<div class="ide-container">
+    <!-- Left Pane: Portal List -->
+    <div class="ide-sidebar">
+        <div class="ide-sidebar-header">
+            <span>Input Systems</span>
+            <a href="{% url 'portals:input_portal_ide' %}" class="btn btn-sm btn-outline-primary py-0 px-2" title="New Portal">
+                <i class="bi bi-plus-lg"></i>
+            </a>
+        </div>
+        <div class="ide-list-container">
+            {% for portal in portals %}
+            <a href="{% url 'portals:input_portal_ide_edit' portal.pk %}" class="ide-list-item {% if active_portal and active_portal.pk == portal.pk %}active{% endif %}">
+                {% if portal.is_active %}
+                <i class="bi bi-check-circle-fill text-success me-2" style="font-size: 0.75rem;"></i>
+                {% else %}
+                <i class="bi bi-dash-circle-fill text-danger me-2" style="font-size: 0.75rem;"></i>
+                {% endif %}
+                <i class="bi bi-folder2-open text-muted me-2"></i>
+                {{ portal.name }}
+            </a>
+            {% endfor %}
+            {% if not portals %}
+            <div class="text-muted text-center p-3 small">No portals configured.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Right Pane: Configuration -->
+    <div class="ide-main">
+        <div class="ide-main-header">
+            <div>
+                {% if active_portal %}
+                <h5 class="mb-0">
+                    <i class="bi bi-arrow-right-circle text-primary"></i> 
+                    {{ active_portal.name }} | <small class="text-muted">{{ active_portal.stream_type }}</small>
+                    {% if active_portal.is_active %}
+                    <span class="badge bg-success ms-2">Enabled <i class="bi bi-check"></i></span>
+                    {% else %}
+                    <span class="badge bg-danger ms-2">Disabled <i class="bi bi-x"></i></span>
+                    {% endif %}
+                </h5>
+                {% else %}
+                <h5 class="mb-0 text-muted"><i class="bi bi-plus-circle"></i> Create New Input Portal</h5>
+                {% endif %}
+            </div>
+            
+            <div class="d-flex gap-2">
+                <a href="{% url 'portals:input_portal_ide' %}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-plus-lg"></i> New Portal
+                </a>
+                {% if active_portal %}
+                <form method="post" action="{% url 'portals:input_portal_delete' active_portal.pk %}" onsubmit="return confirm('Delete this portal?');" class="m-0">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i> Delete</button>
+                </form>
+                {% endif %}
+                <button type="button" class="btn btn-sm btn-success" onclick="document.getElementById('portalForm').submit();">
+                    <i class="bi bi-save"></i> Save
+                </button>
+            </div>
+        </div>
+
+        <div class="ide-content">
+            <form method="post" id="portalForm">
+                {% csrf_token %}
+                
+                <!-- Nav tabs -->
+                <ul class="nav nav-tabs mb-4" id="portalTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="portal-tab" data-bs-toggle="tab" data-bs-target="#portal-pane" type="button" role="tab" aria-controls="portal-pane" aria-selected="true">Portal</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="routing-tab" data-bs-toggle="tab" data-bs-target="#routing-pane" type="button" role="tab" aria-controls="routing-pane" aria-selected="false">Routing</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="protocol-tab" data-bs-toggle="tab" data-bs-target="#protocol-pane" type="button" role="tab" aria-controls="protocol-pane" aria-selected="false">Protocol</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="input-tab" data-bs-toggle="tab" data-bs-target="#input-pane" type="button" role="tab" aria-controls="input-pane" aria-selected="false">Input</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="dispatch-tab" data-bs-toggle="tab" data-bs-target="#dispatch-pane" type="button" role="tab" aria-controls="dispatch-pane" aria-selected="false">Dispatch</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link disabled" id="monitor-tab" data-bs-toggle="tab" data-bs-target="#monitor-pane" type="button" role="tab" aria-controls="monitor-pane" aria-selected="false">Monitor</button>
+                    </li>
+                </ul>
+
+                <!-- Tab panes -->
+                <div class="tab-content" id="portalTabsContent">
+                    
+                    <!-- Tab 1: Portal Overview -->
+                    <div class="tab-pane fade show active" id="portal-pane" role="tabpanel" aria-labelledby="portal-tab" tabindex="0">
+                        <div class="row">
+                            <div class="col-md-6 form-group">
+                                <label for="{{ form.name.id_for_label }}">Portal Name / Alias</label>
+                                {{ form.name }}
+                                {{ form.name.errors }}
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label for="{{ form.stream_type.id_for_label }}">Stream Type</label>
+                                {{ form.stream_type }}
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-12 form-group">
+                                <label for="{{ form.description.id_for_label }}">Description</label>
+                                {{ form.description }}
+                                {{ form.description.errors }}
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-md-12">
+                                <div class="form-check form-switch">
+                                    {{ form.is_active }}
+                                    <label class="form-check-label fw-bold text-success" for="statusSwitch">Status Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab 2: Routing -->
+                    <div class="tab-pane fade" id="routing-pane" role="tabpanel" aria-labelledby="routing-tab" tabindex="0">
+                        <div class="d-flex align-items-center mb-3 text-muted">
+                            <span class="pe-2">All Routes</span>
+                            <div class="flex-grow-1 border-bottom"></div>
+                        </div>
+                        
+                        <div class="mb-3 d-flex align-items-center gap-2">
+                            <span>Route Rotation Enabled</span>
+                            <span class="badge bg-danger text-white">False <i class="bi bi-x"></i></span>
+                        </div>
+                        
+                        <!-- Primary Route (Active) -->
+                        <div class="card border-success mb-2">
+                            <div class="card-header bg-success text-white py-2" data-bs-toggle="collapse" data-bs-target="#primaryRoute" style="cursor: pointer;">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>Primary <i class="bi bi-check-circle-fill text-white ms-1"></i></span>
+                                    <i class="bi bi-chevron-down"></i>
+                                </div>
+                            </div>
+                            <div class="collapse show" id="primaryRoute">
+                                <div class="card-body bg-light">
+                                    <div class="row">
+                                        <div class="col-md-6 form-group">
+                                            <label>Status</label>
+                                            <select class="form-select form-select-sm bg-light">
+                                                <option selected>Enabled</option>
+                                                <option>Disabled</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6 form-group">
+                                            <label for="{{ form.portal_type.id_for_label }}">Resource Class</label>
+                                            {{ form.portal_type }}
+                                            {{ form.portal_type.errors }}
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-12 form-group">
+                                            <label for="{{ form.host.id_for_label }}">Node Name / Alias</label>
+                                            {{ form.host }}
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6 form-group">
+                                            <label for="{{ form.username.id_for_label }}">Login Phrase / Name</label>
+                                            {{ form.username }}
+                                            {{ form.username.errors }}
+                                        </div>
+                                        <div class="col-md-6 form-group">
+                                            <label for="{{ form.password.id_for_label }}">Security Phrase / Password</label>
+                                            {{ form.password }}
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-12 form-group">
+                                            <label for="{{ form.directory.id_for_label }}">Disk / Directory / Path</label>
+                                            {{ form.directory }}
+                                            {{ form.directory.errors }}
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6 form-group">
+                                            <label for="{{ form.port.id_for_label }}">Port</label>
+                                            {{ form.port }}
+                                            {{ form.port.errors }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Secondary Route (Placeholder) -->
+                        <div class="card border-warning mb-2">
+                            <div class="card-header bg-warning text-dark py-2 d-flex justify-content-between align-items-center">
+                                <span>Secondary <i class="bi bi-x-circle-fill text-danger ms-1"></i></span>
+                                <i class="bi bi-chevron-right"></i>
+                            </div>
+                        </div>
+
+                        <!-- Tertiary Route (Placeholder) -->
+                        <div class="card border-secondary mb-2">
+                            <div class="card-header bg-secondary text-white py-2 d-flex justify-content-between align-items-center">
+                                <span>Tertiary <i class="bi bi-dash-circle-fill text-dark ms-1"></i></span>
+                                <i class="bi bi-chevron-right"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab 3: Protocol -->
+                    <div class="tab-pane fade" id="protocol-pane" role="tabpanel" aria-labelledby="protocol-tab" tabindex="0">
+                        <h6 class="text-muted mb-3 border-bottom pb-2">Protocol - (FAI) Flexible Acquisition Interface</h6>
+                        <div class="row mb-3">
+                            <div class="col-md-8 form-group">
+                                <label for="{{ form.script_name.id_for_label }}">Script Name</label>
+                                {{ form.script_name }}
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <label for="{{ form.connect_timeout.id_for_label }}">Connect Timeout (seconds)</label>
+                                {{ form.connect_timeout }}
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <div class="form-check">
+                                    {{ form.enable_transcript }}
+                                    <label class="form-check-label text-muted" for="{{ form.enable_transcript.id_for_label }}">Enable Transcript</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card border-success mt-4">
+                            <div class="card-header bg-success text-white py-2" data-bs-toggle="collapse" data-bs-target="#faiParams" style="cursor: pointer;">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>FAI Parameters</span>
+                                    <i class="bi bi-chevron-down"></i>
+                                </div>
+                            </div>
+                            <div class="collapse show" id="faiParams">
+                                <div class="card-body bg-light">
+                                    <div class="row">
+                                        <div class="col-md-6 form-group">
+                                            <label for="{{ form.file_pattern.id_for_label }}">FILE_PATTERN</label>
+                                            {{ form.file_pattern }}
+                                        </div>
+                                        <div class="col-md-6 form-group">
+                                            <label for="{{ form.disposition.id_for_label }}">DISPOSITION</label>
+                                            {{ form.disposition }}
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6 form-group">
+                                            <label for="{{ form.rename_ext.id_for_label }}">RENAME_EXT</label>
+                                            {{ form.rename_ext }}
+                                        </div>
+                                        <div class="col-md-6 form-group">
+                                            <label for="{{ form.move_to.id_for_label }}">MOVE_TO</label>
+                                            {{ form.move_to }}
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6 form-group">
+                                            <label for="{{ form.rmv_prefix.id_for_label }}">RMV_PREFIX</label>
+                                            {{ form.rmv_prefix }}
+                                        </div>
+                                        <div class="col-md-6 form-group">
+                                            <label for="{{ form.reg_pattern.id_for_label }}">REG_PATTERN</label>
+                                            {{ form.reg_pattern }}
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6 form-group">
+                                            <label for="{{ form.port.id_for_label }}">SERVER_PORT</label>
+                                            {{ form.port }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab 4: Input -->
+                    <div class="tab-pane fade" id="input-pane" role="tabpanel" aria-labelledby="input-tab" tabindex="0">
+                        <div class="row mb-3">
+                            <div class="col-md-6 form-group">
+                                <label for="{{ form.duplicate_detection_algo.id_for_label }}">Duplicate File Detection Algorithm</label>
+                                {{ form.duplicate_detection_algo }}
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label for="{{ form.duplicate_disposition.id_for_label }}">Duplicate File Disposition</label>
+                                {{ form.duplicate_disposition }}
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-12 form-group">
+                                <label for="{{ form.duplicate_directory.id_for_label }}">Duplicate File Directory</label>
+                                {{ form.duplicate_directory }}
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6 form-group">
+                                <label for="{{ form.duplicate_business_logic.id_for_label }}">Duplicate File Business Logic</label>
+                                {{ form.duplicate_business_logic }}
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label for="{{ form.file_compression_type.id_for_label }}">File Compression Type</label>
+                                {{ form.file_compression_type }}
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6 form-group">
+                                <label for="{{ form.input_script.id_for_label }}">Input Script</label>
+                                {{ form.input_script }}
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label for="{{ form.large_file_access_descriptor.id_for_label }}">Large File Access Descriptor</label>
+                                {{ form.large_file_access_descriptor }}
+                            </div>
+                        </div>
+                        <div class="row mt-4 pt-3 border-top">
+                            <div class="col-md-6 form-group">
+                                <label for="{{ form.polling_interval.id_for_label }}">Polling Interval (seconds)</label>
+                                {{ form.polling_interval }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tab 5: Dispatch -->
+                    <div class="tab-pane fade" id="dispatch-pane" role="tabpanel" aria-labelledby="dispatch-tab" tabindex="0">
+                        <div class="row mb-4">
+                            <div class="col-md-12">
+                                <div class="form-check form-switch d-flex align-items-center gap-2">
+                                    <label class="form-check-label fw-bold mb-0" for="{{ form.dispatch_status.id_for_label }}">Dispatch Status</label>
+                                    {{ form.dispatch_status }}
+                                    <span class="badge bg-success">Enabled <i class="bi bi-check"></i></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mb-4">
+                            <div class="col-md-6 form-group">
+                                <label for="{{ form.dispatch_method.id_for_label }}">Dispatch Method</label>
+                                {{ form.dispatch_method }}
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label for="{{ form.schedule_type.id_for_label }}">Schedule Type</label>
+                                {{ form.schedule_type }}
+                            </div>
+                        </div>
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label class="fw-bold mb-2">Base Time</label>
+                                {{ form.base_time }}
+                                
+                                <div class="mt-4 form-group">
+                                    <label for="{{ form.do_not_dispatch_on.id_for_label }}">Do Not Dispatch On</label>
+                                    {{ form.do_not_dispatch_on }}
+                                    <small class="text-muted">None Selected</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-4">
+                                    <label for="{{ form.interval_mins.id_for_label }}">Interval (Minutes)</label>
+                                    {{ form.interval_mins }}
+                                </div>
+                                <div class="form-group">
+                                    <label>No Dispatch Intervals</label>
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <span class="text-muted small" style="width: 50px;">Time 1</span>
+                                        <input type="text" class="form-control form-control-sm bg-light" placeholder="00:00" disabled>
+                                        <input type="text" class="form-control form-control-sm bg-light" placeholder="00:00" disabled>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <span class="text-muted small" style="width: 50px;">Time 2</span>
+                                        <input type="text" class="form-control form-control-sm bg-light" placeholder="00:00" disabled>
+                                        <input type="text" class="form-control form-control-sm bg-light" placeholder="00:00" disabled>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <span class="text-muted small" style="width: 50px;">Time 3</span>
+                                        <input type="text" class="form-control form-control-sm bg-light" placeholder="00:00" disabled>
+                                        <input type="text" class="form-control form-control-sm bg-light" placeholder="00:00" disabled>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row border-top pt-3">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>Pending Processing Throttling</label>
+                                    <div class="mt-2">
+                                        <span class="badge bg-danger">False <i class="bi bi-x"></i></span>
+                                        <span class="d-none">{{ form.pending_processing_throttling }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <label for="{{ form.start_throttling_counts.id_for_label }}">Start Throttling Counts</label>
+                                {{ form.start_throttling_counts }}
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <label for="{{ form.end_throttling_counts.id_for_label }}">End Throttling Counts</label>
+                                {{ form.end_throttling_counts }}
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}File: {{ file.filename }}{% endblock %}
+{% block page_title %}File Detail{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-file-earmark-text"></i> {{ file.filename }}</span>
+        {% if file.status == 'FAILED' or file.status == 'COMPLETED' %}
+        <form method="post" action="{% url 'collection:reprocess' file.pk %}">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-warning"><i class="bi bi-arrow-clockwise"></i> Reprocess</button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <table class="table table-sm">
+                    <tr><td class="text-muted">Status</td><td><span class="badge bg-{% if file.status == 'COMPLETED' %}success{% elif file.status == 'FAILED' %}danger{% else %}secondary{% endif %}">{{ file.status }}</span></td></tr>
+                    <tr><td class="text-muted">Source</td><td>{{ file.source.name|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">Decoder</td><td>{{ file.decoder_type }}</td></tr>
+                    <tr><td class="text-muted">Size</td><td>{{ file.file_size|filesizeformat }}</td></tr>
+                    <tr><td class="text-muted">Hash</td><td><code>{{ file.file_hash|default:"-" }}</code></td></tr>
+                    <tr><td class="text-muted">Uploaded</td><td>{{ file.created_at|date:"Y-m-d H:i:s" }}</td></tr>
+                    <tr><td class="text-muted">Uploaded By</td><td>{{ file.uploaded_by|default:"-" }}</td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <table class="table table-sm">
+                    <tr><td class="text-muted">Total Records</td><td><strong>{{ file.records_total|intcomma }}</strong></td></tr>
+                    <tr><td class="text-muted">Valid</td><td class="text-success"><strong>{{ file.records_valid|intcomma }}</strong></td></tr>
+                    <tr><td class="text-muted">Invalid</td><td class="text-danger">{{ file.records_invalid|intcomma }}</td></tr>
+                    <tr><td class="text-muted">Duplicate</td><td>{{ file.records_duplicate|intcomma }}</td></tr>
+                    <tr><td class="text-muted">Success Rate</td><td>{{ file.success_rate }}%</td></tr>
+                    <tr><td class="text-muted">Processing Time</td><td>{% if file.processing_duration %}{{ file.processing_duration|floatformat:1 }}s{% else %}-{% endif %}</td></tr>
+                    <tr><td class="text-muted">Retries</td><td>{{ file.retry_count }}</td></tr>
+                </table>
+            </div>
+        </div>
+        {% if file.error_message %}
+        <div class="alert alert-danger mt-2">
+            <strong>Error:</strong> {{ file.error_message }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<a href="{% url 'collection:file_list' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back to Files
+</a>
+{% endblock %}

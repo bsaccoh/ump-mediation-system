@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+{% block title %}Processing Queue - UMP Mediation{% endblock %}
+{% block page_title %}Processing Queue{% endblock %}
+
+{% block extra_css %}
+<style>
+    .queue-section { margin-bottom: 1.5rem; }
+    .queue-section .section-header { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 2px solid #dee2e6; margin-bottom: 0.5rem; }
+    .queue-section .section-header h6 { margin: 0; font-weight: 700; }
+    .badge-pulse { animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .file-row { font-size: 0.85rem; }
+    .file-row td { vertical-align: middle; }
+    .progress { height: 6px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+    .status-dot.processing { background: #0d6efd; animation: pulse 1.5s infinite; }
+    .status-dot.pending { background: #ffc107; }
+    .status-dot.completed { background: #198754; }
+    .status-dot.failed { background: #dc3545; }
+    .auto-refresh-badge { font-size: 0.7rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Summary Cards -->
+<div class="row mb-3" id="summaryCards">
+    <div class="col-md-2">
+        <div class="card text-center py-2">
+            <div class="fw-bold fs-4 text-primary" id="sumProcessing">-</div>
+            <small class="text-muted">Processing</small>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center py-2">
+            <div class="fw-bold fs-4 text-warning" id="sumPending">-</div>
+            <small class="text-muted">Pending</small>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center py-2">
+            <div class="fw-bold fs-4 text-success" id="sumCompleted">-</div>
+            <small class="text-muted">Completed (24h)</small>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center py-2">
+            <div class="fw-bold fs-4 text-danger" id="sumFailed">-</div>
+            <small class="text-muted">Failed (7d)</small>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center py-2">
+            <div class="fw-bold fs-4 text-info" id="sumTotalToday">-</div>
+            <small class="text-muted">Files Today</small>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center py-2">
+            <div class="fw-bold fs-4 text-dark" id="sumRecordsToday">-</div>
+            <small class="text-muted">Records Today</small>
+        </div>
+    </div>
+</div>
+
+<!-- Active Processing -->
+<div class="queue-section">
+    <div class="section-header">
+        <h6><span class="status-dot processing"></span> Currently Processing</h6>
+        <span class="badge bg-primary auto-refresh-badge badge-pulse" id="refreshBadge">Auto-refresh: 5s</span>
+    </div>
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr><th>File</th><th>Source</th><th>Decoder</th><th>Elapsed</th><th>Records</th><th>Uploaded By</th></tr>
+                </thead>
+                <tbody id="tbProcessing">
+                    <tr><td colspan="6" class="text-center text-muted py-2">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Pending Queue -->
+<div class="queue-section">
+    <div class="section-header">
+        <h6><span class="status-dot pending"></span> Pending Queue</h6>
+        <span class="badge bg-warning text-dark" id="pendingCount">0</span>
+    </div>
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr><th>File</th><th>Source</th><th>Decoder</th><th>Queued At</th><th>Size</th><th>Uploaded By</th></tr>
+                </thead>
+                <tbody id="tbPending">
+                    <tr><td colspan="6" class="text-center text-muted py-2">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Recently Completed -->
+<div class="queue-section">
+    <div class="section-header">
+        <h6><span class="status-dot completed"></span> Recently Completed (24h)</h6>
+        <span class="badge bg-success" id="completedCount">0</span>
+    </div>
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr><th>File</th><th>Source</th><th>Decoder</th><th>Duration</th><th>Records</th><th>Success Rate</th><th>Completed</th></tr>
+                </thead>
+                <tbody id="tbCompleted">
+                    <tr><td colspan="7" class="text-center text-muted py-2">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Failed -->
+<div class="queue-section">
+    <div class="section-header">
+        <h6><span class="status-dot failed"></span> Failed (Last 7 Days)</h6>
+        <span class="badge bg-danger" id="failedCount">0</span>
+    </div>
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr><th>File</th><th>Source</th><th>Decoder</th><th>Error</th><th>Retries</th><th>Failed At</th><th>Action</th></tr>
+                </thead>
+                <tbody id="tbFailed">
+                    <tr><td colspan="7" class="text-center text-muted py-2">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function formatSize(bytes) {
+    if (!bytes) return '-';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function formatDuration(seconds) {
+    if (seconds == null) return '-';
+    if (seconds < 60) return seconds.toFixed(1) + 's';
+    const m = Math.floor(seconds / 60);
+    const s = (seconds % 60).toFixed(0);
+    return m + 'm ' + s + 's';
+}
+
+function truncate(str, len) {
+    if (!str) return '-';
+    return str.length > len ? str.substring(0, len) + '...' : str;
+}
+
+function renderProcessing(files) {
+    const tb = document.getElementById('tbProcessing');
+    if (files.length === 0) {
+        tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3"><i class="bi bi-check-circle"></i> No files currently processing</td></tr>';
+        return;
+    }
+    tb.innerHTML = files.map(f => `<tr class="file-row">
+        <td><a href="/collection/${f.id}/"><strong>${truncate(f.filename, 45)}</strong></a></td>
+        <td>${f.source}</td>
+        <td><span class="badge bg-info">${f.decoder_type}</span></td>
+        <td><span class="badge bg-primary badge-pulse">${formatDuration(f.processing_duration)}</span></td>
+        <td>${f.records_total > 0 ? f.records_total.toLocaleString() : '<span class="spinner-border spinner-border-sm text-primary" style="width:14px;height:14px;"></span>'}</td>
+        <td>${f.uploaded_by}</td>
+    </tr>`).join('');
+}
+
+function renderPending(files) {
+    const tb = document.getElementById('tbPending');
+    if (files.length === 0) {
+        tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3"><i class="bi bi-inbox"></i> Queue empty</td></tr>';
+        return;
+    }
+    tb.innerHTML = files.map(f => `<tr class="file-row">
+        <td><a href="/collection/${f.id}/">${truncate(f.filename, 45)}</a></td>
+        <td>${f.source}</td>
+        <td><span class="badge bg-info">${f.decoder_type}</span></td>
+        <td>${f.created_at}</td>
+        <td>${formatSize(f.file_size)}</td>
+        <td>${f.uploaded_by}</td>
+    </tr>`).join('');
+}
+
+function renderCompleted(files) {
+    const tb = document.getElementById('tbCompleted');
+    if (files.length === 0) {
+        tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3"><i class="bi bi-hourglass"></i> No completed files in the last 24 hours</td></tr>';
+        return;
+    }
+    tb.innerHTML = files.map(f => {
+        const rate = f.success_rate;
+        const rateClass = rate >= 99 ? 'success' : rate >= 90 ? 'warning' : 'danger';
+        return `<tr class="file-row">
+            <td><a href="/collection/${f.id}/">${truncate(f.filename, 40)}</a></td>
+            <td>${f.source}</td>
+            <td><span class="badge bg-info">${f.decoder_type}</span></td>
+            <td>${formatDuration(f.processing_duration)}</td>
+            <td>${f.records_valid.toLocaleString()} / ${f.records_total.toLocaleString()}</td>
+            <td>
+                <div class="d-flex align-items-center gap-2">
+                    <div class="progress flex-fill" style="min-width:60px;">
+                        <div class="progress-bar bg-${rateClass}" style="width:${rate}%"></div>
+                    </div>
+                    <small class="text-${rateClass} fw-bold">${rate}%</small>
+                </div>
+            </td>
+            <td><small>${f.created_at}</small></td>
+        </tr>`;
+    }).join('');
+}
+
+function renderFailed(files) {
+    const tb = document.getElementById('tbFailed');
+    if (files.length === 0) {
+        tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3"><i class="bi bi-shield-check"></i> No failed files</td></tr>';
+        return;
+    }
+    tb.innerHTML = files.map(f => `<tr class="file-row table-danger bg-opacity-10">
+        <td><a href="/collection/${f.id}/">${truncate(f.filename, 35)}</a></td>
+        <td>${f.source}</td>
+        <td><span class="badge bg-info">${f.decoder_type}</span></td>
+        <td><small class="text-danger">${truncate(f.error_message, 60)}</small></td>
+        <td>${f.retry_count}</td>
+        <td><small>${f.created_at}</small></td>
+        <td><a href="/collection/${f.id}/reprocess/" class="btn btn-sm btn-outline-warning py-0 px-2">
+            <i class="bi bi-arrow-clockwise"></i> Retry
+        </a></td>
+    </tr>`).join('');
+}
+
+function refreshQueue() {
+    fetch("{% url 'dashboard:processing_queue_api' %}")
+    .then(r => r.json())
+    .then(data => {
+        // Summary cards
+        const s = data.summary;
+        document.getElementById('sumProcessing').textContent = s.processing_count;
+        document.getElementById('sumPending').textContent = s.pending_count;
+        document.getElementById('sumCompleted').textContent = s.completed_count;
+        document.getElementById('sumFailed').textContent = s.failed_count;
+        document.getElementById('sumTotalToday').textContent = s.total_today;
+        document.getElementById('sumRecordsToday').textContent = s.records_today.toLocaleString();
+
+        // Section badges
+        document.getElementById('pendingCount').textContent = s.pending_count;
+        document.getElementById('completedCount').textContent = s.completed_count;
+        document.getElementById('failedCount').textContent = s.failed_count;
+
+        // Tables
+        renderProcessing(data.processing);
+        renderPending(data.pending);
+        renderCompleted(data.completed);
+        renderFailed(data.failed);
+    })
+    .catch(err => console.error('Queue refresh error:', err));
+}
+
+// Initial load + auto-refresh every 5 seconds
+refreshQueue();
+setInterval(refreshQueue, 5000);
+</script>
+{% endblock %}

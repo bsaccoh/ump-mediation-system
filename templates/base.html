@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}UMP Mediation{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        :root { --sidebar-width: 240px; --sidebar-collapsed-width: 62px; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f2f5; }
+
+        /* Sidebar */
+        .sidebar { width: var(--sidebar-width); min-height: 100vh; background: linear-gradient(180deg, #1a237e 0%, #0d47a1 100%); position: fixed; top: 0; left: 0; z-index: 1000; transition: width 0.25s ease; overflow: hidden; }
+        .sidebar .brand { padding: 1.2rem; color: #fff; font-size: 1.3rem; font-weight: 700; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between; white-space: nowrap; }
+        .sidebar .brand .brand-text { overflow: hidden; transition: opacity 0.2s, width 0.25s; }
+        .sidebar .brand small { display: block; font-size: 0.7rem; font-weight: 400; opacity: 0.7; }
+        .sidebar .brand-icon { font-size: 1.3rem; flex-shrink: 0; }
+
+        /* Collapse toggle button */
+        .sidebar-toggle { background: none; border: none; color: rgba(255,255,255,0.7); cursor: pointer; padding: 0; font-size: 1rem; flex-shrink: 0; line-height: 1; transition: color 0.2s; }
+        .sidebar-toggle:hover { color: #fff; }
+
+        /* Nav links */
+        .sidebar .nav-link { color: rgba(255,255,255,0.8); padding: 0.6rem 1.2rem; font-size: 0.9rem; border-left: 3px solid transparent; text-decoration: none; white-space: nowrap; display: flex; align-items: center; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { color: #fff; background: rgba(255,255,255,0.1); border-left-color: #42a5f5; }
+        .sidebar .nav-link i:first-child { width: 20px; display: inline-block; text-align: center; margin-right: 10px; flex-shrink: 0; }
+        .sidebar .nav-link-text { overflow: hidden; transition: opacity 0.2s; }
+
+        /* Dropdown toggles */
+        .sidebar .nav-dropdown-toggle { display: flex; align-items: center; cursor: pointer; }
+        .sidebar .nav-dropdown-toggle .nav-text { flex: 1; overflow: hidden; transition: opacity 0.2s; }
+        .sidebar .nav-dropdown-toggle .chevron { font-size: 0.6rem; opacity: 0.6; transition: transform 0.2s, opacity 0.2s; flex-shrink: 0; }
+        .sidebar .nav-dropdown-toggle.collapsed .chevron { transform: rotate(-90deg); }
+
+        /* Sub-menu */
+        .sidebar .nav-sub { list-style: none; padding: 0; margin: 0; }
+        .sidebar .nav-sub.collapse:not(.show) { display: none; }
+        .sidebar .nav-sub .nav-link { padding: 0.45rem 1.2rem 0.45rem 3rem; font-size: 0.85rem; }
+        .sidebar .nav-sub .nav-link i:first-child { width: 18px; font-size: 0.8rem; margin-right: 8px; }
+
+        /* Collapsed sidebar */
+        .sidebar.sidebar-collapsed { width: var(--sidebar-collapsed-width); }
+        .sidebar.sidebar-collapsed .brand { flex-direction: column; justify-content: center; padding: 1rem 0; gap: 0.8rem; }
+        .sidebar.sidebar-collapsed .brand-text { display: none; }
+        .sidebar.sidebar-collapsed .sidebar-toggle { margin: 0 !important; font-size: 1.1rem; }
+        .sidebar.sidebar-collapsed .nav-link-text,
+        .sidebar.sidebar-collapsed .nav-dropdown-toggle .nav-text,
+        .sidebar.sidebar-collapsed .nav-dropdown-toggle .chevron { display: none; }
+        .sidebar.sidebar-collapsed .nav-sub { display: none !important; }
+        .sidebar.sidebar-collapsed .nav-link { justify-content: center; padding: 0.8rem 0; border: none; }
+        .sidebar.sidebar-collapsed .nav-link i:first-child { margin: 0; font-size: 1.1rem; }
+
+        /* Tooltip on collapsed icons */
+        .sidebar.sidebar-collapsed .nav-link { position: relative; }
+        .sidebar.sidebar-collapsed .nav-link[title]:hover::after { content: attr(title); position: absolute; left: calc(var(--sidebar-collapsed-width) - 4px); top: 50%; transform: translateY(-50%); background: #333; color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 0.8rem; white-space: nowrap; z-index: 2000; pointer-events: none; }
+
+        /* Main */
+        .main-content { margin-left: var(--sidebar-width); padding: 1.5rem; transition: margin-left 0.25s ease; }
+        .main-content.expanded { margin-left: var(--sidebar-collapsed-width); }
+        .topbar { background: #fff; border-bottom: 1px solid #dee2e6; padding: 0.8rem 1.5rem; margin: -1.5rem -1.5rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+        .stat-card { text-align: center; padding: 1.2rem; }
+        .stat-card .value { font-size: 2rem; font-weight: 700; color: #1a237e; }
+        .stat-card .label { font-size: 0.8rem; color: #6c757d; }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="brand">
+            <i class="bi bi-diagram-3-fill brand-icon"></i>
+            <span class="brand-text ms-2">UMP<small>Mediation Platform</small></span>
+            <button class="sidebar-toggle ms-auto" id="sidebarToggle" title="Toggle sidebar">
+                <i class="bi bi-chevron-double-left" id="sidebarToggleIcon"></i>
+            </button>
+        </div>
+        <ul class="nav flex-column mt-2">
+            <li class="nav-item">
+                <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="{% url 'dashboard:index' %}" title="Dashboard">
+                    <i class="bi bi-speedometer2"></i><span class="nav-link-text"> Dashboard</span>
+                </a>
+            </li>
+
+            <!-- Operations Dropdown -->
+            <li class="nav-item">
+                <a class="nav-link nav-dropdown-toggle {% if '/search' in request.path or '/subscriber' in request.path or '/record' in request.path or '/collection' in request.path or '/queue' in request.path %}{% else %}collapsed{% endif %}"
+                   data-bs-toggle="collapse" href="#opsMenu" role="button" title="Operations"
+                   aria-expanded="{% if '/search' in request.path or '/subscriber' in request.path or '/record' in request.path or '/collection' in request.path or '/queue' in request.path %}true{% else %}false{% endif %}">
+                    <i class="bi bi-layers"></i>
+                    <span class="nav-text">Operations</span>
+                    <i class="bi bi-chevron-down chevron"></i>
+                </a>
+                <ul class="nav-sub collapse {% if '/search' in request.path or '/subscriber' in request.path or '/record' in request.path or '/collection' in request.path or '/queue' in request.path %}show{% endif %}" id="opsMenu">
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/search' in request.path %}active{% endif %}" href="{% url 'dashboard:cdr_search' %}" title="CDR Search">
+                            <i class="bi bi-search"></i><span class="nav-link-text"> CDR Search</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/subscriber' in request.path %}active{% endif %}" href="{% url 'dashboard:subscriber' %}" title="Subscriber">
+                            <i class="bi bi-person-lines-fill"></i><span class="nav-link-text"> Subscriber</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/collection/upload' in request.path %}active{% endif %}" href="{% url 'collection:upload' %}" title="File Upload">
+                            <i class="bi bi-upload"></i><span class="nav-link-text"> File Upload</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/collection' in request.path and '/upload' not in request.path %}active{% endif %}" href="{% url 'collection:file_list' %}" title="File Manager">
+                            <i class="bi bi-folder2-open"></i><span class="nav-link-text"> File Manager</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/queue' in request.path %}active{% endif %}" href="{% url 'dashboard:processing_queue' %}" title="Processing Queue">
+                            <i class="bi bi-activity"></i><span class="nav-link-text"> Processing Queue</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+
+            <!-- Reference Data Dropdown -->
+            <li class="nav-item">
+                <a class="nav-link nav-dropdown-toggle {% if '/reference/' in request.path %}{% else %}collapsed{% endif %}"
+                   data-bs-toggle="collapse" href="#refMenu" role="button" title="Reference Data"
+                   aria-expanded="{% if '/reference/' in request.path %}true{% else %}false{% endif %}">
+                    <i class="bi bi-database"></i>
+                    <span class="nav-text">Reference Data</span>
+                    <i class="bi bi-chevron-down chevron"></i>
+                </a>
+                <ul class="nav-sub collapse {% if '/reference/' in request.path %}show{% endif %}" id="refMenu">
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/reference/mcc-mnc' in request.path %}active{% endif %}" href="{% url 'reference:mcc_mnc' %}" title="MCC / MNC">
+                            <i class="bi bi-globe"></i><span class="nav-link-text"> MCC / MNC</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/reference/imsi-prefix' in request.path %}active{% endif %}" href="{% url 'reference:imsi_prefix' %}" title="IMSI Prefix">
+                            <i class="bi bi-sim"></i><span class="nav-link-text"> IMSI Prefix</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/reference/numbering-plan' in request.path %}active{% endif %}" href="{% url 'reference:numbering_plan' %}" title="Numbering Plan">
+                            <i class="bi bi-hash"></i><span class="nav-link-text"> Numbering Plan</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/reference/trunks' in request.path %}active{% endif %}" href="{% url 'reference:trunks' %}" title="Trunks">
+                            <i class="bi bi-diagram-3"></i><span class="nav-link-text"> Trunks</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+
+            <!-- System & Portals Dropdown -->
+            <li class="nav-item">
+                <a class="nav-link nav-dropdown-toggle {% if '/portals/' not in request.path %}collapsed{% endif %}"
+                   data-bs-toggle="collapse" href="#portalsMenu" role="button" title="System & Portals"
+                   aria-expanded="{% if '/portals/' in request.path %}true{% else %}false{% endif %}">
+                    <i class="bi bi-diagram-3"></i>
+                    <span class="nav-text">System &amp; Portals</span>
+                    <i class="bi bi-chevron-down chevron"></i>
+                </a>
+                <ul class="nav-sub collapse {% if '/portals/' in request.path %}show{% endif %}" id="portalsMenu">
+                    <!-- Configure Portal sub-group -->
+                    <li class="nav-item">
+                        <a class="nav-link nav-dropdown-toggle {% if '/portals/input-portal' not in request.path and '/portals/output-portal' not in request.path %}collapsed{% endif %}"
+                           data-bs-toggle="collapse" href="#configPortalMenu" role="button" title="Configure Portal"
+                           style="padding-left:2rem; font-size:0.82rem;">
+                            <i class="bi bi-plug"></i>
+                            <span class="nav-text">Configure Portal</span>
+                            <i class="bi bi-chevron-down chevron"></i>
+                        </a>
+                        <ul class="nav-sub collapse {% if '/portals/input-portal' in request.path or '/portals/output-portal' in request.path %}show{% endif %}" id="configPortalMenu">
+                            <li>
+                                <a class="nav-link {% if '/portals/' in request.path and '/portals/output' not in request.path %}active{% endif %}"
+                                   href="{% url 'portals:input_portal_ide' %}" title="Input Portal"
+                                   style="padding-left:3.5rem;">
+                                    <i class="bi bi-arrow-down-circle"></i><span class="nav-link-text"> Input Portal</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a class="nav-link {% if '/portals/output-portal' in request.path %}active{% endif %}"
+                                   href="{% url 'portals:output_portal_list' %}" title="Output Portal"
+                                   style="padding-left:3.5rem;">
+                                    <i class="bi bi-arrow-up-circle"></i><span class="nav-link-text"> Output Portal</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/portals/plugins' in request.path %}active{% endif %}"
+                           href="{% url 'portals:plugin_list' %}" title="Configure Plug-ins">
+                            <i class="bi bi-puzzle"></i><span class="nav-link-text"> Configure Plug-ins</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/portals/resources' in request.path %}active{% endif %}"
+                           href="{% url 'portals:resource_list' %}" title="Resource Management">
+                            <i class="bi bi-server"></i><span class="nav-link-text"> Resource Management</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+
+            <!-- Configuration Dropdown -->
+            <li class="nav-item">
+                <a class="nav-link nav-dropdown-toggle {% if '/admin/' not in request.path and '/scripts/' not in request.path and '/business-logic/' not in request.path %}collapsed{% endif %}"
+                   data-bs-toggle="collapse" href="#configMenu" role="button" title="Configuration"
+                   aria-expanded="{% if '/admin/' in request.path or '/scripts/' in request.path or '/business-logic/' in request.path %}true{% else %}false{% endif %}">
+                    <i class="bi bi-gear"></i>
+                    <span class="nav-text">Configuration</span>
+                    <i class="bi bi-chevron-down chevron"></i>
+                </a>
+                <ul class="nav-sub collapse {% if '/admin/' in request.path or '/scripts/' in request.path or '/business-logic/' in request.path %}show{% endif %}" id="configMenu">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'admin:index' %}" title="Admin Panel">
+                            <i class="bi bi-sliders"></i><span class="nav-link-text"> Admin Panel</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/scripts/' in request.path %}active{% endif %}"
+                           href="{% url 'scripts:script_ide' %}" title="Scripts">
+                            <i class="bi bi-code-square"></i><span class="nav-link-text"> Scripts</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/business-logic/' in request.path %}active{% endif %}"
+                           href="{% url 'businesslogic:rule_list' %}" title="Business Logic">
+                            <i class="bi bi-lightbulb"></i><span class="nav-link-text"> Business Logic</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+        </ul>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="topbar">
+            <h5 class="mb-0">{% block page_title %}Dashboard{% endblock %}</h5>
+            <div class="d-flex align-items-center gap-3">
+                {% if user.is_authenticated %}
+                <span class="text-muted small me-1" title="Last Login" style="font-size: 0.75rem;"><i class="bi bi-clock-history"></i> {{ user.last_login|date:"M d, Y H:i" }}</span>
+                <span class="text-muted"><i class="bi bi-person-circle"></i> {{ user.username }}</span>
+                <a href="{% url 'logout' %}" class="btn btn-sm btn-outline-secondary">Logout</a>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    (function () {
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.querySelector('.main-content');
+        const toggleBtn = document.getElementById('sidebarToggle');
+        const toggleIcon = document.getElementById('sidebarToggleIcon');
+        const COLLAPSED_KEY = 'ump_sidebar_collapsed';
+
+        function applyState(collapsed, animate) {
+            if (!animate) {
+                sidebar.style.transition = 'none';
+                mainContent.style.transition = 'none';
+            }
+            if (collapsed) {
+                sidebar.classList.add('sidebar-collapsed');
+                mainContent.classList.add('expanded');
+                toggleIcon.className = 'bi bi-chevron-double-right';
+            } else {
+                sidebar.classList.remove('sidebar-collapsed');
+                mainContent.classList.remove('expanded');
+                toggleIcon.className = 'bi bi-chevron-double-left';
+            }
+            if (!animate) {
+                // Force reflow then restore transitions
+                sidebar.offsetHeight;
+                sidebar.style.transition = '';
+                mainContent.style.transition = '';
+            }
+        }
+
+        // Restore saved state without animation on page load
+        const saved = localStorage.getItem(COLLAPSED_KEY) === '1';
+        applyState(saved, false);
+
+        toggleBtn.addEventListener('click', function () {
+            const isCollapsed = sidebar.classList.contains('sidebar-collapsed');
+            const next = !isCollapsed;
+            applyState(next, true);
+            localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0');
+        });
+    })();
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Dashboard - UMP Mediation{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Stats Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="value text-primary">{{ total_records|intcomma }}</div>
+            <div class="label">Total CDR Records</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="value text-success">{{ records_today|intcomma }}</div>
+            <div class="label">Records Today</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="value text-info">{{ files_completed }}</div>
+            <div class="label">Files Processed</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="value {% if files_failed > 0 %}text-danger{% else %}text-secondary{% endif %}">{{ files_failed }}</div>
+            <div class="label">Files Failed</div>
+        </div>
+    </div>
+</div>
+
+<!-- Stream Breakdown Row -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="value text-primary">{{ msc_total|intcomma }}</div>
+            <div class="label">MSC Records (Voice/SMS)</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="value text-info">{{ pgw_total|intcomma }}</div>
+            <div class="label">PGW Records (4G Data)</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="value text-warning">{{ sgsn_total|intcomma }}</div>
+            <div class="label">SGSN Records (2G/3G Data)</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="value text-secondary">{{ sgw_total|intcomma }}</div>
+            <div class="label">SGW Records (4G S-GW)</div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Service Type Breakdown -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-pie-chart"></i> Service Types</div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Type</th><th>Count</th><th>Duration</th></tr></thead>
+                    <tbody>
+                    {% for stat in service_stats %}
+                    <tr>
+                        <td><span class="badge bg-{% if stat.service_type == 'VOICE' %}primary{% elif stat.service_type == 'SMS' %}success{% else %}warning{% endif %}">{{ stat.service_type }}</span></td>
+                        <td>{{ stat.count|intcomma }}</td>
+                        <td>{{ stat.total_duration|default:0|intcomma }}s</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="3" class="text-muted text-center">No records yet</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Record Type Breakdown -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-bar-chart"></i> Record Types (Top 10)</div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Type</th><th>Count</th></tr></thead>
+                    <tbody>
+                    {% for stat in record_type_stats %}
+                    <tr>
+                        <td>{{ stat.record_type }}</td>
+                        <td>{{ stat.count|intcomma }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="2" class="text-muted text-center">No records yet</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Files -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-clock-history"></i> Recent Files</div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>File</th><th>Status</th><th>Records</th></tr></thead>
+                    <tbody>
+                    {% for f in recent_files %}
+                    <tr>
+                        <td title="{{ f.filename }}">{{ f.filename|truncatechars:25 }}</td>
+                        <td><span class="badge bg-{% if f.status == 'COMPLETED' %}success{% elif f.status == 'FAILED' %}danger{% elif f.status == 'PROCESSING' %}warning{% else %}secondary{% endif %}">{{ f.status }}</span></td>
+                        <td>{{ f.records_valid|intcomma }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="3" class="text-muted text-center">No files yet</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% block title %}Subscriber View - UMP Mediation{% endblock %}
+{% block page_title %}Subscriber View{% endblock %}
+
+{% block extra_css %}
+<style>
+    .subscriber-card { border-left: 4px solid #0d6efd; }
+    .timeline-row { font-size: 0.85rem; }
+    .role-badge { font-size: 0.7rem; min-width: 60px; text-align: center; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Search Bar -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form id="subForm" autocomplete="off" class="d-flex gap-2 align-items-end">
+            {% csrf_token %}
+            <div class="flex-fill">
+                <label class="form-label small fw-bold mb-1">MSISDN / Phone Number</label>
+                <input type="text" name="msisdn" id="msisdnInput" class="form-control"
+                       placeholder="Enter MSISDN e.g. 23276450206 or partial 76450" autofocus>
+            </div>
+            <button type="submit" class="btn btn-primary px-4" style="height:38px;">
+                <i class="bi bi-search"></i> Lookup
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Summary (hidden until search) -->
+<div id="summarySection" style="display:none;">
+    <div class="row mb-3">
+        <div class="col-md-8">
+            <div class="card subscriber-card">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="mb-0"><i class="bi bi-person-circle text-primary"></i> <span id="sumMsisdn"></span></h5>
+                        <span class="badge bg-secondary" id="sumTotal"></span>
+                    </div>
+                    <div class="row text-center">
+                        <div class="col">
+                            <div class="fw-bold text-primary fs-5" id="sumVoice">0</div>
+                            <small class="text-muted">Voice Calls</small>
+                        </div>
+                        <div class="col">
+                            <div class="fw-bold text-success fs-5" id="sumSms">0</div>
+                            <small class="text-muted">SMS</small>
+                        </div>
+                        <div class="col">
+                            <div class="fw-bold text-warning fs-5" id="sumOther">0</div>
+                            <small class="text-muted">Other</small>
+                        </div>
+                        <div class="col">
+                            <div class="fw-bold text-info fs-5" id="sumDuration">0</div>
+                            <small class="text-muted">Total Duration (s)</small>
+                        </div>
+                        <div class="col">
+                            <div class="fw-bold fs-5" id="sumAvgDur">0</div>
+                            <small class="text-muted">Avg Call (s)</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body py-2">
+                    <table class="table table-sm table-borderless mb-0" style="font-size:0.85rem;">
+                        <tr><td class="text-muted">Primary IMSI</td><td class="fw-bold" id="sumImsi">-</td></tr>
+                        <tr><td class="text-muted">Primary IMEI</td><td class="fw-bold" id="sumImei">-</td></tr>
+                        <tr><td class="text-muted">First Activity</td><td id="sumFirst">-</td></tr>
+                        <tr><td class="text-muted">Last Activity</td><td id="sumLast">-</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Message -->
+<div id="messageBox" class="alert alert-info" style="display:none;"></div>
+
+<!-- Timeline Table -->
+<div class="card" id="timelineCard" style="display:none;">
+    <div class="card-header d-flex justify-content-between align-items-center py-2">
+        <span><i class="bi bi-clock-history"></i> Activity Timeline</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Time</th>
+                        <th>Type</th>
+                        <th>Service</th>
+                        <th>Role</th>
+                        <th>Other Party</th>
+                        <th>Duration</th>
+                        <th>Cell ID</th>
+                        <th>LAC</th>
+                        <th>MSC</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="timelineBody"></tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center" id="pagBar" style="display:none;">
+        <small class="text-muted">Showing <span id="pagShowing"></span> of <span id="pagTotal"></span> records</small>
+        <nav><ul class="pagination pagination-sm mb-0" id="pagNumbers"></ul></nav>
+    </div>
+</div>
+
+<script>
+let currentPage = 1;
+const perPage = 30;
+
+function getCSRFToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+}
+
+document.getElementById('subForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    currentPage = 1;
+    doLookup();
+});
+
+function doLookup() {
+    const msisdn = document.getElementById('msisdnInput').value.trim();
+    if (!msisdn || msisdn.length < 5) {
+        document.getElementById('messageBox').textContent = 'Enter at least 5 digits.';
+        document.getElementById('messageBox').style.display = 'block';
+        return;
+    }
+
+    const params = new URLSearchParams();
+    params.append('csrfmiddlewaretoken', getCSRFToken());
+    params.append('msisdn', msisdn);
+    params.append('page', currentPage);
+    params.append('per_page', perPage);
+
+    document.getElementById('timelineBody').innerHTML = '<tr><td colspan="10" class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Searching...</td></tr>';
+    document.getElementById('timelineCard').style.display = 'block';
+
+    fetch("{% url 'dashboard:subscriber_api' %}", {
+        method: 'POST', body: params,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': getCSRFToken() }
+    })
+    .then(r => r.json())
+    .then(data => {
+        const msgBox = document.getElementById('messageBox');
+        if (data.message) { msgBox.textContent = data.message; msgBox.style.display = 'block'; }
+        else { msgBox.style.display = 'none'; }
+
+        if (!data.success || data.records.length === 0) {
+            document.getElementById('summarySection').style.display = 'none';
+            document.getElementById('timelineBody').innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">No activity found</td></tr>';
+            document.getElementById('pagBar').style.display = 'none';
+            return;
+        }
+
+        // Summary
+        const s = data.summary;
+        document.getElementById('summarySection').style.display = 'block';
+        document.getElementById('sumMsisdn').textContent = s.msisdn;
+        document.getElementById('sumTotal').textContent = s.total_records.toLocaleString() + ' records';
+        document.getElementById('sumVoice').textContent = s.total_voice.toLocaleString();
+        document.getElementById('sumSms').textContent = s.total_sms.toLocaleString();
+        document.getElementById('sumOther').textContent = s.total_other.toLocaleString();
+        document.getElementById('sumDuration').textContent = s.total_duration.toLocaleString();
+        document.getElementById('sumAvgDur').textContent = s.avg_duration;
+        document.getElementById('sumImsi').textContent = s.primary_imsi;
+        document.getElementById('sumImei').textContent = s.primary_imei;
+        document.getElementById('sumFirst').textContent = s.first_activity;
+        document.getElementById('sumLast').textContent = s.last_activity;
+
+        // Timeline
+        const tbody = document.getElementById('timelineBody');
+        let html = '';
+        data.records.forEach(r => {
+            const roleColors = { 'CALLER': 'primary', 'CALLED': 'success', 'CHARGED': 'warning' };
+            const roleLabels = { 'CALLER': 'Caller', 'CALLED': 'Called', 'CHARGED': 'Charged' };
+            const svcIcons = { 'VOICE': 'telephone', 'SMS': 'chat-dots' };
+            html += `<tr class="timeline-row">
+                <td><small>${r.start_time || '-'}</small></td>
+                <td><span class="badge bg-secondary">${r.record_type}</span></td>
+                <td><i class="bi bi-${svcIcons[r.service_type] || 'circle'} text-${r.service_type === 'VOICE' ? 'primary' : 'success'}"></i> ${r.service_type}</td>
+                <td><span class="badge bg-${roleColors[r.role] || 'secondary'} role-badge">${roleLabels[r.role] || r.role}</span></td>
+                <td><code>${r.other_party}</code></td>
+                <td>${r.duration != null ? r.duration + 's' : '-'}</td>
+                <td>${r.cell_id || '-'}</td>
+                <td>${r.lac || '-'}</td>
+                <td><small>${r.msc_id || '-'}</small></td>
+                <td><a href="/record/${(r.stream || 'msc').toLowerCase()}/${r.id}/" class="btn btn-sm btn-outline-primary py-0"><i class="bi bi-eye"></i></a></td>
+            </tr>`;
+        });
+        tbody.innerHTML = html;
+
+        // Pagination
+        const pag = data.pagination;
+        if (pag.pages > 1) {
+            document.getElementById('pagBar').style.display = 'flex';
+            const start = (pag.page - 1) * pag.per_page + 1;
+            const end = Math.min(pag.page * pag.per_page, pag.total);
+            document.getElementById('pagShowing').textContent = start + '-' + end;
+            document.getElementById('pagTotal').textContent = pag.total.toLocaleString();
+            buildPagination(pag.page, pag.pages);
+        } else {
+            document.getElementById('pagBar').style.display = 'none';
+        }
+    })
+    .catch(err => {
+        document.getElementById('timelineBody').innerHTML = '<tr><td colspan="10" class="text-center py-3 text-danger">Error: ' + err.message + '</td></tr>';
+    });
+}
+
+function goToPage(page) {
+    currentPage = page;
+    doLookup();
+    document.getElementById('timelineCard').scrollIntoView({ behavior: 'smooth' });
+}
+
+function buildPagination(current, totalPages) {
+    const ul = document.getElementById('pagNumbers');
+    let html = '';
+    html += `<li class="page-item ${current <= 1 ? 'disabled' : ''}">
+        <a class="page-link" href="#" onclick="event.preventDefault(); goToPage(${current - 1})"><i class="bi bi-chevron-left"></i></a></li>`;
+    if (current > 3) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); goToPage(1)">1</a></li>`;
+        if (current > 4) html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+    }
+    for (let i = Math.max(1, current - 2); i <= Math.min(totalPages, current + 2); i++) {
+        html += `<li class="page-item ${i === current ? 'active' : ''}">
+            <a class="page-link" href="#" onclick="event.preventDefault(); goToPage(${i})">${i}</a></li>`;
+    }
+    if (current < totalPages - 2) {
+        if (current < totalPages - 3) html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); goToPage(${totalPages})">${totalPages}</a></li>`;
+    }
+    html += `<li class="page-item ${current >= totalPages ? 'disabled' : ''}">
+        <a class="page-link" href="#" onclick="event.preventDefault(); goToPage(${current + 1})"><i class="bi bi-chevron-right"></i></a></li>`;
+    ul.innerHTML = html;
+}
+</script>
+{% endblock %}
