@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% load humanize %}
 
-{% block title %}GDC Scripts - UMP Mediation{% endblock %}
-{% block page_title %}GDC Scripts{% endblock %}
+{% block title %}Scripts - UMP Mediation{% endblock %}
+{% block page_title %}Scripts{% endblock %}
 
 {% block extra_css %}
 <!-- CodeMirror CSS -->
@@ -134,6 +134,17 @@
 {% endblock %}
 
 {% block content %}
+<div class="alert alert-warning d-flex align-items-start mb-2 py-2 px-3 mx-3 mt-2" role="alert" style="font-size:0.85rem;">
+    <i class="bi bi-exclamation-triangle-fill me-2 mt-1"></i>
+    <div>
+        <strong>Snippet library — not a live editor.</strong>
+        Saving here updates a stored copy of the script in the database only. It does
+        <strong>not</strong> modify the production decoders/processors that run on uploaded CDR files
+        (those live in <code>streams/&lt;stream&gt;/decoder.py</code> and <code>processor.py</code> on disk and are
+        managed via git/deploy). Use this page to keep reference copies, draft changes,
+        or run ad-hoc utility scripts via the Run button.
+    </div>
+</div>
 <div class="ide-container">
     
     <!-- Left Sidebar: Script Explorer -->

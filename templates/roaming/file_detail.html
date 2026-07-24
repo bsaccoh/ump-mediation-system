@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Roaming File {{ rfile.file_number }}{% endblock %}
+{% block page_title %}Roaming File {{ rfile.file_number }}{% endblock %}
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between">
+        <span><i class="bi bi-file-earmark-binary"></i> {{ rfile.file_number }}</span>
+        <span class="badge bg-{% if rfile.status == 'SETTLED' %}success{% elif rfile.status == 'DISPUTED' %}danger{% else %}secondary{% endif %}">{{ rfile.get_status_display }}</span>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <dl class="row mb-0 small">
+                    <dt class="col-5">Partner</dt><dd class="col-7">{{ rfile.partner.code }} — {{ rfile.partner.name }}</dd>
+                    <dt class="col-5">Cycle</dt><dd class="col-7">{{ rfile.billing_cycle.period_start }} → {{ rfile.billing_cycle.period_end }}</dd>
+                    <dt class="col-5">Direction</dt><dd class="col-7">{{ rfile.get_direction_display }}</dd>
+                    <dt class="col-5">Records</dt><dd class="col-7">{{ rfile.record_count }}</dd>
+                    <dt class="col-5">Voice min</dt><dd class="col-7">{{ rfile.voice_minutes }}</dd>
+                    <dt class="col-5">SMS</dt><dd class="col-7">{{ rfile.sms_count }}</dd>
+                    <dt class="col-5">Data MB</dt><dd class="col-7">{{ rfile.data_mb }}</dd>
+                    <dt class="col-5">SHA-256</dt><dd class="col-7 small"><code>{{ rfile.sha256|default:"—" }}</code></dd>
+                </dl>
+            </div>
+            <div class="col-md-6 text-end">
+                <h2 class="mb-0">{{ rfile.total_amount }} {{ rfile.currency }}</h2>
+                <small class="text-muted">Generated {{ rfile.generated_at|date:"Y-m-d H:i" }} by {{ rfile.generated_by|default:"—" }}</small>
+                {% if rfile.csv_file %}
+                <div class="mt-3">
+                    <a class="btn btn-sm btn-outline-secondary" href="{% url 'roaming:file_csv' rfile.pk %}"><i class="bi bi-download"></i> CSV</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><i class="bi bi-exclamation-diamond"></i> Disputes ({{ rfile.disputes.count }})</div>
+    <div class="table-responsive"><table class="table table-sm mb-0">
+        <thead class="table-light"><tr><th>Ref</th><th>Raised By</th><th>Status</th><th class="text-end">Claimed</th><th class="text-end">Variance</th><th>Opened</th></tr></thead>
+        <tbody>
+            {% for d in rfile.disputes.all %}
+            <tr>
+                <td>{{ d.dispute_ref }}</td>
+                <td>{{ d.raised_by }}</td>
+                <td>{{ d.get_status_display }}</td>
+                <td class="text-end">{{ d.claimed_amount }}</td>
+                <td class="text-end">{{ d.variance_amount }}</td>
+                <td class="small">{{ d.opened_at|date:"Y-m-d" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-center text-muted py-3">No disputes.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+</div>
+{% endblock %}

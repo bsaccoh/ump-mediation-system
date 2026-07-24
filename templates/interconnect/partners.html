@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% block title %}Partners — Interconnect{% endblock %}
+{% block page_title %}Interconnect Partners{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-people"></i> Partners</span>
+        <span class="badge bg-secondary" id="totalBadge">{{ total }} partners</span>
+    </div>
+    <div class="card-body pb-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search code, name, country…" oninput="loadData()">
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary btn-sm" onclick="openModal()"><i class="bi bi-plus-lg"></i> Add Partner</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="alertBox" class="alert" style="display:none;"></div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Code</th><th>Name</th><th>Country</th><th>CC</th>
+                        <th>MCC/MNC</th><th>Type</th><th>Currency</th><th>Status</th><th width="80"></th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="9" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm"></div> Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center" id="pagBar" style="display:none !important;">
+        <small class="text-muted">Showing <span id="pagShowing"></span> of <span id="pagTotal"></span></small>
+        <nav><ul class="pagination pagination-sm mb-0" id="pagNums"></ul></nav>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="entryModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Add Partner</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="entryId">
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Code <span class="text-danger">*</span></label>
+                        <input type="text" id="fCode" class="form-control form-control-sm" placeholder="AFRIC" maxlength="20">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Name <span class="text-danger">*</span></label>
+                        <input type="text" id="fName" class="form-control form-control-sm" placeholder="Africell SL">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Currency</label>
+                        <input type="text" id="fCurrency" class="form-control form-control-sm" value="SLE" maxlength="3">
+                    </div>
+
+                    <div class="col-md-5">
+                        <label class="form-label small fw-bold">Country</label>
+                        <input type="text" id="fCountry" class="form-control form-control-sm" value="Sierra Leone">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold">Country Code</label>
+                        <input type="text" id="fCountryCode" class="form-control form-control-sm" placeholder="232">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold">MCC</label>
+                        <input type="text" id="fMcc" class="form-control form-control-sm" maxlength="3">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">MNC</label>
+                        <input type="text" id="fMnc" class="form-control form-control-sm" maxlength="3">
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Network Type</label>
+                        <select id="fIsLocal" class="form-select form-select-sm">
+                            <option value="true">Local (Sierra Leone)</option>
+                            <option value="false">Foreign Carrier</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Role</label>
+                        <select id="fIsHome" class="form-select form-select-sm">
+                            <option value="false">Partner</option>
+                            <option value="true">Home Network (Orange)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Status</label>
+                        <select id="fIsActive" class="form-select form-select-sm">
+                            <option value="true">Active</option>
+                            <option value="false">Inactive</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Contact Name</label>
+                        <input type="text" id="fContactName" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Billing Email</label>
+                        <input type="email" id="fBillingEmail" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Phone</label>
+                        <input type="text" id="fPhone" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Billing Address</label>
+                        <input type="text" id="fBillingAddress" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold">Notes</label>
+                        <textarea id="fNotes" class="form-control form-control-sm" rows="2"></textarea>
+                    </div>
+                </div>
+                <div id="modalError" class="alert alert-danger mt-2" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="saveEntry()"><i class="bi bi-save"></i> Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentPage = 1;
+function getCSRF() { return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''; }
+function showAlert(msg, type='success') {
+    const b=document.getElementById('alertBox'); b.className=`alert alert-${type}`; b.textContent=msg; b.style.display='block';
+    setTimeout(()=>b.style.display='none',4000);
+}
+
+function loadData() {
+    const q = document.getElementById('searchInput').value;
+    fetch(`{% url 'interconnect:partner_api' %}?q=${encodeURIComponent(q)}&page=${currentPage}`)
+        .then(r => r.json()).then(data => {
+            document.getElementById('totalBadge').textContent = data.total + ' partners';
+            const tbody = document.getElementById('tableBody');
+            if (!data.records.length) {
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">No partners found</td></tr>';
+                document.getElementById('pagBar').style.cssText='display:none !important'; return;
+            }
+            tbody.innerHTML = data.records.map(r => {
+                const typeLabel = r.is_home ? '<span class="badge bg-warning text-dark">Home</span>'
+                                : r.is_local ? '<span class="badge bg-info">Local</span>'
+                                : '<span class="badge bg-secondary">Foreign</span>';
+                return `<tr>
+                    <td class="text-black"><strong>${r.code}</strong></td>
+                    <td class="text-black">${r.name}</td>
+                    <td class="text-black">${r.country||'-'}</td>
+                    <td class="text-black">${r.country_code||'-'}</td>
+                    <td class="text-black small">${r.mcc||'-'}/${r.mnc||'-'}</td>
+                    <td>${typeLabel}</td>
+                    <td class="text-black">${r.default_currency}</td>
+                    <td><span class="badge bg-${r.is_active?'success':'secondary'}">${r.is_active?'Active':'Inactive'}</span></td>
+                    <td class="text-end">
+                        <button class="btn btn-xs btn-outline-primary py-0 px-1 me-1" onclick='editEntry(${JSON.stringify(r).replace(/'/g,"\\'")})'><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-xs btn-outline-danger py-0 px-1" onclick="deleteEntry(${r.id})"><i class="bi bi-trash"></i></button>
+                    </td>
+                </tr>`;
+            }).join('');
+            buildPagination(data.page, data.pages, data.total);
+        });
+}
+
+function buildPagination(page, pages, total) {
+    const bar = document.getElementById('pagBar');
+    if (pages<=1){bar.style.cssText='display:none !important';return;}
+    bar.style.cssText='display:flex !important';
+    document.getElementById('pagShowing').textContent=`${(page-1)*25+1}–${Math.min(page*25,total)}`;
+    document.getElementById('pagTotal').textContent=total;
+    let html=`<li class="page-item ${page<=1?'disabled':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${page-1})">‹</a></li>`;
+    for(let i=Math.max(1,page-2);i<=Math.min(pages,page+2);i++)
+        html+=`<li class="page-item ${i===page?'active':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${i})">${i}</a></li>`;
+    html+=`<li class="page-item ${page>=pages?'disabled':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${page+1})">›</a></li>`;
+    document.getElementById('pagNums').innerHTML=html;
+}
+function goPage(p){currentPage=p;loadData();}
+
+function openModal(r=null) {
+    document.getElementById('entryId').value = r?.id||'';
+    document.getElementById('fCode').value = r?.code||'';
+    document.getElementById('fName').value = r?.name||'';
+    document.getElementById('fCountry').value = r?.country||'Sierra Leone';
+    document.getElementById('fCountryCode').value = r?.country_code||'232';
+    document.getElementById('fMcc').value = r?.mcc||'';
+    document.getElementById('fMnc').value = r?.mnc||'';
+    document.getElementById('fIsLocal').value = r?(r.is_local?'true':'false'):'true';
+    document.getElementById('fIsHome').value = r?(r.is_home?'true':'false'):'false';
+    document.getElementById('fIsActive').value = r?(r.is_active?'true':'false'):'true';
+    document.getElementById('fCurrency').value = r?.default_currency||'SLE';
+    document.getElementById('fContactName').value = r?.contact_name||'';
+    document.getElementById('fBillingEmail').value = r?.billing_email||'';
+    document.getElementById('fPhone').value = r?.phone||'';
+    document.getElementById('fBillingAddress').value = r?.billing_address||'';
+    document.getElementById('fNotes').value = r?.notes||'';
+    document.getElementById('modalTitle').textContent = r?'Edit Partner':'Add Partner';
+    document.getElementById('modalError').style.display='none';
+    new bootstrap.Modal(document.getElementById('entryModal')).show();
+}
+function editEntry(r){openModal(r);}
+
+function saveEntry() {
+    const params = new URLSearchParams({
+        csrfmiddlewaretoken:getCSRF(), id:document.getElementById('entryId').value,
+        code:document.getElementById('fCode').value.trim(),
+        name:document.getElementById('fName').value.trim(),
+        country:document.getElementById('fCountry').value.trim(),
+        country_code:document.getElementById('fCountryCode').value.trim(),
+        mcc:document.getElementById('fMcc').value.trim(),
+        mnc:document.getElementById('fMnc').value.trim(),
+        is_local:document.getElementById('fIsLocal').value,
+        is_home:document.getElementById('fIsHome').value,
+        is_active:document.getElementById('fIsActive').value,
+        default_currency:document.getElementById('fCurrency').value.trim(),
+        contact_name:document.getElementById('fContactName').value.trim(),
+        billing_email:document.getElementById('fBillingEmail').value.trim(),
+        phone:document.getElementById('fPhone').value.trim(),
+        billing_address:document.getElementById('fBillingAddress').value.trim(),
+        notes:document.getElementById('fNotes').value.trim(),
+    });
+    fetch("{% url 'interconnect:partner_save' %}", {method:'POST',body:params,headers:{'X-CSRFToken':getCSRF()}})
+        .then(r=>r.json()).then(data=>{
+            if(data.success){bootstrap.Modal.getInstance(document.getElementById('entryModal')).hide();showAlert('Saved.');loadData();}
+            else{document.getElementById('modalError').textContent=data.error;document.getElementById('modalError').style.display='block';}
+        });
+}
+
+function deleteEntry(id) {
+    if(!confirm('Delete this partner? (Related rates/cycles/invoices may be affected.)'))return;
+    fetch(`{% url 'interconnect:partner_delete' 0 %}`.replace('/0/',`/${id}/`),{method:'POST',headers:{'X-CSRFToken':getCSRF()}})
+        .then(r=>r.json()).then(d=>{if(d.success){showAlert('Deleted.');loadData();}else{showAlert(d.error||'Delete failed','danger');}});
+}
+
+document.addEventListener('DOMContentLoaded', loadData);
+</script>
+{% endblock %}

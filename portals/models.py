@@ -4,6 +4,9 @@ Portals Models
 Defines InputPortal, OutputPortal, Plugin, and Resource models
 for the UMP Mediation System.
 """
+import json
+
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -11,11 +14,13 @@ class StreamTypeMixin(models.Model):
     """Abstract mixin providing stream_type choices."""
 
     class StreamType(models.TextChoices):
-        MSC = 'MSC', 'MSC'
-        PGW = 'PGW', 'PGW'
+        MSC  = 'MSC',  'MSC'
+        IMS  = 'IMS',  'IMS (VoLTE/VoBB)'
+        PGW  = 'PGW',  'PGW'
         SGSN = 'SGSN', 'SGSN'
-        SGW = 'SGW', 'SGW'
-        ALL = 'ALL', 'All Streams'
+        SGW  = 'SGW',  'SGW'
+        CBS  = 'CBS',  'CBS (Huawei OCS/CBS)'
+        ALL  = 'ALL',  'All Streams'
 
     stream_type = models.CharField(
         max_length=10,
@@ -125,6 +130,8 @@ class OutputPortal(StreamTypeMixin):
         CSV = 'CSV', 'CSV'
         JSON = 'JSON', 'JSON'
         XML = 'XML', 'XML'
+        TEXT = 'TEXT', 'Plain Text'
+        RAW = 'RAW', 'Raw Binary (No Decoding)'
 
     name = models.CharField(max_length=100)
     portal_type = models.CharField(max_length=10, choices=PortalType.choices)
@@ -137,7 +144,13 @@ class OutputPortal(StreamTypeMixin):
     port = models.IntegerField(null=True, blank=True)
     username = models.CharField(max_length=100, blank=True)
     password = models.CharField(max_length=255, blank=True)
-    directory = models.CharField(max_length=500, blank=True)
+    directory = models.CharField(
+        max_length=500, blank=True,
+        help_text='Absolute path OR path relative to project DATA_DIR. '
+                  'Supports placeholders: {operator}, {vendor}, {ne}, {stream}, '
+                  '{portal}, {YYYY}, {MM}, {DD}. '
+                  'If blank, defaults to "{operator}/output/{vendor}/{ne}".'
+    )
     is_active = models.BooleanField(default=True)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -151,6 +164,51 @@ class OutputPortal(StreamTypeMixin):
 
     def __str__(self):
         return f"{self.name} ({self.portal_type})"
+
+    def clean(self):
+        super().clean()
+        if self.directory:
+            self.directory = self.directory.strip('"').strip("'")
+
+    def resolve_directory(self, dt=None, *, operator=None, vendor=None,
+                          network_element=None):
+        """Returns the absolute output path, resolving placeholders.
+
+        Multi-operator layout: ``{operator}/output/{vendor}/{ne}``. The
+        operator/vendor/network_element come from the CDRFile being delivered;
+        each falls back to a safe token when unknown so a file is never lost.
+        """
+        import os
+        from django.conf import settings
+        from datetime import datetime
+
+        op = (operator or 'unknown').lower()
+        vend = (vendor or 'unknown').lower()
+        ne = (network_element or self.stream_type or 'unknown').lower()
+
+        directory = (self.directory or '').strip()
+        if not directory:
+            # Per-operator default tree: {operator}/output/{vendor}/{ne}
+            directory = os.path.join(op, 'output', vend, ne)
+
+        dt = dt or datetime.now()
+        replacements = {
+            '{operator}': op,
+            '{vendor}': vend,
+            '{ne}': ne,
+            '{stream}': self.stream_type.lower(),
+            '{portal}': self.name.lower(),
+            '{YYYY}': dt.strftime('%Y'),
+            '{MM}': dt.strftime('%m'),
+            '{DD}': dt.strftime('%d'),
+        }
+        for placeholder, value in replacements.items():
+            directory = directory.replace(placeholder, value)
+
+        if not os.path.isabs(directory):
+            directory = os.path.join(settings.DATA_DIR, directory)
+
+        return directory
 
 
 class Plugin(models.Model):
@@ -221,3 +279,106 @@ class Resource(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.resource_type})"
+
+
+class OutputSchema(StreamTypeMixin):
+    """Defines the output file format and header mapping for a specific downstream."""
+    name = models.CharField(max_length=100)
+    mapping_json = models.JSONField(
+        default=dict, 
+        help_text="JSON mapping of Output Header -> Database Field (e.g. {'MSISDN': 'subscriber_id'})"
+    )
+    delimiter = models.CharField(max_length=5, default=',')
+    include_header = models.BooleanField(default=True)
+    quote_all = models.BooleanField(default=False, help_text="If true, quote all fields in CSV output.")
+    line_terminator = models.CharField(
+        max_length=5, default='\n', 
+        help_text="Line endings: \\n for Unix, \\r\\n for Windows."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'portals_output_schema'
+        verbose_name = 'Output Schema'
+        verbose_name_plural = 'Output Schemas'
+
+    def __str__(self):
+        return f"{self.name} ({self.stream_type})"
+
+
+class DistributionRule(StreamTypeMixin):
+    """Maps an input stream to an output portal with specific filtering and schema."""
+    name = models.CharField(max_length=100)
+    output_portal = models.ForeignKey(OutputPortal, on_delete=models.CASCADE, related_name='rules')
+    output_schema = models.ForeignKey(OutputSchema, on_delete=models.PROTECT, related_name='rules')
+    
+    filter_logic = models.TextField(
+        blank=True,
+        help_text='JSON dict of field=value applied via Django ORM .filter(**kwargs). '
+                  'Empty matches all. Example: {"prepaid_flag": "POSTPAID", "is_roaming": false}'
+    )
+    is_active = models.BooleanField(default=True)
+    priority = models.IntegerField(default=10)
+
+    # Retry policy (per-rule overrides)
+    max_retries = models.IntegerField(
+        default=3,
+        help_text='Total delivery attempts before giving up (1 = no retry).'
+    )
+    retry_backoff_seconds = models.CharField(
+        max_length=100,
+        default='2,5',
+        blank=True,
+        help_text='Comma-separated wait seconds between attempts, e.g. "2,5,10". '
+                  'Last value is reused if attempts exceed the list length.'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'portals_distribution_rule'
+        ordering = ['priority', 'name']
+        verbose_name = 'Distribution Rule'
+        verbose_name_plural = 'Distribution Rules'
+
+    def __str__(self):
+        return f"{self.name} -> {self.output_portal.name}"
+
+    def backoff_schedule(self) -> list:
+        """Parse `retry_backoff_seconds` into a list of ints. Returns [] when blank/invalid."""
+        text = (self.retry_backoff_seconds or '').strip()
+        if not text:
+            return []
+        out = []
+        for part in text.split(','):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                v = int(part)
+                if v >= 0:
+                    out.append(v)
+            except ValueError:
+                continue
+        return out
+
+    def filter_kwargs(self) -> dict:
+        text = (self.filter_logic or '').strip()
+        if not text:
+            return {}
+        try:
+            data = json.loads(text)
+        except (TypeError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def clean(self):
+        text = (self.filter_logic or '').strip()
+        if not text:
+            return
+        try:
+            data = json.loads(text)
+        except (TypeError, ValueError) as e:
+            raise ValidationError({'filter_logic': f'Invalid JSON: {e}'})
+        if not isinstance(data, dict):
+            raise ValidationError({'filter_logic': 'filter_logic must be a JSON object'})

@@ -61,6 +61,7 @@ class PGWDecoder:
         0x9c: 'ps_furnish_charging_info',
         0x9d: 'served_imeisv',
         0x9e: 'rat_type',
+        0x9f: 'ms_timezone', # Primitive version
     }
 
     # Extended tags (2-byte: 9f xx)
@@ -242,7 +243,7 @@ class PGWDecoder:
         while pos < len(data) - 1:
             tag = data[pos]
 
-            # Handle extended tags (9f xx)
+            # Handle extended tags (9f xx) — PRIMITIVE extended context
             if tag == 0x9f:
                 if pos + 1 >= len(data):
                     break
@@ -263,8 +264,35 @@ class PGWDecoder:
                 pos += length
                 continue
 
-            # Handle constructed tags (a0-bf range)
-            if tag >= 0xa0 and tag <= 0xbf:
+            # Handle 2-byte CONSTRUCTED extended tags (bf xx)
+            # MUST come BEFORE the generic 0xa0-0xbf block below
+            if tag == 0xbf:
+                if pos + 1 >= len(data):
+                    break
+                ext_tag = data[pos + 1]
+                pos += 2
+
+                if pos >= len(data):
+                    break
+
+                length, len_bytes = self._parse_length(data, pos)
+                pos += len_bytes
+
+                if pos + length > len(data):
+                    break
+
+                value = data[pos:pos + length]
+
+                if ext_tag == 0x22:
+                    # BF 22 = Huawei proprietary listOfServiceData (EXT[34])
+                    # Contains multiple SEQUENCE (0x30) entries, each with rating group info
+                    self._decode_huawei_service_data(record, value)
+
+                pos += length
+                continue
+
+            # Handle constructed tags (a0-be range — note: bf is handled above)
+            if tag >= 0xa0 and tag <= 0xbe:
                 pos += 1
                 if pos >= len(data):
                     break
@@ -280,9 +308,14 @@ class PGWDecoder:
                 elif tag == 0xa6:
                     self._decode_address_constructed(record, 'serving_node_address', data[pos:pos+length])
                 elif tag == 0xa9:
-                    self._decode_service_data_list(record, data[pos:pos+length])
+                    # [9] CONSTRUCTED = servedPDPPDNAddressExt (subscriber's assigned PDN IP)
+                    # NOT listOfServiceData — that is at BF22
+                    self._decode_address_constructed(record, 'pdn_address', data[pos:pos+length])
                 elif tag == 0xac:
                     self._decode_traffic_volumes(record, data[pos:pos+length])
+                elif tag == 0xbe:
+                    # [30] CONSTRUCTED = ePCQoSInformation
+                    self._decode_qos_information(record, data[pos:pos+length])
 
                 pos += length
                 continue
@@ -322,6 +355,12 @@ class PGWDecoder:
         if tag == 0x80:
             record['record_type'] = value[0] if value else None
             record['record_type_name'] = 'PGW-CDR' if value and value[0] in [79, 85] else 'SGW-CDR'
+
+        elif tag == 0x82:
+            # nodeID [2] — IA5String or OctetString
+            record['node_id_82'] = value.decode('ascii', errors='ignore').strip() if value else None
+            if not record.get('node_id'):
+                record['node_id'] = record['node_id_82']
 
         elif tag == 0x83:
             record['imsi'] = self._tbcd_decode(value)
@@ -396,12 +435,24 @@ class PGWDecoder:
 
         elif tag == 0x91:
             record['node_id_int'] = str(int.from_bytes(value, 'big')) if value else None
+            if not record.get('node_id'):
+                record['node_id'] = record['node_id_int']
 
         elif tag == 0x92:
-            record['node_id'] = value.decode('ascii', errors='ignore').strip()
+            node_id_val = value.decode('ascii', errors='ignore').strip() if value else None
+            record['node_id_92'] = node_id_val
+            # Only use tag 0x92 as the primary node_id if we don't have one yet,
+            # or if the existing one is just a generic placeholder.
+            existing = record.get('node_id', '')
+            if not existing or existing == 'FTSMF01':
+                if node_id_val:
+                    record['node_id'] = node_id_val
+
+        elif tag == 0x90:
+            record['record_sequence_number'] = int.from_bytes(value, 'big') if value else None
 
         elif tag == 0x94:
-            record['local_sequence_number'] = str(int.from_bytes(value, 'big')) if value else None
+            record['local_sequence_number'] = int.from_bytes(value, 'big') if value else None
 
         elif tag == 0x95:
             record['apn_selection_mode'] = value[0] if value else None
@@ -417,6 +468,11 @@ class PGWDecoder:
 
         elif tag == 0x9b:
             record['serving_plmn'] = self._decode_plmn(value)
+
+        elif tag == 0x9c:
+            # locationAreaCode [28] - observed in some Huawei variants
+            if value and len(value) >= 2:
+                record['lac'] = str(int.from_bytes(value[:2], 'big'))
 
         elif tag == 0x9d:
             record['imeisv'] = self._tbcd_decode(value)
@@ -527,6 +583,27 @@ class PGWDecoder:
         record['total_data_volume'] = str(total_uplink + total_downlink)
         record['data_volume_mb'] = round((total_uplink + total_downlink) / (1024 * 1024), 3)
 
+    def _decode_qos_information(self, record: Dict, data: bytes):
+        """Decode ePCQoSInformation constructed field"""
+        pos = 0
+        while pos < len(data):
+            tag = data[pos]
+            pos += 1
+            if pos >= len(data): break
+            length, len_bytes = self._parse_length(data, pos)
+            pos += len_bytes
+            if pos + length > len(data): break
+            value = data[pos:pos + length]
+
+            if tag == 0x81: # qCI
+                record['qci'] = value[0] if value else None
+            elif tag == 0x82: # maxRequestedBandwidthUL
+                record['max_requested_bw_ul'] = int.from_bytes(value, 'big')
+            elif tag == 0x83: # maxRequestedBandwidthDL
+                record['max_requested_bw_dl'] = int.from_bytes(value, 'big')
+            
+            pos += length
+
     def _decode_traffic_volume_entry(self, data: bytes) -> Optional[Dict]:
         """Decode a single traffic volume entry"""
         entry = {}
@@ -572,26 +649,286 @@ class PGWDecoder:
         return entry if entry else None
 
     def _decode_service_data_list(self, record: Dict, data: bytes):
-        """Decode list of service data (rating groups)"""
+        """Decode listOfServiceData per 3GPP TS 32.298 §6.1.1.5.
+
+        Each ServiceDataContainer entry is EXPLICITLY tagged as a CONSTRUCTED
+        context element (0xa0 … 0xaf).  Huawei also emits flat PRIMITIVE fields
+        directly inside the list for partial/abbreviated containers.
+
+        Extracts:
+            service_data_list  — list of dicts, one per container
+            rating_groups      — list of integer RG IDs found across all entries
+            rating_group       — string form of the first / primary RG ID
+        """
         record['service_data_raw'] = data.hex()
 
-        rating_groups = []
+        service_data_list = []
+        flat_entry: Optional[Dict] = None  # accumulator for top-level primitives
         pos = 0
 
-        while pos < len(data) - 2:
-            if data[pos:pos+2] == b'\xa0\x06':
-                pos += 2
-                if pos + 4 <= len(data) and data[pos:pos+2] == b'\x80\x04':
-                    rg_id = int.from_bytes(data[pos+2:pos+6], 'big')
-                    rating_groups.append(rg_id)
-                    pos += 6
-                else:
-                    pos += 1
+        while pos < len(data):
+            if pos >= len(data):
+                break
+
+            tag = data[pos]
+
+            # ── CONSTRUCTED context tag (0xa0 … 0xaf) ── explicit SEQUENCE wrapper
+            if tag >= 0xa0 and tag <= 0xbf and (tag & 0x20):
+                pos += 1
+                if pos >= len(data):
+                    break
+                entry_len, len_bytes = self._parse_length(data, pos)
+                pos += len_bytes
+                if pos + entry_len > len(data):
+                    break
+                entry = self._parse_service_data_entry(data[pos:pos + entry_len])
+                if entry:
+                    service_data_list.append(entry)
+                pos += entry_len
+
+            # ── PRIMITIVE tag at top level (flat/abbreviated Huawei format) ──
+            elif not (tag & 0x20):
+                pos += 1
+                if pos >= len(data):
+                    break
+                val_len, len_bytes = self._parse_length(data, pos)
+                pos += len_bytes
+                if pos + val_len > len(data):
+                    break
+                value = data[pos:pos + val_len]
+                inner = tag & 0x1f  # context tag number
+
+                if flat_entry is None:
+                    flat_entry = {}
+
+                if inner == 0x00:   # [0] ratingGroup
+                    flat_entry['rating_group'] = int.from_bytes(value, 'big') if value else 0
+                elif inner == 0x01:  # [1] localSequenceNumber
+                    flat_entry['local_sequence_number'] = int.from_bytes(value, 'big') if value else 0
+                elif inner == 0x08:  # [8] dataVolumeUplink (3GPP standard)
+                    flat_entry['data_volume_uplink'] = int.from_bytes(value, 'big') if value else 0
+                elif inner == 0x09:  # [9] dataVolumeDownlink (3GPP standard)
+                    flat_entry['data_volume_downlink'] = int.from_bytes(value, 'big') if value else 0
+                pos += val_len
+
             else:
                 pos += 1
 
-        if rating_groups:
-            record['rating_groups'] = rating_groups
+        if flat_entry:
+            service_data_list.append(flat_entry)
+
+        if service_data_list:
+            # Merge across multiple 0xa9 tags in the same record
+            existing_sdl = record.get('service_data_list', [])
+            record['service_data_list'] = existing_sdl + service_data_list
+            # Collect new rating group IDs and accumulate with any already found
+            new_rg_ids = [e['rating_group'] for e in service_data_list if 'rating_group' in e]
+            if new_rg_ids:
+                existing_rgs = record.get('rating_groups', [])
+                combined = existing_rgs + [rg for rg in new_rg_ids if rg not in existing_rgs]
+                record['rating_groups'] = combined
+                record['rating_group'] = str(combined[0])
+
+    def _decode_huawei_service_data(self, record: Dict, data: bytes):
+        """Decode Huawei proprietary listOfServiceData at BF22 (EXT[34]).
+
+        Structure:
+            BF 22 <len>
+              30 <len>   SEQUENCE (ServiceDataContainer entry)
+                81 <len> <bytes>   ratingGroup     (Huawei uses [1] not [0])
+                82 <len> <bytes>   ruleName        (ASCII string)
+                88 <len> <bytes>   dataVolumeUplink
+                89 <len> <bytes>   dataVolumeDownlink
+                ...
+              30 <len>   SEQUENCE (next entry)
+                ...
+
+        Note: Huawei shifts the inner tag numbers by +1 relative to 3GPP standard:
+              standard [0]=ratingGroup  →  Huawei [1] 0x81
+              standard [1]=localSeq     →  Huawei [2] 0x82 (ruleName overloaded here)
+        """
+        service_data_list = []
+        pos = 0
+
+        while pos < len(data):
+            if pos >= len(data):
+                break
+
+            tag = data[pos]
+
+            if tag != 0x30:
+                # Skip unexpected bytes
+                pos += 1
+                if pos >= len(data):
+                    break
+                skip_len, skip_lb = self._parse_length(data, pos)
+                pos += skip_lb + skip_len
+                continue
+
+            # SEQUENCE entry
+            pos += 1
+            if pos >= len(data):
+                break
+
+            seq_len, len_bytes = self._parse_length(data, pos)
+            pos += len_bytes
+
+            if pos + seq_len > len(data):
+                break
+
+            seq_data = data[pos:pos + seq_len]
+            entry = self._parse_huawei_service_data_entry(seq_data)
+            if entry:
+                service_data_list.append(entry)
+
+            pos += seq_len
+
+        if service_data_list:
+            existing_sdl = record.get('service_data_list', [])
+            record['service_data_list'] = existing_sdl + service_data_list
+
+            new_rg_ids = [e['rating_group'] for e in service_data_list if 'rating_group' in e]
+            if new_rg_ids:
+                existing_rgs = record.get('rating_groups', [])
+                # Deduplicate while preserving first-seen order
+                seen = set(existing_rgs)
+                combined = list(existing_rgs)
+                for rg in new_rg_ids:
+                    if rg not in seen:
+                        seen.add(rg)
+                        combined.append(rg)
+                record['rating_groups'] = combined
+                # Store all unique rating groups joined by ", " (e.g. "14, 11, 1065")
+                record['rating_group'] = ', '.join(str(rg) for rg in combined)
+
+    def _parse_huawei_service_data_entry(self, data: bytes) -> Optional[Dict]:
+        """Parse one Huawei ServiceDataContainer SEQUENCE entry from BF22.
+
+        Huawei inner tag assignments (context-specific IMPLICIT):
+            [1] 0x81  ratingGroup          (integer)
+            [2] 0x82  ruleName             (ASCII string, e.g. "up_rs-airtel-sl-")
+            [3] 0x83  ratingGroupAccCount  (integer, optional)
+            [4] 0x84  timeOfFirstUsage     (9-byte BCD timestamp)
+            [5] 0x85  timeOfLastUsage      (9-byte BCD timestamp)
+            [6] 0x86  timeUsage            (integer seconds)
+            [7] 0x87  serviceConditionChange
+            [8] 0x88  dataVolumeUplink     (integer bytes)
+            [9] 0x89  dataVolumeDownlink   (integer bytes)
+           [10] 0x8a  timeOfReport         (9-byte BCD timestamp)
+           [11] 0x8b  localSequenceNumber  (integer)
+        """
+        entry: Dict = {}
+        pos = 0
+
+        while pos < len(data):
+            if pos + 1 >= len(data):
+                break
+
+            tag = data[pos]
+            pos += 1
+            val_len, len_bytes = self._parse_length(data, pos)
+            pos += len_bytes
+
+            if pos + val_len > len(data):
+                break
+
+            value = data[pos:pos + val_len]
+
+            if tag == 0x81:    # ratingGroup (Huawei [1])
+                entry['rating_group'] = int.from_bytes(value, 'big') if value else 0
+            elif tag == 0x82:  # ruleName (Huawei [2])
+                try:
+                    entry['rule_name'] = value.decode('ascii', errors='ignore').strip('\x00').strip()
+                except Exception:
+                    entry['rule_name'] = value.hex()
+            elif tag == 0x83:  # ratingGroupAccCount
+                entry['rating_group_acc_count'] = int.from_bytes(value, 'big') if value else 0
+            elif tag == 0x84:  # timeOfFirstUsage
+                ts = self._decode_timestamp(value)
+                if ts:
+                    entry['time_of_first_usage'] = ts
+            elif tag == 0x85:  # timeOfLastUsage
+                ts = self._decode_timestamp(value)
+                if ts:
+                    entry['time_of_last_usage'] = ts
+            elif tag == 0x86:  # timeUsage
+                entry['time_usage'] = int.from_bytes(value, 'big') if value else 0
+            elif tag == 0x87:  # serviceConditionChange
+                entry['service_condition_change'] = int.from_bytes(value, 'big') if value else 0
+            elif tag == 0x88:  # dataVolumeUplink
+                entry['data_volume_uplink'] = int.from_bytes(value, 'big') if value else 0
+            elif tag == 0x89:  # dataVolumeDownlink
+                entry['data_volume_downlink'] = int.from_bytes(value, 'big') if value else 0
+            elif tag == 0x8a:  # timeOfReport
+                ts = self._decode_timestamp(value)
+                if ts:
+                    entry['time_of_report'] = ts
+            elif tag == 0x8b:  # localSequenceNumber
+                entry['local_sequence_number'] = int.from_bytes(value, 'big') if value else 0
+
+            pos += val_len
+
+        return entry if entry else None
+
+    def _parse_service_data_entry(self, data: bytes) -> Optional[Dict]:
+        """Parse the inner TLVs of one ServiceDataContainer (contents of 0xa0 wrapper).
+
+        3GPP TS 32.298 inner tags (IMPLICIT context-specific):
+            [0] 0x80  ratingGroup
+            [1] 0x81  localSequenceNumber
+            [2] 0x82  timeOfFirstUsage   (9-byte BCD timestamp)
+            [3] 0x83  timeOfLastUsage    (9-byte BCD timestamp)
+            [4] 0x84  timeUsage          (integer seconds)
+            [5] 0x85  serviceConditionChange
+            [8] 0x88  dataVolumeUplink
+            [9] 0x89  dataVolumeDownlink
+           [10] 0x8a  timeOfReport       (9-byte BCD timestamp)
+           [12] 0x8c  serviceIdentifier
+        """
+        entry: Dict = {}
+        pos = 0
+
+        while pos < len(data):
+            if pos + 1 >= len(data):
+                break
+            tag = data[pos]
+            pos += 1
+            val_len, len_bytes = self._parse_length(data, pos)
+            pos += len_bytes
+            if pos + val_len > len(data):
+                break
+            value = data[pos:pos + val_len]
+
+            if tag == 0x80:   # ratingGroup
+                entry['rating_group'] = int.from_bytes(value, 'big') if value else 0
+            elif tag == 0x81:  # localSequenceNumber
+                entry['local_sequence_number'] = int.from_bytes(value, 'big') if value else 0
+            elif tag == 0x82:  # timeOfFirstUsage
+                ts = self._decode_timestamp(value)
+                if ts:
+                    entry['time_of_first_usage'] = ts
+            elif tag == 0x83:  # timeOfLastUsage
+                ts = self._decode_timestamp(value)
+                if ts:
+                    entry['time_of_last_usage'] = ts
+            elif tag == 0x84:  # timeUsage (seconds)
+                entry['time_usage'] = int.from_bytes(value, 'big') if value else 0
+            elif tag == 0x85:  # serviceConditionChange
+                entry['service_condition_change'] = int.from_bytes(value, 'big') if value else 0
+            elif tag == 0x88:  # dataVolumeUplink (3GPP standard [8])
+                entry['data_volume_uplink'] = int.from_bytes(value, 'big') if value else 0
+            elif tag == 0x89:  # dataVolumeDownlink (3GPP standard [9])
+                entry['data_volume_downlink'] = int.from_bytes(value, 'big') if value else 0
+            elif tag == 0x8a:  # timeOfReport
+                ts = self._decode_timestamp(value)
+                if ts:
+                    entry['time_of_report'] = ts
+            elif tag == 0x8c:  # serviceIdentifier
+                entry['service_identifier'] = int.from_bytes(value, 'big') if value else 0
+
+            pos += val_len
+
+        return entry if entry else None
 
     def _decode_user_location(self, record: Dict, data: bytes):
         """

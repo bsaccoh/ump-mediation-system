@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Invoices — Interconnect{% endblock %}
+{% block page_title %}Invoices{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-file-earmark-text"></i> Invoices</span>
+        <span class="badge bg-secondary" id="totalBadge">{{ total }} invoices</span>
+    </div>
+    <div class="card-body pb-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search number / partner…" oninput="loadData()">
+            </div>
+            <div class="col-md-2">
+                <select id="filterStatus" class="form-select form-select-sm" onchange="loadData()">
+                    <option value="">All Statuses</option>
+                    {% for v,l in status_choices %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <a class="btn btn-primary btn-sm" href="{% url 'interconnect:invoice_generate' %}"><i class="bi bi-plus-lg"></i> Generate Invoice</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="alertBox" class="alert" style="display:none;"></div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Invoice #</th><th>Partner</th><th>Cycle</th><th>Direction</th>
+                        <th class="text-end">Total</th><th class="text-end">Paid</th><th class="text-end">Outstanding</th>
+                        <th>Status</th><th>Due</th><th width="160"></th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="10" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm"></div> Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center" id="pagBar" style="display:none !important;">
+        <small class="text-muted">Showing <span id="pagShowing"></span> of <span id="pagTotal"></span></small>
+        <nav><ul class="pagination pagination-sm mb-0" id="pagNums"></ul></nav>
+    </div>
+</div>
+
+<script>
+let currentPage = 1;
+const STATUS_COLORS = {DRAFT:'secondary',ISSUED:'primary',SENT:'info',PAID:'success',PART_PAID:'warning',OVERDUE:'danger',DISPUTED:'danger',VOID:'dark'};
+function getCSRF() { return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''; }
+function showAlert(msg, type='success') {
+    const b=document.getElementById('alertBox'); b.className=`alert alert-${type}`; b.textContent=msg; b.style.display='block';
+    setTimeout(()=>b.style.display='none',4000);
+}
+
+function loadData() {
+    const q = document.getElementById('searchInput').value;
+    const status = document.getElementById('filterStatus').value;
+    fetch(`{% url 'interconnect:invoice_api' %}?q=${encodeURIComponent(q)}&status=${status}&page=${currentPage}`)
+        .then(r=>r.json()).then(data=>{
+            document.getElementById('totalBadge').textContent = data.total + ' invoices';
+            const tbody = document.getElementById('tableBody');
+            if (!data.records.length) {
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">No invoices found</td></tr>';
+                document.getElementById('pagBar').style.cssText='display:none !important'; return;
+            }
+            tbody.innerHTML = data.records.map(r => {
+                const c = STATUS_COLORS[r.status] || 'secondary';
+                const dirBadge = r.direction === 'INBOUND' ? 'success' : 'warning';
+                const pdf = r.pdf_url ? `<a class="btn btn-xs btn-outline-secondary py-0 px-1" title="PDF" href="${r.pdf_url}" target="_blank"><i class="bi bi-file-pdf"></i></a>` : `<a class="btn btn-xs btn-outline-secondary py-0 px-1" title="PDF" href="/interconnect/invoices/${r.id}/pdf/" target="_blank"><i class="bi bi-file-pdf"></i></a>`;
+                const csv = `<a class="btn btn-xs btn-outline-secondary py-0 px-1" title="CSV" href="/interconnect/invoices/${r.id}/csv/"><i class="bi bi-file-spreadsheet"></i></a>`;
+                return `<tr>
+                    <td class="text-black"><a href="/interconnect/invoices/${r.id}/" class="text-decoration-none"><strong>${r.invoice_number}</strong></a></td>
+                    <td class="text-black">${r.partner} — ${r.partner_name}</td>
+                    <td class="text-black small">${r.cycle}</td>
+                    <td><span class="badge bg-${dirBadge}">${r.direction}</span></td>
+                    <td class="text-end text-black"><strong>${parseFloat(r.total).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</strong> <span class="text-muted small">${r.currency}</span></td>
+                    <td class="text-end text-black">${parseFloat(r.amount_paid).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                    <td class="text-end text-black">${parseFloat(r.amount_outstanding).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                    <td><span class="badge bg-${c}">${r.status}</span></td>
+                    <td class="text-black small">${r.due_date||'-'}</td>
+                    <td class="text-end text-nowrap">
+                        <a class="btn btn-xs btn-outline-primary py-0 px-1" title="View" href="/interconnect/invoices/${r.id}/"><i class="bi bi-eye"></i></a>
+                        ${pdf} ${csv}
+                        <div class="dropdown d-inline-block">
+                            <button class="btn btn-xs btn-outline-dark py-0 px-1 dropdown-toggle" data-bs-toggle="dropdown" title="Status"><i class="bi bi-check2-square"></i></button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item small" href="#" onclick="event.preventDefault();setStatus(${r.id},'ISSUED')">Mark Issued</a></li>
+                                <li><a class="dropdown-item small" href="#" onclick="event.preventDefault();setStatus(${r.id},'SENT')">Mark Sent</a></li>
+                                <li><a class="dropdown-item small" href="#" onclick="event.preventDefault();setStatus(${r.id},'PAID')">Mark Paid</a></li>
+                                <li><a class="dropdown-item small" href="#" onclick="event.preventDefault();setStatus(${r.id},'DISPUTED')">Mark Disputed</a></li>
+                                <li><a class="dropdown-item small" href="#" onclick="event.preventDefault();setStatus(${r.id},'VOID')">Void</a></li>
+                            </ul>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+            buildPagination(data.page, data.pages, data.total);
+        });
+}
+
+function buildPagination(page, pages, total) {
+    const bar = document.getElementById('pagBar');
+    if (pages<=1){bar.style.cssText='display:none !important';return;}
+    bar.style.cssText='display:flex !important';
+    document.getElementById('pagShowing').textContent=`${(page-1)*25+1}–${Math.min(page*25,total)}`;
+    document.getElementById('pagTotal').textContent=total;
+    let html=`<li class="page-item ${page<=1?'disabled':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${page-1})">‹</a></li>`;
+    for(let i=Math.max(1,page-2);i<=Math.min(pages,page+2);i++)
+        html+=`<li class="page-item ${i===page?'active':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${i})">${i}</a></li>`;
+    html+=`<li class="page-item ${page>=pages?'disabled':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${page+1})">›</a></li>`;
+    document.getElementById('pagNums').innerHTML=html;
+}
+function goPage(p){currentPage=p;loadData();}
+
+function setStatus(id, status) {
+    const params = new URLSearchParams({csrfmiddlewaretoken:getCSRF(), status:status});
+    fetch(`/interconnect/invoices/${id}/status/`, {method:'POST',body:params,headers:{'X-CSRFToken':getCSRF()}})
+        .then(r=>r.json()).then(d=>{
+            if(d.success){showAlert('Status updated to '+d.status+'.');loadData();}
+            else showAlert(d.error||'Update failed','danger');
+        });
+}
+
+document.addEventListener('DOMContentLoaded', loadData);
+</script>
+{% endblock %}

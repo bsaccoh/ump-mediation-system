@@ -28,6 +28,8 @@ def _build_pgw_queryset(params):
     apn = params.get('apn', '').strip()
     imsi = params.get('imsi', '').strip()
     imei = params.get('imei', '').strip()
+    lac = params.get('lac', '').strip()
+    node_id = params.get('node_id', '').strip()
     record_type = params.get('record_type', '').strip()
     rat_type = params.get('rat_type', '').strip()
     source_id = params.get('source_id', '').strip()
@@ -49,6 +51,12 @@ def _build_pgw_queryset(params):
     if imei:
         query = query.filter(imei__icontains=imei)
         filters.append(f'imei={imei}')
+    if lac:
+        query = query.filter(lac__icontains=lac)
+        filters.append(f'lac={lac}')
+    if node_id:
+        query = query.filter(node_id__icontains=node_id)
+        filters.append(f'node_id={node_id}')
     if record_type:
         types = [t.strip() for t in record_type.split(',') if t.strip()]
         query = query.filter(record_type__in=types)
@@ -163,6 +171,9 @@ def pgw_search_api(request):
             'is_roaming': rec.is_roaming,
             'cell_id': rec.cell_id,
             'lac': rec.lac,
+            'tac': rec.tac,
+            'eci': rec.eci,
+            'rating_group': rec.rating_group or '',
             'status': rec.status,
         })
 
@@ -210,11 +221,14 @@ EXPORT_COLUMNS = [
     ('sgw_address', 'SGW Address'),
     ('node_id', 'Node ID'),
     ('cell_id', 'Cell ID'),
-    ('lac', 'TAC'),
+    ('lac', 'LAC'),
+    ('tac', 'TAC'),
+    ('eci', 'ECI'),
     ('serving_plmn', 'Serving PLMN'),
     ('cause_for_closing', 'Cause'),
     ('is_roaming', 'Roaming'),
     ('charging_id', 'Charging ID'),
+    ('rating_group', 'Rating Group'),
     ('status', 'Status'),
 ]
 

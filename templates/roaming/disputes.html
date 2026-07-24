@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}Roaming Disputes{% endblock %}
+{% block page_title %}Roaming Disputes{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-exclamation-diamond"></i> Disputes</span>
+        <span class="badge bg-secondary" id="totalBadge">{{ total }} dispute{{ total|pluralize }}</span>
+    </div>
+    <div class="card-body pb-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <select id="filterStatus" class="form-select form-select-sm" onchange="loadData()">
+                    <option value="">All Statuses</option>
+                    {% for v,l in status_choices %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary btn-sm" onclick="openModal()"><i class="bi bi-plus-lg"></i> Log Dispute</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="alertBox" class="alert" style="display:none;"></div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Ref</th><th>File</th><th>Partner</th><th>Raised By</th>
+                        <th class="text-end">Claimed</th><th class="text-end">Variance</th>
+                        <th>Status</th><th>Opened</th><th width="80"></th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="9" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm"></div> Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center" id="pagBar" style="display:none !important;">
+        <small class="text-muted">Showing <span id="pagShowing"></span> of <span id="pagTotal"></span></small>
+        <nav><ul class="pagination pagination-sm mb-0" id="pagNums"></ul></nav>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="entryModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title" id="modalTitle">Log Dispute</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="hidden" id="entryId">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Roaming File <span class="text-danger">*</span></label>
+                        <select id="fFile" class="form-select form-select-sm">
+                            <option value="">— select file —</option>
+                            {% for f in files %}<option value="{{ f.pk }}">{{ f.file_number }} — {{ f.partner.code }} — {{ f.total_amount }} {{ f.currency }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Dispute Reference <span class="text-danger">*</span></label>
+                        <input type="text" id="fRef" class="form-control form-control-sm" placeholder="DISP-2026-Q1-001">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Raised By</label>
+                        <input type="text" id="fRaisedBy" class="form-control form-control-sm" placeholder="partner.finance@example.com">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Claimed Volume</label>
+                        <input type="number" step="0.001" id="fVolume" class="form-control form-control-sm" value="0">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Claimed Amount</label>
+                        <input type="number" step="0.01" id="fAmount" class="form-control form-control-sm" value="0">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Status</label>
+                        <select id="fStatus" class="form-select form-select-sm">
+                            {% for v,l in status_choices %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold">Description</label>
+                        <textarea id="fDesc" class="form-control form-control-sm" rows="3" placeholder="Partner claim details..."></textarea>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold">Resolution Notes</label>
+                        <textarea id="fResNotes" class="form-control form-control-sm" rows="2"></textarea>
+                    </div>
+                </div>
+                <div id="modalError" class="alert alert-danger mt-2" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="saveEntry()"><i class="bi bi-save"></i> Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentPage = 1;
+const STATUS_COLORS = {OPEN:'warning',UNDER_REVIEW:'info',ACCEPTED:'primary',REJECTED:'secondary',RESOLVED:'success'};
+function getCSRF() { return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''; }
+function showAlert(msg, type='success') {
+    const b=document.getElementById('alertBox'); b.className=`alert alert-${type}`; b.textContent=msg; b.style.display='block';
+    setTimeout(()=>b.style.display='none',4000);
+}
+function fmt(n,dp=2){return parseFloat(n||0).toLocaleString(undefined,{minimumFractionDigits:dp,maximumFractionDigits:dp});}
+
+function loadData() {
+    const status = document.getElementById('filterStatus').value;
+    fetch(`{% url 'roaming:dispute_api' %}?status=${status}&page=${currentPage}`)
+        .then(r=>r.json()).then(data=>{
+            document.getElementById('totalBadge').textContent = data.total + ' dispute' + (data.total === 1 ? '' : 's');
+            const tbody = document.getElementById('tableBody');
+            if (!data.records.length) {
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">No disputes recorded.</td></tr>';
+                document.getElementById('pagBar').style.cssText='display:none !important'; return;
+            }
+            tbody.innerHTML = data.records.map(r => {
+                const c = STATUS_COLORS[r.status]||'secondary';
+                const varAmt = parseFloat(r.variance_amount);
+                const varClass = varAmt < 0 ? 'text-danger' : (varAmt > 0 ? 'text-success' : '');
+                return `<tr>
+                    <td class="text-black"><strong>${r.dispute_ref}</strong></td>
+                    <td class="text-black small"><a href="/roaming/files/${r.file_id}/">${r.file_number}</a></td>
+                    <td class="text-black">${r.partner}</td>
+                    <td class="text-black small">${r.raised_by||'-'}</td>
+                    <td class="text-end text-black">${fmt(r.claimed_amount)}</td>
+                    <td class="text-end ${varClass}">${fmt(varAmt)}</td>
+                    <td><span class="badge bg-${c}">${r.status}</span></td>
+                    <td class="text-black small">${r.opened_at.slice(0,10)}</td>
+                    <td class="text-end">
+                        <button class="btn btn-xs btn-outline-primary py-0 px-1 me-1" onclick='editEntry(${JSON.stringify(r).replace(/'/g,"\\'")})'><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-xs btn-outline-danger py-0 px-1" onclick="deleteEntry(${r.id})"><i class="bi bi-trash"></i></button>
+                    </td>
+                </tr>`;
+            }).join('');
+            buildPagination(data.page, data.pages, data.total);
+        });
+}
+
+function buildPagination(page, pages, total) {
+    const bar = document.getElementById('pagBar');
+    if (pages<=1){bar.style.cssText='display:none !important';return;}
+    bar.style.cssText='display:flex !important';
+    document.getElementById('pagShowing').textContent=`${(page-1)*25+1}–${Math.min(page*25,total)}`;
+    document.getElementById('pagTotal').textContent=total;
+    let html=`<li class="page-item ${page<=1?'disabled':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${page-1})">‹</a></li>`;
+    for(let i=Math.max(1,page-2);i<=Math.min(pages,page+2);i++)
+        html+=`<li class="page-item ${i===page?'active':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${i})">${i}</a></li>`;
+    html+=`<li class="page-item ${page>=pages?'disabled':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${page+1})">›</a></li>`;
+    document.getElementById('pagNums').innerHTML=html;
+}
+function goPage(p){currentPage=p;loadData();}
+
+function openModal(r=null) {
+    document.getElementById('entryId').value = r?.id||'';
+    document.getElementById('fFile').value = r?.file_id||'';
+    document.getElementById('fRef').value = r?.dispute_ref||'';
+    document.getElementById('fRaisedBy').value = r?.raised_by||'';
+    document.getElementById('fVolume').value = r?.claimed_volume||'0';
+    document.getElementById('fAmount').value = r?.claimed_amount||'0';
+    document.getElementById('fStatus').value = r?.status||'OPEN';
+    document.getElementById('fDesc').value = r?.description||'';
+    document.getElementById('fResNotes').value = r?.resolution_notes||'';
+    document.getElementById('modalTitle').textContent = r?'Edit Dispute':'Log Dispute';
+    document.getElementById('modalError').style.display='none';
+    new bootstrap.Modal(document.getElementById('entryModal')).show();
+}
+function editEntry(r){openModal(r);}
+
+function saveEntry() {
+    const params = new URLSearchParams({
+        csrfmiddlewaretoken:getCSRF(), id:document.getElementById('entryId').value,
+        roaming_file_id:document.getElementById('fFile').value,
+        dispute_ref:document.getElementById('fRef').value.trim(),
+        raised_by:document.getElementById('fRaisedBy').value.trim(),
+        claimed_volume:document.getElementById('fVolume').value||'0',
+        claimed_amount:document.getElementById('fAmount').value||'0',
+        status:document.getElementById('fStatus').value,
+        description:document.getElementById('fDesc').value.trim(),
+        resolution_notes:document.getElementById('fResNotes').value.trim(),
+    });
+    fetch("{% url 'roaming:dispute_save' %}", {method:'POST', body:params, headers:{'X-CSRFToken':getCSRF()}})
+        .then(r=>r.json()).then(d=>{
+            if(d.success){bootstrap.Modal.getInstance(document.getElementById('entryModal')).hide();showAlert('Saved.');loadData();}
+            else{document.getElementById('modalError').textContent=d.error;document.getElementById('modalError').style.display='block';}
+        });
+}
+
+function deleteEntry(id) {
+    if(!confirm('Delete this dispute?'))return;
+    fetch(`{% url 'roaming:dispute_delete' 0 %}`.replace('/0/',`/${id}/`),{method:'POST',headers:{'X-CSRFToken':getCSRF()}})
+        .then(r=>r.json()).then(d=>{if(d.success){showAlert('Deleted.');loadData();}});
+}
+
+document.addEventListener('DOMContentLoaded', loadData);
+</script>
+{% endblock %}

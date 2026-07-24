@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import DataSource, CDRFile
+from .models import DataSource, CDRFile, DistributionPortal
 
 
 @admin.register(DataSource)
@@ -57,3 +57,15 @@ class CDRFileAdmin(admin.ModelAdmin):
         if dur is not None:
             return f'{dur:.1f}s'
         return '-'
+
+
+@admin.register(DistributionPortal)
+class DistributionPortalAdmin(admin.ModelAdmin):
+    list_display = ('name', 'label', 'vendor', 'decoder_type', 'enabled', 'created_at')
+    list_filter = ('decoder_type', 'vendor', 'enabled')
+    search_fields = ('name', 'label', 'description')
+    fieldsets = (
+        (None, {
+            'fields': ('name', 'label', 'vendor', 'decoder_type', 'enabled', 'description')
+        }),
+    )

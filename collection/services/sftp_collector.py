@@ -13,7 +13,8 @@ import paramiko
 
 from django.conf import settings
 from collection.models import DataSource, CDRFile
-from collection.services.file_detector import detect_decoder_type
+from collection.services.file_detector import detect_decoder_type, classify_file
+from collection.services.storage import input_storage_dir
 from collection.services.deduplication import get_file_hash, check_duplicate
 
 logger = logging.getLogger(__name__)
@@ -81,26 +82,28 @@ class SFTPCollector:
             filename=filename
         ).exists()
 
-    def download_file(self, remote_filename: str) -> str:
-        """Download a file from the remote server.
+    def download_file(self, remote_filename: str, cls=None) -> str:
+        """Download a file from the remote server into the per-operator tree.
 
         Returns local file path on success, empty string on failure.
         """
         remote_path = self.source.sftp_remote_path or '.'
         remote_full = f'{remote_path}/{remote_filename}'
 
-        # Detect decoder type for subdirectory routing
+        cls = cls or classify_file(remote_filename)
         decoder_type = self.source.decoder_type
         if not decoder_type or decoder_type == 'AUTO':
-            decoder_type = detect_decoder_type(remote_filename)
+            decoder_type = cls.decoder_type
 
-        stream_dirs = {'MSC': 'msc', 'PGW': 'pgw', 'SGSN': 'sgsn', 'SGW': 'sgw'}
-        subdir = stream_dirs.get(decoder_type, '')
-        local_dir = os.path.join(settings.INCOMING_DIR, subdir)
-        os.makedirs(local_dir, exist_ok=True)
-
-        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-        local_filename = f'{ts}_{remote_filename}'
+        # Store under DATA_DIR/{operator}/input/{vendor}/{ne}/<original name>.
+        # Fall back to the DataSource's configured vendor/NE when no pattern matched.
+        local_dir = input_storage_dir(
+            cls.operator,
+            cls.vendor or (self.source.vendor or None),
+            cls.network_element or (self.source.network_element or None),
+            decoder_type,
+        )
+        local_filename = remote_filename  # keep original name (path carries vendor/op)
         local_path = os.path.join(local_dir, local_filename)
 
         try:
@@ -131,8 +134,12 @@ class SFTPCollector:
                     stats['skipped'] += 1
                     continue
 
+                # Classify once (operator/vendor/NE/decoder) and reuse for both
+                # storage routing and CDRFile tagging.
+                cls = classify_file(filename)
+
                 # Download
-                local_path = self.download_file(filename)
+                local_path = self.download_file(filename, cls)
                 if not local_path:
                     stats['failed'] += 1
                     stats['errors'].append(f'Download failed: {filename}')
@@ -146,10 +153,9 @@ class SFTPCollector:
                     logger.info(f'Duplicate hash for {filename}, skipped')
                     continue
 
-                # Detect decoder
                 decoder_type = self.source.decoder_type
                 if not decoder_type or decoder_type == 'AUTO':
-                    decoder_type = detect_decoder_type(filename)
+                    decoder_type = cls.decoder_type
 
                 # Create CDRFile — signal triggers processing
                 file_size = os.path.getsize(local_path)
@@ -160,6 +166,9 @@ class SFTPCollector:
                     file_size=file_size,
                     file_hash=file_hash,
                     decoder_type=decoder_type,
+                    operator_code=cls.operator or '',
+                    vendor=cls.vendor or (self.source.vendor or ''),
+                    network_element=cls.network_element or (self.source.network_element or ''),
                     status=CDRFile.Status.PENDING,
                 )
                 stats['collected'] += 1

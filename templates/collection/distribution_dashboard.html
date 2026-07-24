@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+{% block title %}Distribution Dashboard{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Distribution Dashboard</h3>
+    <a href="{% url 'collection:file_list' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back to Files
+    </a>
+  </div>
+
+  {% if messages %}
+    {% for m in messages %}
+      <div class="alert alert-{{ m.tags|default:'info' }} alert-dismissible fade show">
+        {{ m }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <!-- Totals -->
+  <div class="row g-3 mb-3">
+    <div class="col-md-3">
+      <div class="card text-bg-light"><div class="card-body">
+        <div class="text-muted small">All deliveries</div>
+        <div class="h3 mb-0">{{ totals.all }}</div>
+      </div></div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-bg-success"><div class="card-body">
+        <div class="small">Success</div>
+        <div class="h3 mb-0">{{ totals.success }}</div>
+      </div></div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-bg-danger"><div class="card-body">
+        <div class="small">Failed</div>
+        <div class="h3 mb-0">{{ totals.failed }}</div>
+      </div></div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-bg-warning"><div class="card-body">
+        <div class="small">Skipped</div>
+        <div class="h3 mb-0">{{ totals.skipped }}</div>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <form method="get" class="card card-body mb-3">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Status</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">All</option>
+          <option value="SUCCESS" {% if filters.status == 'SUCCESS' %}selected{% endif %}>Success</option>
+          <option value="FAILED" {% if filters.status == 'FAILED' %}selected{% endif %}>Failed</option>
+          <option value="SKIPPED" {% if filters.status == 'SKIPPED' %}selected{% endif %}>Skipped</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small mb-1">Portal</label>
+        <select name="portal" class="form-select form-select-sm">
+          <option value="">All portals</option>
+          {% for p in portals %}
+            <option value="{{ p.pk }}" {% if filters.portal == p.pk|stringformat:'s' %}selected{% endif %}>{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Stream</label>
+        <select name="stream" class="form-select form-select-sm">
+          <option value="">All streams</option>
+          {% for s in streams %}
+            <option value="{{ s }}" {% if filters.stream == s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Period</label>
+        <select name="days" class="form-select form-select-sm">
+          <option value="1" {% if filters.days == '1' %}selected{% endif %}>Last 24h</option>
+          <option value="7" {% if filters.days == '7' %}selected{% endif %}>Last 7 days</option>
+          <option value="30" {% if filters.days == '30' %}selected{% endif %}>Last 30 days</option>
+          <option value="all" {% if filters.days == 'all' %}selected{% endif %}>All time</option>
+        </select>
+      </div>
+      <div class="col-md-3 text-end">
+        <button class="btn btn-sm btn-primary">Apply Filters</button>
+        <a href="{% url 'collection:distribution_dashboard' %}" class="btn btn-sm btn-outline-secondary">Reset</a>
+      </div>
+    </div>
+  </form>
+
+  <!-- Logs table -->
+  <form method="post" action="{% url 'collection:distribution_log_bulk_retry' %}" id="bulkRetryForm"
+        onsubmit="return confirmBulkRetry();">
+    {% csrf_token %}
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center py-2">
+        <div class="small text-muted">
+          <span id="selCount">0</span> selected.
+          Tip: only FAILED rows can be retried.
+        </div>
+        <button type="submit" class="btn btn-sm btn-warning" id="bulkRetryBtn" disabled>
+          <i class="bi bi-arrow-clockwise"></i> Retry Selected
+        </button>
+      </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0 align-middle">
+        <thead class="table-light">
+          <tr>
+            <th style="width:30px;">
+              <input type="checkbox" id="selAll" class="form-check-input" title="Select all FAILED rows on this page">
+            </th>
+            <th>Delivered</th>
+            <th>CDR File</th>
+            <th>Rule</th>
+            <th>Stream</th>
+            <th>Portal</th>
+            <th>Filename</th>
+            <th class="text-end">Records</th>
+            <th class="text-end">Size</th>
+            <th>Retries</th>
+            <th>Status</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+            <tr {% if log.status == 'FAILED' %}class="table-warning-subtle"{% endif %}>
+              <td>
+                {% if log.status == 'FAILED' and log.rule_id and log.cdr_file_id %}
+                  <input type="checkbox" name="log_ids" value="{{ log.pk }}" class="form-check-input row-check">
+                {% endif %}
+              </td>
+              <td><small>{{ log.delivered_at|date:'Y-m-d H:i:s' }}</small></td>
+              <td>
+                {% if log.cdr_file %}
+                  <a href="{% url 'collection:file_detail' log.cdr_file_id %}">#{{ log.cdr_file_id }}</a>
+                  <small class="text-muted d-block">{{ log.cdr_file.filename|truncatechars:30 }}</small>
+                {% else %}—{% endif %}
+              </td>
+              <td>{{ log.rule.name|default:'—' }}</td>
+              <td>{{ log.rule.stream_type|default:'—' }}</td>
+              <td>{{ log.output_portal.name|default:'—' }}</td>
+              <td><small>{{ log.filename|truncatechars:40 }}</small></td>
+              <td class="text-end">{{ log.record_count }}</td>
+              <td class="text-end"><small>{{ log.file_size|filesizeformat }}</small></td>
+              <td>
+                {% if log.retry_count > 0 %}
+                  <span class="badge bg-warning text-dark">{{ log.retry_count }}</span>
+                {% else %}—{% endif %}
+              </td>
+              <td>
+                {% if log.status == 'SUCCESS' %}
+                  <span class="badge bg-success">SUCCESS</span>
+                {% elif log.status == 'FAILED' %}
+                  <span class="badge bg-danger" title="{{ log.error }}">FAILED</span>
+                {% else %}
+                  <span class="badge bg-warning text-dark" title="{{ log.error }}">SKIPPED</span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                {% if log.status == 'SUCCESS' and log.output_portal and log.output_portal.portal_type == 'LOCAL' %}
+                  <a href="{% url 'collection:distribution_log_view' log.pk %}" class="btn btn-xs btn-outline-primary py-0 px-1" title="View"><i class="bi bi-eye"></i></a>
+                  <a href="{% url 'collection:distribution_log_download' log.pk %}" class="btn btn-xs btn-outline-secondary py-0 px-1" title="Download"><i class="bi bi-download"></i></a>
+                {% endif %}
+                {% if log.status == 'FAILED' and log.rule and log.cdr_file %}
+                  <a href="{% url 'collection:distribution_log_retry' log.pk %}" class="btn btn-xs btn-outline-warning py-0 px-1" title="Retry delivery"
+                     onclick="return confirm('Retry delivery for rule {{ log.rule.name }}?');">
+                    <i class="bi bi-arrow-clockwise"></i> Retry
+                  </a>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="12" class="text-center text-muted py-4">No distribution logs match the current filters.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if logs|length >= 500 %}
+      <div class="card-footer small text-muted">Showing first 500 rows. Refine filters to narrow down.</div>
+    {% endif %}
+    </div>
+  </form>
+</div>
+
+<script>
+(function () {
+  const selAll = document.getElementById('selAll');
+  const btn = document.getElementById('bulkRetryBtn');
+  const counter = document.getElementById('selCount');
+  const checks = () => Array.from(document.querySelectorAll('.row-check'));
+
+  function refresh() {
+    const checked = checks().filter(c => c.checked).length;
+    counter.textContent = checked;
+    btn.disabled = checked === 0;
+  }
+
+  if (selAll) {
+    selAll.addEventListener('change', () => {
+      checks().forEach(c => { c.checked = selAll.checked; });
+      refresh();
+    });
+  }
+  document.querySelectorAll('.row-check').forEach(c => c.addEventListener('change', refresh));
+  refresh();
+})();
+
+function confirmBulkRetry() {
+  const n = document.querySelectorAll('.row-check:checked').length;
+  if (n === 0) { return false; }
+  return confirm(`Retry ${n} failed delivery/ies? Each will run again with its rule's retry policy.`);
+}
+</script>
+{% endblock %}

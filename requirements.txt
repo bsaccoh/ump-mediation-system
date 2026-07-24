@@ -1,0 +1,7 @@
+Django>=4.2,<5.0
+djangorestframework>=3.14
+django-celery-beat>=2.5
+celery>=5.3
+redis>=5.0
+reportlab>=4.0
+openpyxl>=3.1

@@ -48,11 +48,19 @@
                             <small class="text-muted">SMS</small>
                         </div>
                         <div class="col">
-                            <div class="fw-bold text-warning fs-5" id="sumOther">0</div>
-                            <small class="text-muted">Other</small>
+                            <div class="fw-bold text-warning fs-5" id="sumData">0</div>
+                            <small class="text-muted">Data Sessions</small>
                         </div>
                         <div class="col">
-                            <div class="fw-bold text-info fs-5" id="sumDuration">0</div>
+                            <div class="fw-bold text-info fs-5" id="sumDataMB">0</div>
+                            <small class="text-muted">Data (MB)</small>
+                        </div>
+                        <div class="col">
+                            <div class="fw-bold text-secondary fs-5" id="sumOther">0</div>
+                            <small class="text-muted">IMS Events</small>
+                        </div>
+                        <div class="col">
+                            <div class="fw-bold fs-5" id="sumDuration">0</div>
                             <small class="text-muted">Total Duration (s)</small>
                         </div>
                         <div class="col">
@@ -81,10 +89,22 @@
 <!-- Message -->
 <div id="messageBox" class="alert alert-info" style="display:none;"></div>
 
+<!-- Per-stream record counts -->
+<div id="streamBadges" class="mb-2" style="display:none;">
+    <small class="text-muted me-2">Sources:</small>
+    <span class="badge bg-primary me-1" id="badgeMsc"  style="display:none;"><i class="bi bi-telephone"></i> MSC <span id="badgeMscCount"></span></span>
+    <span class="badge bg-info    me-1" id="badgeIms"  style="display:none;"><i class="bi bi-broadcast-pin"></i> IMS <span id="badgeImsCount"></span></span>
+    <span class="badge bg-warning me-1 text-dark" id="badgePgw" style="display:none;"><i class="bi bi-router"></i> PGW <span id="badgePgwCount"></span></span>
+    <span class="badge bg-secondary me-1" id="badgeSgsn" style="display:none;"><i class="bi bi-router"></i> SGSN <span id="badgeSgsnCount"></span></span>
+    <span class="badge bg-secondary me-1" id="badgeSgw"  style="display:none;"><i class="bi bi-router"></i> SGW <span id="badgeSgwCount"></span></span>
+</div>
+
 <!-- Timeline Table -->
 <div class="card" id="timelineCard" style="display:none;">
     <div class="card-header d-flex justify-content-between align-items-center py-2">
-        <span><i class="bi bi-clock-history"></i> Activity Timeline</span>
+        <span><i class="bi bi-clock-history"></i> Activity Timeline
+            <small class="text-muted ms-2">(paired CDR legs collapsed into one event)</small>
+        </span>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -92,14 +112,15 @@
                 <thead class="table-light">
                     <tr>
                         <th>Time</th>
+                        <th>Stream</th>
                         <th>Type</th>
                         <th>Service</th>
                         <th>Role</th>
                         <th>Other Party</th>
                         <th>Duration</th>
+                        <th>Tech</th>
                         <th>Cell ID</th>
-                        <th>LAC</th>
-                        <th>MSC</th>
+                        <th>Node</th>
                         <th></th>
                     </tr>
                 </thead>
@@ -141,7 +162,7 @@ function doLookup() {
     params.append('page', currentPage);
     params.append('per_page', perPage);
 
-    document.getElementById('timelineBody').innerHTML = '<tr><td colspan="10" class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Searching...</td></tr>';
+    document.getElementById('timelineBody').innerHTML = '<tr><td colspan="11" class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Searching...</td></tr>';
     document.getElementById('timelineCard').style.display = 'block';
 
     fetch("{% url 'dashboard:subscriber_api' %}", {
@@ -156,7 +177,7 @@ function doLookup() {
 
         if (!data.success || data.records.length === 0) {
             document.getElementById('summarySection').style.display = 'none';
-            document.getElementById('timelineBody').innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">No activity found</td></tr>';
+            document.getElementById('timelineBody').innerHTML = '<tr><td colspan="11" class="text-center py-4 text-muted">No activity found</td></tr>';
             document.getElementById('pagBar').style.display = 'none';
             return;
         }
@@ -166,34 +187,78 @@ function doLookup() {
         document.getElementById('summarySection').style.display = 'block';
         document.getElementById('sumMsisdn').textContent = s.msisdn;
         document.getElementById('sumTotal').textContent = s.total_records.toLocaleString() + ' records';
-        document.getElementById('sumVoice').textContent = s.total_voice.toLocaleString();
-        document.getElementById('sumSms').textContent = s.total_sms.toLocaleString();
-        document.getElementById('sumOther').textContent = s.total_other.toLocaleString();
-        document.getElementById('sumDuration').textContent = s.total_duration.toLocaleString();
+        document.getElementById('sumVoice').textContent = (s.total_voice || 0).toLocaleString();
+        document.getElementById('sumSms').textContent   = (s.total_sms   || 0).toLocaleString();
+        document.getElementById('sumData').textContent  = (s.total_data_sessions || 0).toLocaleString();
+        document.getElementById('sumDataMB').textContent = (s.total_data_mb || 0).toLocaleString();
+        document.getElementById('sumOther').textContent = (s.total_other || 0).toLocaleString();
+        document.getElementById('sumDuration').textContent = (s.total_duration || 0).toLocaleString();
         document.getElementById('sumAvgDur').textContent = s.avg_duration;
         document.getElementById('sumImsi').textContent = s.primary_imsi;
         document.getElementById('sumImei').textContent = s.primary_imei;
         document.getElementById('sumFirst').textContent = s.first_activity;
         document.getElementById('sumLast').textContent = s.last_activity;
 
+        // Stream badges
+        ['Msc','Ims','Pgw','Sgsn','Sgw'].forEach(name => {
+            const key = name.toLowerCase();
+            const count = s['count_' + key] || 0;
+            const el = document.getElementById('badge' + name);
+            if (count > 0) {
+                document.getElementById('badge' + name + 'Count').textContent = count.toLocaleString();
+                el.style.display = 'inline-block';
+            } else {
+                el.style.display = 'none';
+            }
+        });
+        document.getElementById('streamBadges').style.display = 'block';
+
         // Timeline
         const tbody = document.getElementById('timelineBody');
+        const roleColors  = { CALLER:'primary', CALLED:'success', CHARGED:'warning', SUBSCRIBER:'info' };
+        const roleLabels  = { CALLER:'Caller', CALLED:'Called', CHARGED:'Charged', SUBSCRIBER:'Data' };
+        const svcIcons    = { VOICE:'telephone', SMS:'chat-dots', EVENT:'broadcast-pin', DATA:'cloud-download' };
+        const svcColors   = { VOICE:'primary', SMS:'success', EVENT:'info', DATA:'warning' };
+        const streamColors = { MSC:'primary', IMS:'info', PGW:'warning text-dark', SGSN:'secondary', SGW:'secondary' };
+        const techColors   = { EUTRAN:'primary', NR:'danger', UTRAN:'info', GERAN:'secondary',
+                              WLAN:'success', '4G':'primary', '3G':'info', '2G':'secondary', '5G':'danger' };
         let html = '';
         data.records.forEach(r => {
-            const roleColors = { 'CALLER': 'primary', 'CALLED': 'success', 'CHARGED': 'warning' };
-            const roleLabels = { 'CALLER': 'Caller', 'CALLED': 'Called', 'CHARGED': 'Charged' };
-            const svcIcons = { 'VOICE': 'telephone', 'SMS': 'chat-dots' };
+            const stream = (r.stream || 'MSC').toUpperCase();
+            const streamBadge = `<span class="badge bg-${streamColors[stream] || 'secondary'}">${stream}</span>`;
+            const techBadge = r.technology
+                ? `<span class="badge bg-${techColors[r.technology] || 'light text-dark'}">${r.technology}</span>`
+                : '<small class="text-muted">-</small>';
+            // Pair indicator: if this row represents a collapsed pair, hint at it
+            const pairHint = r.paired_record_id
+                ? `<i class="bi bi-link-45deg text-muted ms-1" title="Collapsed pair (other leg: #${r.paired_record_id})"></i>`
+                : '';
+            // Service label — show SIP method for IMS for clarity
+            let svcLabel = r.service_type;
+            if (stream === 'IMS' && r.sip_method) {
+                svcLabel = `${r.service_type} <small class="text-muted">(${r.sip_method})</small>`;
+            }
+            // Detail URL — per stream
+            const detailUrl = stream === 'IMS' ? `/ims/${r.id}/`
+                            : stream === 'MSC' ? `/cdr/${r.id}/`
+                            : `/record/${stream.toLowerCase()}/${r.id}/`;
+            // Duration display (data records show MB instead)
+            const durOrData = (stream === 'PGW' || stream === 'SGSN' || stream === 'SGW') && r.data_volume_mb
+                ? `<small>${r.data_volume_mb} MB</small>`
+                : (r.duration != null ? r.duration + 's' : '-');
+
             html += `<tr class="timeline-row">
                 <td><small>${r.start_time || '-'}</small></td>
-                <td><span class="badge bg-secondary">${r.record_type}</span></td>
-                <td><i class="bi bi-${svcIcons[r.service_type] || 'circle'} text-${r.service_type === 'VOICE' ? 'primary' : 'success'}"></i> ${r.service_type}</td>
+                <td>${streamBadge}</td>
+                <td><span class="badge bg-light text-dark border">${r.record_type}</span>${pairHint}</td>
+                <td><i class="bi bi-${svcIcons[r.service_type] || 'circle'} text-${svcColors[r.service_type] || 'secondary'}"></i> ${svcLabel}</td>
                 <td><span class="badge bg-${roleColors[r.role] || 'secondary'} role-badge">${roleLabels[r.role] || r.role}</span></td>
                 <td><code>${r.other_party}</code></td>
-                <td>${r.duration != null ? r.duration + 's' : '-'}</td>
-                <td>${r.cell_id || '-'}</td>
-                <td>${r.lac || '-'}</td>
+                <td>${durOrData}</td>
+                <td>${techBadge}</td>
+                <td><small>${r.cell_id || '-'}</small></td>
                 <td><small>${r.msc_id || '-'}</small></td>
-                <td><a href="/record/${(r.stream || 'msc').toLowerCase()}/${r.id}/" class="btn btn-sm btn-outline-primary py-0"><i class="bi bi-eye"></i></a></td>
+                <td><a href="${detailUrl}" class="btn btn-sm btn-outline-primary py-0"><i class="bi bi-eye"></i></a></td>
             </tr>`;
         });
         tbody.innerHTML = html;

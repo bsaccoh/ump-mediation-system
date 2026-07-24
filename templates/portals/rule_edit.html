@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}{% if rule %}Edit{% else %}New{% endif %} Rule{% endblock %}
+{% block page_title %}{% if rule %}Edit{% else %}New{% endif %} Distribution Rule{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header"><i class="bi bi-pencil"></i> {% if rule %}{{ rule.name }}{% else %}New Rule{% endif %}</div>
+    <div class="card-body">
+        {% if form.errors %}
+        <div class="alert alert-danger">
+            <strong>Please correct:</strong>
+            <ul class="mb-0">{% for field in form %}{% for e in field.errors %}<li>{{ field.label }}: {{ e }}</li>{% endfor %}{% endfor %}</ul>
+        </div>
+        {% endif %}
+        <form method="post">
+            {% csrf_token %}
+            <div class="row mb-3">
+                <div class="col-md-6 form-group">
+                    <label for="{{ form.name.id_for_label }}">Rule Name</label>
+                    {{ form.name }}
+                </div>
+                <div class="col-md-3 form-group">
+                    <label for="{{ form.stream_type.id_for_label }}">Stream Type</label>
+                    {{ form.stream_type }}
+                </div>
+                <div class="col-md-3 form-group">
+                    <label for="{{ form.priority.id_for_label }}">Priority</label>
+                    {{ form.priority }}
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-6 form-group">
+                    <label for="{{ form.output_portal.id_for_label }}">Output Portal</label>
+                    {{ form.output_portal }}
+                </div>
+                <div class="col-md-6 form-group">
+                    <label for="{{ form.output_schema.id_for_label }}">Output Schema</label>
+                    {{ form.output_schema }}
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-12 form-group">
+                    <label for="{{ form.filter_logic.id_for_label }}">Filter Logic (JSON)</label>
+                    {{ form.filter_logic }}
+                    <small class="form-text text-muted">{{ form.filter_logic.help_text }} Examples: <code>{"prepaid_flag":"POSTPAID"}</code> · <code>{"record_type__in":["MOC","MTC"]}</code> · <code>{}</code> = all.</small>
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-3 form-group">
+                    <label for="{{ form.max_retries.id_for_label }}">Max Retries</label>
+                    {{ form.max_retries }}
+                    <small class="form-text text-muted">{{ form.max_retries.help_text }}</small>
+                </div>
+                <div class="col-md-4 form-group">
+                    <label for="{{ form.retry_backoff_seconds.id_for_label }}">Retry Backoff (sec)</label>
+                    {{ form.retry_backoff_seconds }}
+                    <small class="form-text text-muted">{{ form.retry_backoff_seconds.help_text }}</small>
+                </div>
+                <div class="col-md-5 d-flex align-items-end">
+                    <div class="form-check form-switch mb-1">
+                        {{ form.is_active }}
+                        <label class="form-check-label fw-bold" for="{{ form.is_active.id_for_label }}">Rule Active</label>
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success"><i class="bi bi-save"></i> Save Changes</button>
+                <a href="{% url 'portals:output_portal_ide' %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

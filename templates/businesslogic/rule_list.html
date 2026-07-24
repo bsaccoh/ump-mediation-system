@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load humanize %}
-{% block title %}Business Logic - UMP Mediation{% endblock %}
-{% block page_title %}Business Logic{% endblock %}
+{% block title %}{{ page_title|default:"Business Logic" }} - UMP Mediation{% endblock %}
+{% block page_title %}{{ page_title|default:"Business Logic" }}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -18,6 +18,9 @@
     .type-filtering { background: #fd7e14; }
     .type-rating { background: #e91e8e; }
     .type-aggregation { background: #0dcaf0; }
+    .type-correlation { background: #3f51b5; }
+    .type-detection { background: #f44336; }
+    .type-error_handling { background: #607d8b; }
 </style>
 {% endblock %}
 
@@ -92,7 +95,7 @@
                 <a href="{% url 'businesslogic:rule_list' %}" class="btn btn-sm btn-outline-secondary ms-1"><i class="bi bi-x"></i> Clear</a>
             </div>
             <div class="col-auto ms-auto">
-                <a href="{% url 'businesslogic:rule_create' %}" class="btn btn-sm btn-primary">
+                <a href="{% url 'businesslogic:rule_create' %}{% if default_type %}?type={{ default_type }}{% endif %}" class="btn btn-sm btn-primary">
                     <i class="bi bi-plus-circle"></i> New Rule
                 </a>
             </div>
@@ -140,6 +143,9 @@
                         {% elif rule.rule_type == 'ENRICHMENT' %}type-enrichment
                         {% elif rule.rule_type == 'FILTERING' %}type-filtering
                         {% elif rule.rule_type == 'RATING' %}type-rating
+                        {% elif rule.rule_type == 'CORRELATION' %}type-correlation
+                        {% elif rule.rule_type == 'DETECTION' %}type-detection
+                        {% elif rule.rule_type == 'ERROR_HANDLING' %}type-error_handling
                         {% else %}type-aggregation{% endif %}"
                         title="{{ rule.get_rule_type_display }}">
                         {% if rule.rule_type == 'VALIDATION' %}<i class="bi bi-check-circle"></i>
@@ -147,6 +153,9 @@
                         {% elif rule.rule_type == 'ENRICHMENT' %}<i class="bi bi-plus-circle"></i>
                         {% elif rule.rule_type == 'FILTERING' %}<i class="bi bi-funnel"></i>
                         {% elif rule.rule_type == 'RATING' %}<i class="bi bi-currency-dollar"></i>
+                        {% elif rule.rule_type == 'CORRELATION' %}<i class="bi bi-diagram-3"></i>
+                        {% elif rule.rule_type == 'DETECTION' %}<i class="bi bi-shield-exclamation"></i>
+                        {% elif rule.rule_type == 'ERROR_HANDLING' %}<i class="bi bi-bug"></i>
                         {% else %}<i class="bi bi-collection"></i>{% endif %}
                     </span>
                     <span class="ms-1 small">{{ rule.get_rule_type_display }}</span>

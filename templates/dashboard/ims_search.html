@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}IMS Search - UMP Mediation{% endblock %}
+{% block page_title %}IMS CDR Search{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-broadcast-pin"></i> Search IMS Records</span>
+        <small class="text-muted">{{ total_records|intcomma }} records in database</small>
+    </div>
+    <div class="card-body">
+        <form id="search-form" class="row g-2">
+            <div class="col-md-3">
+                <label class="form-label small">Calling Number</label>
+                <input type="text" class="form-control form-control-sm" name="calling_number" placeholder="+232... or partial">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small">Called Number</label>
+                <input type="text" class="form-control form-control-sm" name="called_number" placeholder="+232... or partial">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">IMSI</label>
+                <input type="text" class="form-control form-control-sm" name="imsi">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">SIP Method</label>
+                <select class="form-select form-select-sm" name="sip_method">
+                    <option value="">All</option>
+                    <option>INVITE</option>
+                    <option>MESSAGE</option>
+                    <option>REGISTER</option>
+                    <option>SUBSCRIBE</option>
+                    <option>NOTIFY</option>
+                    <option>BYE</option>
+                    <option>UPDATE</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Service Type</label>
+                <select class="form-select form-select-sm" name="service_type">
+                    <option value="">All</option>
+                    <option>VOICE</option>
+                    <option>SMS</option>
+                    <option>EVENT</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small">Session-ID contains</label>
+                <input type="text" class="form-control form-control-sm" name="session_id">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Start From</label>
+                <input type="datetime-local" class="form-control form-control-sm" name="start_from">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Start To</label>
+                <input type="datetime-local" class="form-control form-control-sm" name="start_to">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Pair Status</label>
+                <select class="form-select form-select-sm" name="paired" id="filter-paired">
+                    <option value=""    {% if prefill_paired == "" %}selected{% endif %}>All</option>
+                    <option value="yes" {% if prefill_paired == "yes" %}selected{% endif %}>Paired only</option>
+                    <option value="no"  {% if prefill_paired == "no" %}selected{% endif %}>Orphans only (no pair)</option>
+                </select>
+            </div>
+            <input type="hidden" name="file_id" value="{{ prefill_file_id }}">
+            <div class="col-md-3 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> Search</button>
+                <button type="reset" class="btn btn-outline-secondary btn-sm" id="clear-btn">Clear</button>
+            </div>
+        </form>
+        {% if prefill_file_id %}
+        <small class="text-muted ms-2"><i class="bi bi-funnel"></i> Filtering to file #{{ prefill_file_id }}</small>
+        {% endif %}
+    </div>
+</div>
+
+<div id="stats-bar" class="row mb-2" style="display:none;">
+    <div class="col-md-3"><div class="card border-primary"><div class="card-body py-2"><small class="text-muted">Total</small><div class="h5 mb-0" id="stat-total">0</div></div></div></div>
+    <div class="col-md-3"><div class="card border-primary"><div class="card-body py-2"><small class="text-muted">Voice</small><div class="h5 mb-0" id="stat-voice">0</div></div></div></div>
+    <div class="col-md-3"><div class="card border-success"><div class="card-body py-2"><small class="text-muted">SMS</small><div class="h5 mb-0" id="stat-sms">0</div></div></div></div>
+    <div class="col-md-3"><div class="card border-info"><div class="card-body py-2"><small class="text-muted">Event</small><div class="h5 mb-0" id="stat-event">0</div></div></div></div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div id="results-area" class="text-center text-muted p-4">
+            Use the form above to search IMS records.
+        </div>
+    </div>
+</div>
+
+<script>
+const form = document.getElementById('search-form');
+const results = document.getElementById('results-area');
+const statsBar = document.getElementById('stats-bar');
+
+function fmtBadge(svc) {
+    if (svc === 'VOICE') return '<span class="badge bg-primary">VOICE</span>';
+    if (svc === 'SMS')   return '<span class="badge bg-success">SMS</span>';
+    if (svc === 'EVENT') return '<span class="badge bg-info">EVENT</span>';
+    return '<span class="badge bg-secondary">'+ (svc||'-') +'</span>';
+}
+function fmtRole(r) {
+    if (r === 'ORIGINATING') return '<span class="badge bg-primary">↑ O</span>';
+    if (r === 'TERMINATING') return '<span class="badge bg-info">↓ T</span>';
+    return '<small>'+ (r||'-') +'</small>';
+}
+
+async function doSearch(page=1) {
+    const fd = new FormData(form);
+    fd.append('page', page);
+    fd.append('per_page', 30);
+    results.innerHTML = '<div class="p-4 text-center text-muted"><i class="bi bi-hourglass-split"></i> Searching...</div>';
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+    const r = await fetch("{% url 'ims:cdr_search_api' %}", {
+        method:'POST', body:fd, headers:{'X-CSRFToken':csrf}
+    });
+    const data = await r.json();
+    if (!data.success) { results.innerHTML = '<div class="p-3 text-danger">'+(data.message||'Error')+'</div>'; return; }
+    if (data.records.length === 0) {
+        results.innerHTML = '<div class="p-4 text-muted text-center">'+(data.message||'No matching records')+'</div>';
+        statsBar.style.display = 'none';
+        return;
+    }
+    statsBar.style.display = 'flex';
+    document.getElementById('stat-total').textContent = data.stats.total_records.toLocaleString();
+    document.getElementById('stat-voice').textContent = (data.stats.voice_count||0).toLocaleString();
+    document.getElementById('stat-sms').textContent   = (data.stats.sms_count||0).toLocaleString();
+    document.getElementById('stat-event').textContent = (data.stats.event_count||0).toLocaleString();
+
+    let html = '<div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead class="table-light"><tr>'
+      +'<th>#</th><th>Record</th><th>Svc</th><th>Method</th><th>Role</th>'
+      +'<th>Calling</th><th>Called</th><th>IMSI</th><th>Start</th><th>Dur</th>'
+      +'<th>Category</th><th>Orig IOI</th><th></th></tr></thead><tbody>';
+    for (const r of data.records) {
+        html += '<tr>'
+          +'<td class="text-muted small">'+r.id+'</td>'
+          +'<td><span class="badge bg-secondary">'+(r.record_type||'-')+'</span></td>'
+          +'<td>'+fmtBadge(r.service_type)+'</td>'
+          +'<td><strong>'+(r.sip_method||'-')+'</strong></td>'
+          +'<td>'+fmtRole(r.role_of_node)+'</td>'
+          +'<td><code>'+(r.calling_number||'-')+'</code></td>'
+          +'<td><code>'+(r.called_number||'-')+'</code></td>'
+          +'<td><code class="small">'+(r.imsi||'-')+'</code></td>'
+          +'<td class="small">'+(r.start_time||'-')+'</td>'
+          +'<td class="text-end">'+(r.duration||0)+'</td>'
+          +'<td><small>'+(r.call_category||'-')+'</small></td>'
+          +'<td><small class="text-muted">'+(r.originating_ioi||'-').substring(0,30)+'</small></td>'
+          +'<td><a class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:0.7rem;" href="/ims/'+r.id+'/"><i class="bi bi-eye"></i></a></td>'
+          +'</tr>';
+    }
+    html += '</tbody></table></div>';
+    // pagination
+    const p = data.pagination;
+    if (p.pages > 1) {
+        html += '<div class="d-flex justify-content-between align-items-center p-2 border-top">'
+          +'<small class="text-muted">Page '+p.page+' of '+p.pages+' &middot; '+p.total.toLocaleString()+' total</small>'
+          +'<div class="btn-group btn-group-sm">'
+          + (p.page>1 ? '<button class="btn btn-outline-secondary" onclick="doSearch('+(p.page-1)+')">Prev</button>' : '')
+          + (p.page<p.pages ? '<button class="btn btn-outline-secondary" onclick="doSearch('+(p.page+1)+')">Next</button>' : '')
+          +'</div></div>';
+    }
+    results.innerHTML = html;
+}
+form.addEventListener('submit', (e)=>{ e.preventDefault(); doSearch(1); });
+document.getElementById('clear-btn').addEventListener('click', ()=>{
+    setTimeout(()=>{ results.innerHTML='<div class="p-4 text-center text-muted">Use the form above to search IMS records.</div>'; statsBar.style.display='none'; }, 50);
+});
+
+// Hidden CSRF
+const csrfInput = document.createElement('input');
+csrfInput.type='hidden'; csrfInput.name='csrfmiddlewaretoken';
+csrfInput.value = document.cookie.split('; ').find(r=>r.startsWith('csrftoken='))?.split('=')[1]||'';
+form.appendChild(csrfInput);
+
+// Auto-run search when the page was reached via a "Show orphans" or
+// pre-filtered link from File Detail (?paired=…&file_id=…).
+{% if prefill_paired or prefill_file_id %}
+doSearch(1);
+{% endif %}
+</script>
+{% endblock %}

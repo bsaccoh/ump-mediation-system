@@ -185,18 +185,15 @@ function loadData(){
                 document.getElementById('pagBar').style.cssText='display:none !important';return;
             }
             tbody.innerHTML = data.records.map(r=>{
-                const dc = DIR_COLORS[r.direction]||'secondary';
                 const di = DIR_ICONS[r.direction]||'bi-question';
-                const tc = TYPE_COLORS[r.trunk_type]||'secondary';
-                const descHtml = r.description ? `<small class="text-muted">${r.description}</small>` : '<span class="text-muted">—</span>';
                 return `<tr>
-                    <td><span class="badge bg-light text-dark border"><code>${r.switch_id||'—'}</code></span></td>
-                    <td><strong><code>${r.trunk_id}</code></strong></td>
-                    <td><span class="badge bg-${tc}">${r.trunk_type}</span></td>
-                    <td><span class="badge bg-${dc}"><i class="bi ${di}"></i> ${r.direction}</span></td>
-                    <td>${r.partner||'<span class="text-muted">—</span>'}</td>
-                    <td>${descHtml}</td>
-                    <td>${r.enabled?'<span class="badge bg-success">Active</span>':'<span class="badge bg-secondary">Disabled</span>'}</td>
+                    <td class="text-black">${r.switch_id||'—'}</td>
+                    <td class="text-black">${r.trunk_id}</td>
+                    <td class="text-black">${r.trunk_type||'—'}</td>
+                    <td class="text-black"><i class="bi ${di}"></i> ${r.direction}</td>
+                    <td class="text-black">${r.partner||'—'}</td>
+                    <td class="text-black small">${r.description||'—'}</td>
+                    <td class="text-black">${r.enabled?'Active':'Disabled'}</td>
                     <td class="text-end">
                         <button class="btn btn-xs btn-outline-primary py-0 px-1 me-1" onclick='editEntry(${JSON.stringify(r).replace(/'/g,"\\'")})'><i class="bi bi-pencil"></i></button>
                         <button class="btn btn-xs btn-outline-danger py-0 px-1" onclick="deleteEntry(${r.id})"><i class="bi bi-trash"></i></button>

@@ -114,6 +114,7 @@
                         <th>RAT</th>
                         <th>LAC</th>
                         <th>RAC</th>
+                        <th>Rating Group</th>
                         <th>Roaming</th>
                         <th>Status</th>
                         <th></th>
@@ -211,6 +212,7 @@ function doSearch(page) {
                 <td><small>${r.rat_type || '-'}</small></td>
                 <td><small>${r.lac || '-'}</small></td>
                 <td><small>${r.rac || '-'}</small></td>
+                <td>${r.rating_group ? `<span class="badge bg-secondary">${r.rating_group}</span>` : '-'}</td>
                 <td>${r.is_roaming ? '<span class="badge bg-warning text-dark">Yes</span>' : '-'}</td>
                 <td><span class="badge bg-${r.status === 'VALID' ? 'success' : r.status === 'INVALID' ? 'danger' : 'warning'}">${r.status}</span></td>
                 <td><a href="/sgsn/${r.id}/" class="btn btn-outline-primary btn-sm py-0">View</a></td>

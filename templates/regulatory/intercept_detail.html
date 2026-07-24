@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}LEA {{ request_obj.case_number }}{% endblock %}
+{% block page_title %}LEA Request {{ request_obj.case_number }}{% endblock %}
+{% block content %}
+<div class="alert alert-warning"><i class="bi bi-shield-lock-fill"></i> Restricted access — all activity is audited.</div>
+<div class="card mb-3">
+    <div class="card-header"><i class="bi bi-card-checklist"></i> Request</div>
+    <div class="card-body">
+        <dl class="row mb-0 small">
+            <dt class="col-3">Case</dt><dd class="col-9">{{ request_obj.case_number }}</dd>
+            <dt class="col-3">Agency</dt><dd class="col-9">{{ request_obj.requesting_agency }}</dd>
+            <dt class="col-3">Officer</dt><dd class="col-9">{{ request_obj.officer_name }} ({{ request_obj.officer_contact }})</dd>
+            <dt class="col-3">Legal basis</dt><dd class="col-9">{{ request_obj.legal_basis|default:"—" }}</dd>
+            <dt class="col-3">Scope</dt><dd class="col-9">{{ request_obj.filter_start }} → {{ request_obj.filter_end }}</dd>
+            <dt class="col-3">Filters</dt><dd class="col-9">
+                MSISDN: <code>{{ request_obj.filter_msisdn|default:"—" }}</code>
+                IMSI: <code>{{ request_obj.filter_imsi|default:"—" }}</code>
+                IMEI: <code>{{ request_obj.filter_imei|default:"—" }}</code>
+                Cell: <code>{{ request_obj.filter_cell_id|default:"—" }}</code>
+            </dd>
+            <dt class="col-3">Status</dt><dd class="col-9">{{ request_obj.get_status_display }}</dd>
+        </dl>
+    </div>
+</div>
+<div class="card">
+    <div class="card-header"><i class="bi bi-file-earmark-lock"></i> Extractions ({{ request_obj.extractions.count }})</div>
+    <div class="table-responsive"><table class="table table-sm mb-0">
+        <thead class="table-light"><tr><th>Executed</th><th>By</th><th class="text-end">Records</th><th>SHA-256</th><th></th></tr></thead>
+        <tbody>
+            {% for e in request_obj.extractions.all %}
+            <tr>
+                <td>{{ e.executed_at|date:"Y-m-d H:i" }}</td>
+                <td>{{ e.executed_by|default:"—" }}</td>
+                <td class="text-end">{{ e.record_count }}</td>
+                <td class="small text-muted">{{ e.sha256|default:"—" }}</td>
+                <td class="text-end"><a class="btn btn-xs btn-outline-secondary" href="{% url 'regulatory:intercept_download_extraction' e.pk %}"><i class="bi bi-download"></i> CSV</a></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted py-3">No extractions yet.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+</div>
+{% endblock %}

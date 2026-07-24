@@ -60,73 +60,349 @@
     </div>
 </div>
 
-<div class="row">
-    <!-- Service Type Breakdown -->
-    <div class="col-md-4">
+<!-- Processing Volume (sourced from CDRFile — works even in decode-only mode) -->
+<div class="card mb-4" id="procVolCard">
+  <div class="card-header d-flex justify-content-between align-items-center" style="background:#fafafa;font-weight:600;">
+    <span><i class="bi bi-speedometer2"></i> Processing Volume <span class="text-muted" style="font-weight:400;font-size:.8rem;">(last 30 days)</span></span>
+    <span class="d-flex align-items-center gap-3">
+      <span class="text-muted" style="font-size:.8rem;" id="pvTotals">…</span>
+      <form method="post" action="{% url 'dashboard:run_collection' %}" class="m-0">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-primary" title="Scan input folders and decode new files now">
+          <i class="bi bi-play-fill"></i> Run collection now
+        </button>
+      </form>
+    </span>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="text-muted small text-uppercase mb-1">By Operator</div>
+        <table class="table table-sm mb-0"><tbody id="pvOperator"></tbody></table>
+      </div>
+      <div class="col-md-4">
+        <div class="text-muted small text-uppercase mb-1">By Stream</div>
+        <table class="table table-sm mb-0"><tbody id="pvStream"></tbody></table>
+      </div>
+      <div class="col-md-4">
+        <div class="text-muted small text-uppercase mb-1">By Service Type</div>
+        <table class="table table-sm mb-0"><tbody id="pvService"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const fmt = n => (n||0).toLocaleString();
+  fetch("{% url 'dashboard:summary_api' %}?days=30").then(r=>r.json()).then(d=>{
+    const t=d.totals||{};
+    document.getElementById('pvTotals').textContent =
+      `${fmt(t.files)} files · ${fmt(t.records)} records · ${fmt(t.duplicates)} dup · ${fmt(t.failed)} failed`;
+    const fill=(id,rows,key)=>{
+      document.getElementById(id).innerHTML = (rows&&rows.length)
+        ? rows.map(r=>`<tr><td>${r[key]}</td><td class="text-end">${fmt(r.records)}</td></tr>`).join('')
+        : '<tr><td class="text-muted">No data</td></tr>';
+    };
+    fill('pvOperator', d.by_operator, 'operator');
+    fill('pvStream', d.by_stream, 'stream');
+    fill('pvService', d.by_service_type, 'service_type');
+  }).catch(()=>{ document.getElementById('pvTotals').textContent='unavailable'; });
+})();
+</script>
+
+<!-- ============================================================ -->
+<!-- PM-KPI Sample — 7 operational KPI charts                     -->
+<!-- ============================================================ -->
+<style>
+.kpi-block .card-header{background:#fafafa;border-bottom:1px solid #eee;font-weight:600;font-size:.95rem;position:relative;}
+.kpi-block .kpi-subtitle{color:#6c757d;font-size:.8rem;margin-top:-2px;font-weight:400;}
+.kpi-block canvas{max-height:320px;}
+.kpi-menu-btn{position:absolute;top:6px;right:8px;background:transparent;border:none;color:#6c757d;padding:2px 6px;border-radius:4px;cursor:pointer;line-height:1;font-size:1.1rem;}
+.kpi-menu-btn:hover{background:#eee;color:#212529;}
+.kpi-pop{position:absolute;top:34px;right:8px;z-index:30;background:#fff;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.08);padding:10px 12px;min-width:230px;display:none;}
+.kpi-pop.show{display:block;}
+.kpi-pop label{display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;color:#6c757d;margin-bottom:2px;margin-top:6px;font-weight:600;}
+.kpi-pop input[type=date]{width:100%;font-size:.85rem;padding:3px 6px;border:1px solid #ced4da;border-radius:4px;}
+.kpi-pop .pop-actions{display:flex;gap:6px;margin-top:10px;}
+.kpi-pop .pop-actions button{flex:1;font-size:.8rem;padding:4px 8px;}
+.kpi-range-tag{display:inline-block;margin-left:6px;font-size:.7rem;color:#FF6600;font-weight:500;}
+</style>
+
+<h5 class="mt-4 mb-3 text-secondary"><i class="bi bi-bar-chart-line"></i> Key Performance Indicators</h5>
+
+<div class="row g-3 mb-3 kpi-block">
+    <div class="col-lg-6">
         <div class="card">
-            <div class="card-header"><i class="bi bi-pie-chart"></i> Service Types</div>
-            <div class="card-body p-0">
-                <table class="table table-sm mb-0">
-                    <thead><tr><th>Type</th><th>Count</th><th>Duration</th></tr></thead>
-                    <tbody>
-                    {% for stat in service_stats %}
-                    <tr>
-                        <td><span class="badge bg-{% if stat.service_type == 'VOICE' %}primary{% elif stat.service_type == 'SMS' %}success{% else %}warning{% endif %}">{{ stat.service_type }}</span></td>
-                        <td>{{ stat.count|intcomma }}</td>
-                        <td>{{ stat.total_duration|default:0|intcomma }}s</td>
-                    </tr>
-                    {% empty %}
-                    <tr><td colspan="3" class="text-muted text-center">No records yet</td></tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
+            <div class="card-header" data-kpi-head="1">1. Call Records by Call Type<span class="kpi-range-tag" data-tag="1"></span>
+                <div class="kpi-subtitle">Distribution of CDRs by service type.</div>
             </div>
+            <div class="card-body" style="height:340px"><canvas id="kpi1"></canvas></div>
         </div>
     </div>
-
-    <!-- Record Type Breakdown -->
-    <div class="col-md-4">
+    <div class="col-lg-6">
         <div class="card">
-            <div class="card-header"><i class="bi bi-bar-chart"></i> Record Types (Top 10)</div>
-            <div class="card-body p-0">
-                <table class="table table-sm mb-0">
-                    <thead><tr><th>Type</th><th>Count</th></tr></thead>
-                    <tbody>
-                    {% for stat in record_type_stats %}
-                    <tr>
-                        <td>{{ stat.record_type }}</td>
-                        <td>{{ stat.count|intcomma }}</td>
-                    </tr>
-                    {% empty %}
-                    <tr><td colspan="2" class="text-muted text-center">No records yet</td></tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
+            <div class="card-header" data-kpi-head="2">2. Incoming vs Outgoing Traffic<span class="kpi-range-tag" data-tag="2"></span>
+                <div class="kpi-subtitle">Comparison of incoming, outgoing and transit traffic.</div>
             </div>
-        </div>
-    </div>
-
-    <!-- Recent Files -->
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header"><i class="bi bi-clock-history"></i> Recent Files</div>
-            <div class="card-body p-0">
-                <table class="table table-sm mb-0">
-                    <thead><tr><th>File</th><th>Status</th><th>Records</th></tr></thead>
-                    <tbody>
-                    {% for f in recent_files %}
-                    <tr>
-                        <td title="{{ f.filename }}">{{ f.filename|truncatechars:25 }}</td>
-                        <td><span class="badge bg-{% if f.status == 'COMPLETED' %}success{% elif f.status == 'FAILED' %}danger{% elif f.status == 'PROCESSING' %}warning{% else %}secondary{% endif %}">{{ f.status }}</span></td>
-                        <td>{{ f.records_valid|intcomma }}</td>
-                    </tr>
-                    {% empty %}
-                    <tr><td colspan="3" class="text-muted text-center">No files yet</td></tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+            <div class="card-body" style="height:340px"><canvas id="kpi2"></canvas></div>
         </div>
     </div>
 </div>
+
+<div class="row g-3 mb-3 kpi-block">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header" data-kpi-head="3">3. Total Data Usage by Technology<span class="kpi-range-tag" data-tag="3"></span>
+                <div class="kpi-subtitle">Total traffic volume generated by each network technology.</div>
+            </div>
+            <div class="card-body" style="height:320px"><canvas id="kpi3"></canvas></div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header" data-kpi-head="4">4. Subscriber Growth Trend<span class="kpi-range-tag" data-tag="4"></span>
+                <div class="kpi-subtitle">Monthly active subscribers (distinct IMSI).</div>
+            </div>
+            <div class="card-body" style="height:320px"><canvas id="kpi4"></canvas></div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-3 kpi-block">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header" data-kpi-head="5">5. Inter-Operator Traffic Analysis<span class="kpi-range-tag" data-tag="5"></span>
+                <div class="kpi-subtitle">Traffic exchanged between operators.</div>
+            </div>
+            <div class="card-body" style="height:340px"><canvas id="kpi5"></canvas></div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header" data-kpi-head="6">6. Call Drop Rate by Operator<span class="kpi-range-tag" data-tag="6"></span>
+                <div class="kpi-subtitle">QoS comparison across operators.</div>
+            </div>
+            <div class="card-body" style="height:340px"><canvas id="kpi6"></canvas></div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4 kpi-block">
+    <div class="col-lg-12">
+        <div class="card">
+            <div class="card-header" data-kpi-head="7">7. International Traffic Trend<span class="kpi-range-tag" data-tag="7"></span>
+                <div class="kpi-subtitle">Incoming and outgoing international records (monthly).</div>
+            </div>
+            <div class="card-body" style="height:320px"><canvas id="kpi7"></canvas></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function(){
+    const API = "{% url 'dashboard:kpis_api' %}";
+    const PALETTE = {
+        'Voice MO':'#0d6efd','Voice MT':'#198754',
+        'SMS MO':'#fd7e14','SMS MT':'#dc3545',
+        'International':'#6f42c1','Data Session':'#e6b800',
+    };
+    const PRIMARY = '#1f4d9b';
+    const charts = {};
+    const ranges = {1:null,2:null,3:null,4:null,5:null,6:null,7:null};
+    function destroyIf(k){ if (charts[k]) charts[k].destroy(); }
+    function showEmpty(canvasId, has){
+        const cvs = document.getElementById(canvasId);
+        const body = cvs.parentElement;
+        let msg = body.querySelector('.kpi-empty');
+        if (!has) {
+            cvs.style.display = 'none';
+            if (!msg) {
+                msg = document.createElement('div');
+                msg.className = 'kpi-empty text-muted d-flex align-items-center justify-content-center';
+                msg.style.cssText = 'height:100%;font-size:.9rem;';
+                msg.textContent = 'No data in selected range';
+                body.appendChild(msg);
+            }
+        } else {
+            cvs.style.display = '';
+            if (msg) msg.remove();
+        }
+    }
+    const sum = a => (a||[]).reduce((x,y)=>x+(+y||0),0);
+    const compact = v => v>=1e9 ? (v/1e9).toFixed(1)+'B'
+                       : v>=1e6 ? (v/1e6).toFixed(1)+'M'
+                       : v>=1e3 ? (v/1e3).toFixed(0)+'K' : v;
+
+    // ---------- per-chart renderers (consume one API response) ---------
+    function render1(d){
+        const c = d.call_records_by_type || {labels:[],data:[]};
+        destroyIf('k1');
+        showEmpty('kpi1', sum(c.data)>0);
+        if (sum(c.data)===0) return;
+        charts.k1 = new Chart(document.getElementById('kpi1'), {
+            type:'doughnut',
+            data:{labels:c.labels, datasets:[{
+                data:c.data, backgroundColor:c.labels.map(l=>PALETTE[l]||'#888'), borderWidth:0,
+            }]},
+            options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}},
+        });
+    }
+    function render2(d){
+        const c = d.direction_traffic || {labels:[],data:[]};
+        destroyIf('k2');
+        showEmpty('kpi2', sum(c.data)>0);
+        if (sum(c.data)===0) return;
+        charts.k2 = new Chart(document.getElementById('kpi2'), {
+            type:'bar',
+            data:{labels:c.labels, datasets:[{label:'Records',data:c.data,backgroundColor:PRIMARY}]},
+            options:{responsive:true,maintainAspectRatio:false,
+                plugins:{legend:{display:false}},
+                scales:{y:{beginAtZero:true,ticks:{callback:compact}}}},
+        });
+    }
+    function render3(d){
+        const c = d.data_usage_by_tech || {labels:[],data_gb:[]};
+        destroyIf('k3');
+        showEmpty('kpi3', sum(c.data_gb)>0);
+        if (sum(c.data_gb)===0) return;
+        charts.k3 = new Chart(document.getElementById('kpi3'), {
+            type:'bar',
+            data:{labels:c.labels, datasets:[{label:'GB',data:c.data_gb,backgroundColor:PRIMARY}]},
+            options:{responsive:true,maintainAspectRatio:false,
+                plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.y+' GB'}}},
+                scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'GB'}}}},
+        });
+    }
+    function render4(d){
+        const c = d.subscriber_growth || {labels:[],data:[]};
+        destroyIf('k4');
+        showEmpty('kpi4', (c.labels||[]).length>0);
+        if ((c.labels||[]).length===0) return;
+        charts.k4 = new Chart(document.getElementById('kpi4'), {
+            type:'line',
+            data:{labels:c.labels, datasets:[{
+                label:'Distinct IMSI',data:c.data,borderColor:PRIMARY,
+                backgroundColor:PRIMARY+'22',fill:true,tension:0.35,
+            }]},
+            options:{responsive:true,maintainAspectRatio:false,
+                plugins:{legend:{display:false}},
+                scales:{y:{ticks:{callback:compact}}}},
+        });
+    }
+    function render5(d){
+        const c = d.inter_operator || {labels:[],data:[]};
+        destroyIf('k5');
+        showEmpty('kpi5', sum(c.data)>0);
+        if (sum(c.data)===0) return;
+        charts.k5 = new Chart(document.getElementById('kpi5'), {
+            type:'bar',
+            data:{labels:c.labels, datasets:[{label:'Records',data:c.data,backgroundColor:PRIMARY}]},
+            options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+                plugins:{legend:{display:false}},
+                scales:{x:{beginAtZero:true,ticks:{callback:compact}}}},
+        });
+    }
+    function render6(d){
+        const c = d.drop_rate_by_operator || {labels:[],data:[]};
+        destroyIf('k6');
+        showEmpty('kpi6', (c.labels||[]).length>0);
+        if ((c.labels||[]).length===0) return;
+        charts.k6 = new Chart(document.getElementById('kpi6'), {
+            type:'bar',
+            data:{labels:c.labels, datasets:[{label:'Drop %',data:c.data,backgroundColor:PRIMARY}]},
+            options:{responsive:true,maintainAspectRatio:false,
+                plugins:{legend:{display:false},
+                         tooltip:{callbacks:{label:ctx=>ctx.parsed.y.toFixed(3)+'%'}}},
+                scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'%'}}}},
+        });
+    }
+    function render7(d){
+        const c = d.international_trend || {labels:[],incoming:[],outgoing:[]};
+        destroyIf('k7');
+        showEmpty('kpi7', (c.labels||[]).length>0);
+        if ((c.labels||[]).length===0) return;
+        charts.k7 = new Chart(document.getElementById('kpi7'), {
+            type:'line',
+            data:{labels:c.labels, datasets:[
+                {label:'Incoming',data:c.incoming,borderColor:'#0d6efd',backgroundColor:'#0d6efd22',fill:false,tension:0.3},
+                {label:'Outgoing',data:c.outgoing,borderColor:'#198754',backgroundColor:'#19875422',fill:false,tension:0.3},
+            ]},
+            options:{responsive:true,maintainAspectRatio:false,
+                plugins:{legend:{position:'bottom'}},
+                scales:{y:{beginAtZero:true,ticks:{callback:compact}}}},
+        });
+    }
+    const RENDERERS = {1:render1,2:render2,3:render3,4:render4,5:render5,6:render6,7:render7};
+
+    // ---------- fetch + dispatch -------------------------------------
+    function loadChart(n){
+        const r = ranges[n];
+        const qs = r ? `?start=${r.start}&end=${r.end}` : '';
+        const tag = document.querySelector(`[data-tag="${n}"]`);
+        if (tag) tag.textContent = r ? `(${r.start} → ${r.end})` : '';
+        fetch(API + qs).then(r=>r.json()).then(RENDERERS[n])
+            .catch(err=>console.error('KPI '+n+' failed',err));
+    }
+    function loadAll(){ for (let i=1;i<=7;i++) loadChart(i); }
+
+    // ---------- inject the dropdown markup into each header ----------
+    function menuHTML(n){
+        return ''
+          + '<button class="kpi-menu-btn" title="Filter by date" data-kpi="'+n+'">&#x22EE;</button>'
+          + '<div class="kpi-pop" data-pop="'+n+'">'
+          +   '<label>From</label><input type="date" data-from="'+n+'">'
+          +   '<label>To</label><input type="date" data-to="'+n+'">'
+          +   '<div class="pop-actions">'
+          +     '<button class="btn btn-sm btn-outline-secondary" data-clear="'+n+'">Clear</button>'
+          +     '<button class="btn btn-sm btn-primary" data-apply="'+n+'">Apply</button>'
+          +   '</div>'
+          + '</div>';
+    }
+    document.querySelectorAll('[data-kpi-head]').forEach(h => {
+        h.insertAdjacentHTML('beforeend', menuHTML(h.getAttribute('data-kpi-head')));
+    });
+
+    // ---------- wire up menus ----------------------------------------
+    document.addEventListener('click', e => {
+        const btn = e.target.closest('.kpi-menu-btn');
+        if (btn) {
+            const n = btn.getAttribute('data-kpi');
+            const pop = document.querySelector(`[data-pop="${n}"]`);
+            document.querySelectorAll('.kpi-pop.show').forEach(p => { if (p!==pop) p.classList.remove('show'); });
+            pop.classList.toggle('show');
+            e.stopPropagation();
+            return;
+        }
+        const apply = e.target.closest('[data-apply]');
+        if (apply) {
+            const n = apply.getAttribute('data-apply');
+            const f = document.querySelector(`[data-from="${n}"]`).value;
+            const t = document.querySelector(`[data-to="${n}"]`).value;
+            if (!f || !t) { alert('Select both From and To dates'); return; }
+            ranges[n] = {start:f, end:t};
+            document.querySelector(`[data-pop="${n}"]`).classList.remove('show');
+            loadChart(n);
+            return;
+        }
+        const clear = e.target.closest('[data-clear]');
+        if (clear) {
+            const n = clear.getAttribute('data-clear');
+            ranges[n] = null;
+            document.querySelector(`[data-from="${n}"]`).value = '';
+            document.querySelector(`[data-to="${n}"]`).value = '';
+            document.querySelector(`[data-pop="${n}"]`).classList.remove('show');
+            loadChart(n);
+            return;
+        }
+        // click outside any popover → close all
+        if (!e.target.closest('.kpi-pop')) {
+            document.querySelectorAll('.kpi-pop.show').forEach(p => p.classList.remove('show'));
+        }
+    });
+
+    loadAll();
+})();
+</script>
+
 {% endblock %}

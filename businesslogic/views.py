@@ -56,6 +56,56 @@ def rule_list(request):
         'rule_types':     BusinessRule.RuleType.choices,
         'status_choices': BusinessRule.Status.choices,
         'stream_choices': BusinessRule.Stream.choices,
+        'page_title':     'All Mediation Rules'
+    })
+
+
+@login_required
+def business_rule_list(request):
+    """Filters for standard business rules (Validation, Transformation, Enrichment)."""
+    types = [BusinessRule.RuleType.VALIDATION, BusinessRule.RuleType.TRANSFORMATION, BusinessRule.RuleType.ENRICHMENT]
+    qs = BusinessRule.objects.filter(rule_type__in=types)
+    return render(request, 'businesslogic/rule_list.html', {
+        'rules': qs,
+        'page_title': 'Business Rules',
+        'is_category': True,
+        'default_type': BusinessRule.RuleType.VALIDATION
+    })
+
+
+@login_required
+def correlation_rule_list(request):
+    """Filters for Correlation rules."""
+    qs = BusinessRule.objects.filter(rule_type=BusinessRule.RuleType.CORRELATION)
+    return render(request, 'businesslogic/rule_list.html', {
+        'rules': qs,
+        'page_title': 'Correlation Rules',
+        'is_category': True,
+        'default_type': BusinessRule.RuleType.CORRELATION
+    })
+
+
+@login_required
+def detection_rule_list(request):
+    """Filters for Detection rules."""
+    qs = BusinessRule.objects.filter(rule_type=BusinessRule.RuleType.DETECTION)
+    return render(request, 'businesslogic/rule_list.html', {
+        'rules': qs,
+        'page_title': 'Detection Rules',
+        'is_category': True,
+        'default_type': BusinessRule.RuleType.DETECTION
+    })
+
+
+@login_required
+def error_handling_list(request):
+    """Filters for Error Handling rules."""
+    qs = BusinessRule.objects.filter(rule_type=BusinessRule.RuleType.ERROR_HANDLING)
+    return render(request, 'businesslogic/rule_list.html', {
+        'rules': qs,
+        'page_title': 'Error Handling',
+        'is_category': True,
+        'default_type': BusinessRule.RuleType.ERROR_HANDLING
     })
 
 
@@ -63,7 +113,11 @@ def rule_list(request):
 
 @login_required
 def rule_create(request):
-    form = BusinessRuleForm(request.POST or None)
+    initial = {}
+    if 'type' in request.GET:
+        initial['rule_type'] = request.GET.get('type')
+    
+    form = BusinessRuleForm(request.POST or None, initial=initial)
     if request.method == 'POST' and form.is_valid():
         rule = form.save(commit=False)
         rule.created_by = request.user

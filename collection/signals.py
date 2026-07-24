@@ -26,6 +26,14 @@ def _process_sync(decoder, cdr_file_id, filename):
                 logger.info(f'MSC processing complete: {message}')
             else:
                 logger.error(f'MSC processing failed: {message}')
+        elif decoder == 'IMS':
+            from streams.ims.processor import IMSProcessor
+            processor = IMSProcessor()
+            success, message = processor.process(cdr_file_id)
+            if success:
+                logger.info(f'IMS processing complete: {message}')
+            else:
+                logger.error(f'IMS processing failed: {message}')
         elif decoder == 'PGW':
             from streams.pgw.processor import PGWProcessor
             processor = PGWProcessor()
@@ -50,6 +58,14 @@ def _process_sync(decoder, cdr_file_id, filename):
                 logger.info(f'SGW processing complete: {message}')
             else:
                 logger.error(f'SGW processing failed: {message}')
+        elif decoder == 'CBS':
+            from streams.cbs.processor import CBSProcessor
+            processor = CBSProcessor()
+            success, message = processor.process(cdr_file_id)
+            if success:
+                logger.info(f'CBS processing complete: {message}')
+            else:
+                logger.error(f'CBS processing failed: {message}')
         else:
             logger.warning(f'No processor for decoder type: {decoder}')
     except Exception as e:
@@ -82,6 +98,11 @@ def trigger_processing_on_create(sender, instance, created, **kwargs):
                 process_msc_file.delay(instance.pk)
                 logger.info(f'Queued MSC processing (Celery) for {instance.filename}')
                 return
+            elif decoder == 'IMS':
+                from streams.ims.tasks import process_ims_file
+                process_ims_file.delay(instance.pk)
+                logger.info(f'Queued IMS processing (Celery) for {instance.filename}')
+                return
             elif decoder == 'PGW':
                 from streams.pgw.tasks import process_pgw_file
                 process_pgw_file.delay(instance.pk)
@@ -96,6 +117,11 @@ def trigger_processing_on_create(sender, instance, created, **kwargs):
                 from streams.sgw.tasks import process_sgw_file
                 process_sgw_file.delay(instance.pk)
                 logger.info(f'Queued SGW processing (Celery) for {instance.filename}')
+                return
+            elif decoder == 'CBS':
+                from streams.cbs.tasks import process_cbs_file
+                process_cbs_file.delay(instance.pk)
+                logger.info(f'Queued CBS processing (Celery) for {instance.filename}')
                 return
         except Exception as e:
             logger.warning(f'Celery unavailable ({e}), falling back to sync')

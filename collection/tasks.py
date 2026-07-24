@@ -76,3 +76,19 @@ def poll_source_sync(source_id: int) -> dict:
 
     source = DataSource.objects.get(pk=source_id)
     return poll_source(source)
+
+
+@shared_task
+def scheduled_collection(operator: str | None = None) -> dict:
+    """Scan the per-operator input trees and decode new files in parallel.
+
+    Runs the `process_batch` command in a detached subprocess (clean
+    multiprocessing pool). Scheduled via Celery Beat; can also be triggered
+    from the UI. Idempotent: already-processed files are skipped by hash.
+    """
+    from collection.services.runner import launch_batch
+
+    info = launch_batch(operator)
+    logger.info(f'scheduled_collection launched process_batch pid={info["pid"]} '
+                f'operator={info["operator"]} log={info["log"]}')
+    return info

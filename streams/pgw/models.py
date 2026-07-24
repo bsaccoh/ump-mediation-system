@@ -18,11 +18,11 @@ class PGWRecord(models.Model):
 
     # Foreign keys
     file = models.ForeignKey(
-        'collection.CDRFile', on_delete=models.CASCADE,
+        'collection.CDRFile', on_delete=models.CASCADE, db_constraint=False,
         related_name='pgw_records', db_index=True
     )
     source = models.ForeignKey(
-        'collection.DataSource', on_delete=models.SET_NULL,
+        'collection.DataSource', on_delete=models.SET_NULL, db_constraint=False,
         null=True, blank=True, db_index=True
     )
 
@@ -30,11 +30,13 @@ class PGWRecord(models.Model):
     record_type = models.CharField(max_length=50, db_index=True)   # PGW-CDR / SGW-CDR
     service_type = models.CharField(max_length=20, default='DATA')  # Always DATA
     charging_id = models.CharField(max_length=50, null=True, blank=True)
+    rating_group = models.CharField(max_length=200, null=True, blank=True, db_index=True)
 
     # Subscriber
     calling_number = models.CharField(max_length=50, blank=True, db_index=True)  # MSISDN
     called_number = models.CharField(max_length=100, blank=True)                 # APN
     imsi = models.CharField(max_length=20, blank=True, db_index=True)
+    prepaid_flag = models.CharField(max_length=10, blank=True, db_index=True)
     imei = models.CharField(max_length=20, blank=True)
 
     # Timing
@@ -43,24 +45,49 @@ class PGWRecord(models.Model):
     duration = models.IntegerField(default=0)  # seconds
 
     # Data volumes (bytes)
-    data_volume_up = models.CharField(max_length=50, default='0')
-    data_volume_down = models.CharField(max_length=50, default='0')
+    data_volume_up = models.BigIntegerField(default=0)
+    data_volume_down = models.BigIntegerField(default=0)
 
     # APN / Network
     apn = models.CharField(max_length=100, blank=True, db_index=True)
+    apn_oi = models.CharField(max_length=100, blank=True)           # Operator Identifier
     pdn_type = models.CharField(max_length=20, blank=True)          # IPv4, IPv6, IPv4v6
+    pdn_type_raw = models.IntegerField(null=True, blank=True)
+    pdn_address = models.CharField(max_length=50, blank=True)       # servedPDPPDNAddress
     rat_type = models.CharField(max_length=20, blank=True)          # EUTRAN, UTRAN, GERAN
     pgw_address = models.CharField(max_length=50, blank=True)
     sgw_address = models.CharField(max_length=50, blank=True)
     node_id = models.CharField(max_length=100, blank=True)
+    local_sequence_number = models.BigIntegerField(null=True, blank=True)
+    record_sequence_number = models.BigIntegerField(null=True, blank=True)
+    charging_characteristics = models.CharField(max_length=50, blank=True)
 
     # Location
     cell_id = models.CharField(max_length=50, blank=True)
-    lac = models.CharField(max_length=20, blank=True)               # TAC for LTE
+    lac = models.CharField(max_length=20, blank=True)               # Location Area Code
+    tac = models.CharField(max_length=20, blank=True)               # Tracking Area Code (LTE)
+    eci = models.CharField(max_length=50, blank=True)               # E-UTRAN Cell Identity (LTE)
     serving_plmn = models.CharField(max_length=10, blank=True)
+    user_location_info = models.TextField(blank=True)               # Raw ULI hex string
+    uli_timestamp = models.DateTimeField(null=True, blank=True)
+    ms_timezone = models.CharField(max_length=50, blank=True)
+
+    # QoS
+    qci = models.IntegerField(null=True, blank=True)
 
     # Cause
     cause_for_closing = models.CharField(max_length=50, blank=True)
+    diagnostics = models.CharField(max_length=100, blank=True)
+
+    # Technical Flags & Metadata
+    selection_mode = models.IntegerField(null=True, blank=True)
+    ch_selection_mode = models.IntegerField(null=True, blank=True)
+    dynamic_address_flag = models.BooleanField(default=False)
+    ims_signaling_context = models.BooleanField(default=False)
+    serving_node_type = models.IntegerField(null=True, blank=True)
+    max_requested_bw_ul = models.BigIntegerField(null=True, blank=True)
+    max_requested_bw_dl = models.BigIntegerField(null=True, blank=True)
+    rule_name = models.CharField(max_length=200, blank=True)
 
     # Roaming
     is_roaming = models.BooleanField(default=False)

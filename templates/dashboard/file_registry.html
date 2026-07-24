@@ -1,0 +1,547 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}File Registry - UMP Mediation{% endblock %}
+{% block page_title %}File Registry{% endblock %}
+
+{% block extra_css %}
+<style>
+    .registry-sidebar {
+        width: 250px; min-width: 210px; flex-shrink: 0;
+        background: #fff; border: 1px solid #dee2e6; border-radius: .375rem;
+        overflow-y: auto; max-height: calc(100vh - 110px);
+        position: sticky; top: 0; font-size: .82rem;
+    }
+    .tree-nav { list-style: none; padding: 0; margin: 0; }
+    .tree-section-hdr {
+        padding: .45rem .75rem; font-weight: 700; font-size: .78rem;
+        color: #1a237e; background: #eef0fb; cursor: pointer;
+        display: flex; align-items: center; gap: 5px; user-select: none;
+        border-bottom: 1px solid #dde;
+    }
+    .tree-section-hdr:hover { background: #e0e3f8; }
+    .tree-section-hdr .ch { margin-left: auto; font-size: .58rem; opacity: .5; transition: transform .2s; }
+    .tree-section-hdr.collapsed .ch { transform: rotate(-90deg); }
+    .tree-group-hdr {
+        padding: .38rem .75rem .38rem 1.4rem; font-weight: 600;
+        color: #374151; background: #f7f8fc; cursor: pointer;
+        display: flex; align-items: center; gap: 5px;
+        border-bottom: 1px solid #ebebeb; user-select: none;
+    }
+    .tree-group-hdr:hover { background: #edf0f8; }
+    .tree-group-hdr .ch { margin-left: auto; font-size: .55rem; opacity: .5; transition: transform .2s; }
+    .tree-group-hdr.collapsed .ch { transform: rotate(-90deg); }
+    .tree-label-row {
+        padding: .22rem .75rem .22rem 1.1rem; font-size: .68rem;
+        color: #6c757d; font-weight: 600; text-transform: uppercase;
+        letter-spacing: .04em; background: #fafbff; border-bottom: 1px solid #f0f0f0;
+    }
+    .tree-leaf {
+        display: flex; align-items: center; gap: 5px;
+        padding: .36rem .75rem .36rem 2.1rem; color: #374151;
+        cursor: pointer; border-bottom: 1px solid #f3f3f3;
+        text-decoration: none; transition: background .1s;
+    }
+    .tree-leaf:hover { background: #e3f2fd; color: #0d47a1; }
+    .tree-leaf.active { background: #bbdefb; color: #0d47a1; font-weight: 600; }
+    .tree-leaf .bcnt { margin-left: auto; font-size: .67rem; }
+    .tree-empty { padding: .5rem .75rem .5rem 2rem; font-size: .78rem; color: #aaa; font-style: italic; }
+    /* right panel */
+    .registry-main { flex: 1; min-width: 0; }
+    .summary-tbl th { font-size: .78rem; background: #f4f6fb; white-space: nowrap; }
+    .summary-tbl td { font-size: .82rem; }
+    .file-tbl { font-size: .8rem; }
+    .file-tbl thead th { background: #2c3e50; color: #fff; font-size: .76rem; white-space: nowrap; vertical-align: middle; }
+    .col-filter { width: 100%; font-size: .71rem; padding: 1px 4px; border: 1px solid #ccc; border-radius: 3px; margin-top: 2px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex gap-3 align-items-start">
+
+    <!-- ===== Left Tree Sidebar ===== -->
+    <div class="registry-sidebar">
+        <div class="p-2 border-bottom d-flex align-items-center gap-1" style="background:#f0f2f8;">
+            <i class="bi bi-folder2 text-primary"></i>
+            <strong style="font-size:.8rem;color:#1a237e;">File Registry</strong>
+        </div>
+        <ul class="tree-nav">
+
+            <!-- ACQUISITION -->
+            <li>
+                <div class="tree-section-hdr" data-bs-toggle="collapse" data-bs-target="#acqTree">
+                    <i class="bi bi-arrow-down-circle-fill text-primary"></i> Acquisition
+                    <i class="bi bi-chevron-down ch"></i>
+                </div>
+                <div id="acqTree" class="collapse show">
+                    <div class="tree-group-hdr" data-bs-toggle="collapse" data-bs-target="#acqInputTree">
+                        <i class="bi bi-inbox text-secondary"></i> Input
+                        <i class="bi bi-chevron-down ch"></i>
+                    </div>
+                    <div id="acqInputTree" class="collapse show">
+                        <!-- All files leaf -->
+                        <div class="tree-label-row">All</div>
+                        <a class="tree-leaf active"
+                           onclick="selectLeaf(this,'acquisition','ALL','','',null,'Acquisition › All Files')">
+                            <i class="bi bi-grid-fill text-secondary"></i> All Files
+                            <span class="badge bg-secondary bcnt">{{ acq_total }}</span>
+                        </a>
+
+                        <!-- Decoder-type groups from DataSources -->
+                        {% if acq_groups %}
+                        <div class="tree-label-row">Portals</div>
+                        {% for grp in acq_groups %}
+                        {% with gid="acq_grp_"|add:grp.decoder %}
+                        <!-- Decoder type group row (if multiple sources) -->
+                        {% if grp.sources|length > 1 %}
+                        <div class="tree-group-hdr" data-bs-toggle="collapse" data-bs-target="#{{ gid }}" style="padding-left:1.8rem;">
+                            <i class="bi bi-hdd-stack text-info"></i> {{ grp.label }}
+                            <span class="badge bg-primary ms-1" style="font-size:.65rem;">{{ grp.total }}</span>
+                            <i class="bi bi-chevron-down ch"></i>
+                        </div>
+                        <div id="{{ gid }}" class="collapse show">
+                            <!-- Decoder-type aggregate leaf -->
+                            <a class="tree-leaf" style="padding-left:2.8rem;"
+                               onclick="selectLeaf(this,'acquisition','{{ grp.decoder }}','','',null,'Acquisition › {{ grp.label }} › All')">
+                                <i class="bi bi-grid text-secondary" style="font-size:.75rem;"></i> All {{ grp.decoder }}
+                                <span class="badge bg-primary bcnt">{{ grp.total }}</span>
+                            </a>
+                            {% for src in grp.sources %}
+                            <a class="tree-leaf" style="padding-left:2.8rem;"
+                               onclick="selectLeaf(this,'acquisition','{{ grp.decoder }}','{{ src.id }}','',null,'Acquisition › {{ grp.label }} › {{ src.name }}')">
+                                <i class="bi bi-hdd-network text-info" style="font-size:.75rem;"></i> {{ src.name }}
+                                <span class="badge bg-secondary bcnt">{{ src.total }}</span>
+                            </a>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <!-- Single source — flat leaf -->
+                        {% if grp.sources %}
+                        <a class="tree-leaf"
+                           onclick="selectLeaf(this,'acquisition','{{ grp.decoder }}','{{ grp.sources.0.id }}','',null,'Acquisition › {{ grp.sources.0.name }}')">
+                            <i class="bi bi-hdd-network text-info"></i> {{ grp.sources.0.name }}
+                            <span class="badge bg-primary bcnt">{{ grp.total }}</span>
+                        </a>
+                        {% else %}
+                        <!-- Files exist but no DataSource configured — show decoder type -->
+                        <a class="tree-leaf"
+                           onclick="selectLeaf(this,'acquisition','{{ grp.decoder }}','','',null,'Acquisition › {{ grp.label }}')">
+                            <i class="bi bi-hdd-network text-info"></i> {{ grp.label }}
+                            <span class="badge bg-primary bcnt">{{ grp.total }}</span>
+                        </a>
+                        {% endif %}
+                        {% endif %}
+                        {% endwith %}
+                        {% endfor %}
+                        {% else %}
+                        <div class="tree-empty">No input portals configured.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </li>
+
+            <!-- DISTRIBUTION -->
+            <li>
+                <div class="tree-section-hdr collapsed" data-bs-toggle="collapse" data-bs-target="#distTree">
+                    <i class="bi bi-arrow-up-circle-fill text-success"></i> Distribution
+                    <i class="bi bi-chevron-down ch"></i>
+                </div>
+                <div id="distTree" class="collapse">
+                    <!-- All distributed leaf -->
+                    <a class="tree-leaf"
+                       onclick="selectLeaf(this,'distribution','ALL','','',null,'Distribution › All Destinations')">
+                        <i class="bi bi-grid-fill text-secondary"></i> All Distributed
+                        <span class="badge bg-success bcnt">{{ dist_total }}</span>
+                    </a>
+
+                    {% if dist_groups %}
+                    {% for grp in dist_groups %}
+                    {% with gid="dist_grp_"|add:grp.id %}
+                    <div class="tree-group-hdr" data-bs-toggle="collapse" data-bs-target="#{{ gid }}">
+                        <i class="bi bi-diagram-3 text-success"></i> {{ grp.label }}
+                        <span class="badge bg-success ms-1" style="font-size:.65rem;">{{ grp.total }}</span>
+                        <i class="bi bi-chevron-down ch"></i>
+                    </div>
+                    <div id="{{ gid }}" class="collapse show">
+                        {% for portal in grp.portals %}
+                        <a class="tree-leaf"
+                           onclick="selectLeaf(this,'distribution','{{ portal.decoder }}','','{{ portal.id }}',null,'Distribution › {{ grp.label }} › {{ portal.label }}')">
+                            <i class="bi bi-hdd-network text-success"></i> {{ portal.label }}
+                            <span class="badge bg-success bcnt">{{ portal.count }}</span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% endwith %}
+                    {% endfor %}
+                    {% else %}
+                    <div class="tree-empty">
+                        No distribution portals configured.<br>
+                        Add them via <a href="/admin/collection/distributionportal/add/" target="_blank">Admin → Distribution Portals</a>.
+                    </div>
+                    {% endif %}
+                </div>
+            </li>
+
+        </ul>
+    </div>
+
+    <!-- ===== Right Main Panel ===== -->
+    <div class="registry-main">
+
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb" class="mb-2">
+            <ol class="breadcrumb mb-0" style="font-size:.8rem;">
+                <li class="breadcrumb-item text-muted">File Registry</li>
+                <li class="breadcrumb-item active fw-semibold" id="breadcrumb">Acquisition › All Files</li>
+            </ol>
+        </nav>
+
+        <!-- File Selection Criteria -->
+        <div class="card mb-2">
+            <div class="card-header py-1" style="background:#f4f6fb;">
+                <small class="fw-semibold text-muted"><i class="bi bi-funnel"></i> File Selection Criteria</small>
+            </div>
+            <div class="card-body py-2">
+                <form id="registryForm" onsubmit="doSearch(1); return false;">
+                    {% csrf_token %}
+                    <input type="hidden" name="mode" id="modeInput" value="acquisition">
+                    <input type="hidden" name="decoder_type" id="decoderInput" value="ALL">
+                    <input type="hidden" name="source_id" id="sourceIdInput" value="">
+                    <input type="hidden" name="dist_portal" id="distPortalInput" value="">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label form-label-sm mb-0">File Type</label>
+                            <select id="fileTypeSelect" class="form-select form-select-sm"
+                                    onchange="document.getElementById('decoderInput').value=this.value; document.getElementById('sourceIdInput').value=''; doSearch(1);">
+                                <option value="ALL">All Types</option>
+                                <option value="MSC">MSC (Voice/SMS)</option>
+                                <option value="PGW">PGW (4G Data)</option>
+                                <option value="SGW">SGW (4G SGW)</option>
+                                <option value="SGSN">SGSN (2G/3G)</option>
+                                <option value="OCS">OCS Input</option>
+                                <option value="CBS">CBS Output</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2" id="statusCol">
+                            <label class="form-label form-label-sm mb-0">Status</label>
+                            <select name="status" class="form-select form-select-sm">
+                                <option value="ALL">All</option>
+                                <option value="COMPLETED">Completed</option>
+                                <option value="FAILED">Failed</option>
+                                <option value="PENDING">Pending</option>
+                                <option value="PROCESSING">Processing</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label form-label-sm mb-0">From</label>
+                            <input type="date" name="start_date" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label form-label-sm mb-0">To</label>
+                            <input type="date" name="end_date" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-3 d-flex gap-1 align-items-end">
+                            <button type="submit" class="btn btn-success btn-sm px-3">
+                                <i class="bi bi-check2"></i> Apply
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearForm()">
+                                <i class="bi bi-arrow-counterclockwise"></i> Restore Defaults
+                            </button>
+                            <div id="loadingSpinner" class="spinner-border spinner-border-sm text-primary ms-1" style="display:none;" role="status"></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Summary Table -->
+        <div class="card mb-2" id="summaryCard" style="display:none;">
+            <div class="card-header py-1 d-flex justify-content-between" style="background:#f4f6fb;">
+                <small class="fw-semibold text-muted"><i class="bi bi-table"></i> Summary Table</small>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm table-bordered summary-tbl mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width:28px;"></th>
+                            <th>Time Range</th>
+                            <th>Total Files</th>
+                            <th>Total Bytes</th>
+                            <th>Creation Time Range</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="text-center text-muted"><i class="bi bi-plus"></i></td>
+                            <td>All Files</td>
+                            <td><strong id="sumFiles">0</strong></td>
+                            <td id="sumBytes">0 B</td>
+                            <td id="sumDateRange">—</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Action Toolbar + File Table -->
+        <div class="card" id="fileCard" style="display:none;">
+            <div class="card-header py-1 d-flex align-items-center gap-1" style="background:#f4f6fb; font-size:.8rem;">
+                <span class="text-muted">
+                    <i class="bi bi-file-earmark-text"></i>
+                    File Table — <span id="fileTableTitle">All Files</span>
+                    <span class="badge bg-secondary ms-1" id="fileCount">—</span>
+                </span>
+                <div class="ms-auto d-flex gap-1">
+                    <div class="dropdown">
+                        <button class="btn btn-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                            <i class="bi bi-plus"></i> Actions
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'collection:upload' %}">
+                                <i class="bi bi-upload me-1"></i>Upload New File</a></li>
+                        </ul>
+                    </div>
+                    <button class="btn btn-info btn-sm text-white" id="btnShowDetail" onclick="showSelectedDetail()" disabled>
+                        <i class="bi bi-eye"></i> Show File Details
+                    </button>
+                    <button class="btn btn-warning btn-sm" id="btnReprocess" onclick="reprocessSelected()" disabled>
+                        <i class="bi bi-arrow-repeat"></i> Reprocessing Requests
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div id="emptyMsg" class="text-center py-4 text-muted" style="display:none;">No files found matching the criteria.</div>
+                <div class="table-responsive" id="tableWrapper">
+                    <table class="table table-sm table-hover table-striped file-tbl mb-0">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="chkAll" onchange="toggleAllChecks(this)"></th>
+                                <th>File ID<br><input class="col-filter" id="filterFileId" oninput="applyColFilters()" placeholder=""></th>
+                                <th>File Type<br>
+                                    <select class="col-filter" id="filterFileType" onchange="applyColFilters()">
+                                        <option value="">All</option>
+                                        <option value="MSC">MSC</option>
+                                        <option value="PGW">PGW</option>
+                                        <option value="SGW">SGW</option>
+                                        <option value="SGSN">SGSN</option>
+                                    </select>
+                                </th>
+                                <th>External File Name<br><input class="col-filter" id="filterName" oninput="applyColFilters()" placeholder=""></th>
+                                <th>Creation Time<br><input class="col-filter" id="filterDate" oninput="applyColFilters()" placeholder="yyyy-mm-dd"></th>
+                                <th>File Size</th>
+                                <th>Status</th>
+                                <th>Records</th>
+                                <th>Valid</th>
+                                <th>Source</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fileTableBody"></tbody>
+                    </table>
+                </div>
+                <div id="pagination" class="d-flex justify-content-between align-items-center px-3 py-2 border-top" style="display:none;">
+                    <small class="text-muted" id="pageInfo"></small>
+                    <div id="pageButtons"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Initial prompt -->
+        <div id="initMsg" class="text-center py-5 text-muted">
+            <i class="bi bi-folder2-open" style="font-size:2rem;"></i>
+            <div class="mt-2">Select a portal from the tree or click Apply to view files.</div>
+        </div>
+    </div>
+</div>
+
+<script>
+const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+let currentPage = 1;
+const perPage = 25;
+
+function selectLeaf(el, mode, decoder, sourceId, distPortal, _, label) {
+    document.querySelectorAll('.tree-leaf').forEach(l => l.classList.remove('active'));
+    el.classList.add('active');
+
+    document.getElementById('modeInput').value = mode;
+    document.getElementById('decoderInput').value = decoder;
+    document.getElementById('sourceIdInput').value = sourceId || '';
+    document.getElementById('distPortalInput').value = distPortal || '';
+    document.getElementById('fileTypeSelect').value = decoder;
+    document.getElementById('breadcrumb').textContent = label;
+    document.getElementById('fileTableTitle').textContent = label.split('›').pop().trim();
+    document.getElementById('statusCol').style.display = mode === 'distribution' ? 'none' : '';
+
+    doSearch(1);
+}
+
+function doSearch(page) {
+    currentPage = page || 1;
+    const form = document.getElementById('registryForm');
+    const params = new URLSearchParams();
+    params.set('csrfmiddlewaretoken', csrfToken);
+    params.set('page', currentPage);
+    params.set('per_page', perPage);
+    params.set('mode', document.getElementById('modeInput').value);
+    params.set('decoder_type', document.getElementById('decoderInput').value);
+    params.set('source_id', document.getElementById('sourceIdInput').value);
+    params.set('dist_portal', document.getElementById('distPortalInput').value);
+
+    for (const el of form.elements) {
+        if (!el.name || ['csrfmiddlewaretoken','mode','decoder_type','source_id','dist_portal'].includes(el.name)) continue;
+        if (el.value && el.value !== 'ALL') params.set(el.name, el.value);
+    }
+
+    document.getElementById('loadingSpinner').style.display = '';
+    document.getElementById('initMsg').style.display = 'none';
+    document.getElementById('summaryCard').style.display = 'none';
+    document.getElementById('fileCard').style.display = 'none';
+
+    fetch("{% url 'dashboard:file_registry_api' %}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: params.toString(),
+    })
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('loadingSpinner').style.display = 'none';
+        if (!data.success) {
+            document.getElementById('initMsg').textContent = data.message || 'Error loading files.';
+            document.getElementById('initMsg').style.display = '';
+            return;
+        }
+        renderSummary(data);
+        renderFileTable(data);
+    })
+    .catch(err => {
+        document.getElementById('loadingSpinner').style.display = 'none';
+        document.getElementById('initMsg').textContent = 'Network error: ' + err;
+        document.getElementById('initMsg').style.display = '';
+    });
+}
+
+function renderSummary(data) {
+    const agg = data.aggregate;
+    const b = agg.total_size_bytes || 0;
+    const bStr = b >= 1073741824 ? (b/1073741824).toFixed(2)+' GB'
+               : b >= 1048576   ? (b/1048576).toFixed(2)+' MB'
+               : b >= 1024      ? (b/1024).toFixed(1)+' KB'
+               : b+' B';
+    document.getElementById('sumFiles').textContent = (data.pagination.total||0).toLocaleString();
+    document.getElementById('sumBytes').textContent = bStr;
+    document.getElementById('sumDateRange').textContent =
+        agg.first_created && agg.first_created !== '-'
+            ? agg.first_created + ' — ' + agg.last_created : '—';
+    document.getElementById('summaryCard').style.display = '';
+}
+
+function renderFileTable(data) {
+    const tbody = document.getElementById('fileTableBody');
+    tbody.innerHTML = '';
+
+    if (data.files.length === 0) {
+        document.getElementById('emptyMsg').style.display = '';
+        document.getElementById('tableWrapper').style.display = 'none';
+    } else {
+        document.getElementById('emptyMsg').style.display = 'none';
+        document.getElementById('tableWrapper').style.display = '';
+        for (const f of data.files) {
+            const sb = {'COMPLETED':'success','FAILED':'danger','PENDING':'warning text-dark',
+                        'PROCESSING':'warning text-dark','DUPLICATE':'secondary'}[f.status]||'secondary';
+            const short = f.filename.length > 52 ? '...' + f.filename.slice(-49) : f.filename;
+            const tr = document.createElement('tr');
+            tr.dataset.fileId  = f.id;
+            tr.dataset.decoder = f.decoder_type;
+            tr.dataset.name    = f.filename.toLowerCase();
+            tr.dataset.date    = f.created_at;
+            tr.innerHTML = `
+                <td><input type="checkbox" class="row-chk" value="${f.id}" onchange="onRowCheck()"></td>
+                <td><code>${f.id}</code></td>
+                <td><span class="badge bg-info text-dark">${f.decoder_type}</span></td>
+                <td title="${f.filename}"><small>${short}</small></td>
+                <td><small>${f.created_at}</small></td>
+                <td><small>${f.file_size_kb.toLocaleString()} KB</small></td>
+                <td><span class="badge bg-${sb}">${f.status}</span></td>
+                <td>${(f.records_total||0).toLocaleString()}</td>
+                <td class="text-success">${(f.records_valid||0).toLocaleString()}</td>
+                <td><small>${f.source}</small></td>
+            `;
+            tr.addEventListener('dblclick', () => window.location.href = f.detail_url);
+            tbody.appendChild(tr);
+        }
+    }
+
+    document.getElementById('fileCount').textContent = data.pagination.total.toLocaleString();
+    document.getElementById('fileCard').style.display = '';
+
+    const p = data.pagination;
+    document.getElementById('pageInfo').textContent =
+        `Showing ${(p.page-1)*p.per_page+1}–${Math.min(p.page*p.per_page,p.total)} of ${p.total.toLocaleString()}`;
+    buildPagination(p.page, p.pages);
+    document.getElementById('pagination').style.display = p.pages > 1 ? '' : 'none';
+}
+
+function applyColFilters() {
+    const idF   = document.getElementById('filterFileId').value.toLowerCase();
+    const typeF = document.getElementById('filterFileType').value;
+    const nameF = document.getElementById('filterName').value.toLowerCase();
+    const dateF = document.getElementById('filterDate').value;
+    document.querySelectorAll('#fileTableBody tr').forEach(tr => {
+        tr.style.display = (
+            (!idF   || tr.dataset.fileId.includes(idF)) &&
+            (!typeF || tr.dataset.decoder === typeF) &&
+            (!nameF || tr.dataset.name.includes(nameF)) &&
+            (!dateF || tr.dataset.date.startsWith(dateF))
+        ) ? '' : 'none';
+    });
+}
+
+function toggleAllChecks(master) {
+    document.querySelectorAll('.row-chk').forEach(c => c.checked = master.checked);
+    onRowCheck();
+}
+function onRowCheck() {
+    const any = document.querySelectorAll('.row-chk:checked').length > 0;
+    document.getElementById('btnShowDetail').disabled = !any;
+    document.getElementById('btnReprocess').disabled  = !any;
+}
+function showSelectedDetail() {
+    const chk = document.querySelectorAll('.row-chk:checked');
+    if (chk.length === 1) window.location.href = `/collection/file/${chk[0].value}/`;
+    else alert('Select a single file to view details.');
+}
+function reprocessSelected() {
+    const chk = Array.from(document.querySelectorAll('.row-chk:checked'));
+    if (!chk.length) return;
+    if (!confirm(`Reprocess ${chk.length} file(s)?`)) return;
+    window.location.href = `/collection/file/${chk[0].value}/reprocess/`;
+}
+
+function buildPagination(page, pages) {
+    const c = document.getElementById('pageButtons');
+    c.innerHTML = '';
+    if (pages <= 1) return;
+    const add = (lbl, pg, active, dis) => {
+        const b = document.createElement('button');
+        b.className = `btn btn-sm ${active ? 'btn-primary' : 'btn-outline-secondary'} mx-1`;
+        b.textContent = lbl; b.disabled = dis;
+        if (!dis && !active) b.onclick = () => doSearch(pg);
+        c.appendChild(b);
+    };
+    add('Prev', page-1, false, page<=1);
+    let s=Math.max(1,page-3), e=Math.min(pages,page+3);
+    if(s>1){add('1',1,false,false);if(s>2){const sp=document.createElement('span');sp.textContent='...';sp.className='mx-1';c.appendChild(sp);}}
+    for(let i=s;i<=e;i++) add(String(i),i,i===page,false);
+    if(e<pages){if(e<pages-1){const sp=document.createElement('span');sp.textContent='...';sp.className='mx-1';c.appendChild(sp);}add(String(pages),pages,false,false);}
+    add('Next', page+1, false, page>=pages);
+}
+
+function clearForm() {
+    document.querySelectorAll('#registryForm select, #registryForm input[type=date]').forEach(el => {
+        el.value = el.tagName === 'SELECT' ? el.options[0].value : '';
+    });
+    document.getElementById('fileTypeSelect').value = document.getElementById('decoderInput').value;
+    doSearch(1);
+}
+
+document.addEventListener('DOMContentLoaded', () => doSearch(1));
+</script>
+{% endblock %}

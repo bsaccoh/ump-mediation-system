@@ -22,6 +22,7 @@ SCRIPTS_TO_ADD = [
     ('seed_reference.py', 'Seed Reference Data', 'TEST_DATA', 'PYTHON'),
     ('test_process.py', 'Test Processing', 'TEST_DATA', 'PYTHON'),
     ('check_schema.py', 'Check DB Schema', 'RECORD_VALIDATION', 'PYTHON'),
+    ('seed_interconnect_data.py', 'Seed Interconnect Sample Data', 'TEST_DATA', 'PYTHON'),
 ]
 
 def run():

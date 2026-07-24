@@ -3,6 +3,7 @@
 
 class DecoderType:
     MSC = 'MSC'
+    IMS = 'IMS'
     PGW = 'PGW'
     SGSN = 'SGSN'
     SGW = 'SGW'
@@ -12,14 +13,15 @@ class DecoderType:
     CSV = 'CSV'
 
     CHOICES = [
-        (MSC, 'MSC (Huawei ASN.1/BER)'),
-        (PGW, 'PGW (3GPP PS Domain)'),
+        (MSC,  'MSC (Huawei ASN.1/BER)'),
+        (IMS,  'IMS (Huawei ATS9900 VoLTE/VoBB)'),
+        (PGW,  'PGW (3GPP PS Domain)'),
         (SGSN, 'SGSN (3GPP PS Domain)'),
-        (SGW, 'SGW (3GPP PS Domain)'),
-        (OCS, 'OCS Input'),
-        (CBS, 'CBS Output'),
+        (SGW,  'SGW (3GPP PS Domain)'),
+        (OCS,  'OCS Input'),
+        (CBS,  'CBS Output'),
         (AUTO, 'Auto-detect'),
-        (CSV, 'Pre-decoded CSV'),
+        (CSV,  'Pre-decoded CSV'),
     ]
 
 

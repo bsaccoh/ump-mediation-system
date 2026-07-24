@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block title %}Reports — Interconnect{% endblock %}
+{% block page_title %}Interconnect Reports{% endblock %}
+
+{% block content %}
+<style>
+.kpi-card{border-left:4px solid #FF6600;}
+.kpi-num{font-size:1.6rem;font-weight:600;color:#212529;}
+.kpi-lbl{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:#6c757d;}
+.report-card .card-header{background:#fafafa;border-bottom:1px solid #eee;font-weight:600;}
+</style>
+
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small mb-1">From</label>
+                <input type="date" id="dateFrom" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">To</label>
+                <input type="date" id="dateTo" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Partner (Top Destinations)</label>
+                <select id="partnerFilter" class="form-select form-select-sm">
+                    <option value="">All Partners</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary btn-sm" onclick="loadAll()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+            </div>
+            <div class="col-auto">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" onclick="exportCSV('traffic_by_partner')"><i class="bi bi-download"></i> Traffic CSV</button>
+                    <button class="btn btn-outline-secondary" onclick="exportCSV('revenue_trend')">Revenue CSV</button>
+                    <button class="btn btn-outline-secondary" onclick="exportCSV('top_destinations')">Top Dest CSV</button>
+                    <button class="btn btn-outline-secondary" onclick="exportCSV('ageing')">Ageing CSV</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- KPI Row -->
+<div class="row g-3 mb-3" id="kpiRow"></div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card report-card">
+            <div class="card-header"><i class="bi bi-bar-chart"></i> Traffic by Partner</div>
+            <div class="card-body" style="height:340px"><canvas id="chartTraffic"></canvas></div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card report-card">
+            <div class="card-header"><i class="bi bi-graph-up-arrow"></i> Revenue Trend (monthly)</div>
+            <div class="card-body" style="height:340px"><canvas id="chartRevenue"></canvas></div>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="card report-card">
+            <div class="card-header"><i class="bi bi-list-ol"></i> Top Destinations</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light"><tr><th>Partner</th><th>Service</th><th>Destination</th><th class="text-end">Events</th><th class="text-end">Volume</th><th class="text-end">Amount</th></tr></thead>
+                        <tbody id="topDestBody"><tr><td colspan="6" class="text-muted text-center py-3">Loading…</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card report-card">
+            <div class="card-header"><i class="bi bi-clock-history"></i> Receivables Ageing</div>
+            <div class="card-body" style="height:300px"><canvas id="chartAgeing"></canvas></div>
+        </div>
+        <div class="card report-card mt-3">
+            <div class="card-header"><i class="bi bi-card-list"></i> Outstanding Invoices</div>
+            <div class="card-body p-0" style="max-height:260px;overflow:auto">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light"><tr><th>Invoice</th><th>Partner</th><th>Bucket</th><th class="text-end">Outstanding</th></tr></thead>
+                    <tbody id="ageingBody"><tr><td colspan="4" class="text-muted text-center py-3">Loading…</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const PALETTE = ['#FF6600','#0d6efd','#198754','#6f42c1','#dc3545','#fd7e14','#20c997','#0dcaf0','#6c757d','#212529'];
+function fmt(n,dp=0){return parseFloat(n||0).toLocaleString(undefined,{minimumFractionDigits:dp,maximumFractionDigits:dp});}
+function qs(params){return Object.entries(params).filter(([k,v])=>v!=null&&v!=='').map(([k,v])=>`${k}=${encodeURIComponent(v)}`).join('&');}
+let charts = {};
+
+function dateRange(){
+    return {start:document.getElementById('dateFrom').value,end:document.getElementById('dateTo').value};
+}
+
+function fetchReport(name, extra={}) {
+    const d = dateRange();
+    return fetch(`{% url 'interconnect:reports_api' %}?${qs({report:name,...d,...extra})}`).then(r=>r.json());
+}
+
+function loadAll() {
+    Promise.all([
+        fetchReport('traffic_by_partner'),
+        fetchReport('revenue_trend'),
+        fetchReport('top_destinations', {partner:document.getElementById('partnerFilter').value,limit:20}),
+        fetchReport('ageing'),
+    ]).then(([traf, rev, top, age]) => {
+        renderKPIs(traf.data||[], rev.data||[], age.data||[]);
+        renderTraffic(traf.data||[]);
+        renderRevenue(rev.data||[]);
+        renderTopDest(top.data||[]);
+        renderAgeing(age.data||[]);
+    });
+}
+
+function renderKPIs(traf, rev, age) {
+    const totMin = traf.reduce((a,r)=>a+(r.voice_minutes||0),0);
+    const totSMS = traf.reduce((a,r)=>a+(r.sms||0),0);
+    const totData = traf.reduce((a,r)=>a+(r.data_mb||0),0);
+    const totRev = rev.reduce((a,r)=>a+(r.inbound||0)-(r.outbound||0),0);
+    const totOut = age.reduce((a,r)=>a+(r.outstanding||0),0);
+    document.getElementById('kpiRow').innerHTML = [
+        ['Voice Minutes',  fmt(totMin,1)],
+        ['SMS Events',     fmt(totSMS)],
+        ['Data (MB)',      fmt(totData,1)],
+        ['Net Revenue (SLE)', fmt(totRev,2)],
+        ['Outstanding (SLE)', fmt(totOut,2)],
+    ].map(([lbl,val])=>`<div class="col"><div class="card kpi-card"><div class="card-body py-2"><div class="kpi-lbl">${lbl}</div><div class="kpi-num">${val}</div></div></div></div>`).join('');
+}
+
+function renderTraffic(rows) {
+    const labels = rows.map(r=>r.partner);
+    const data1 = rows.map(r=>r.voice_minutes);
+    const data2 = rows.map(r=>r.sms);
+    const data3 = rows.map(r=>r.data_mb);
+    const ctx = document.getElementById('chartTraffic').getContext('2d');
+    if (charts.traffic) charts.traffic.destroy();
+    charts.traffic = new Chart(ctx, {
+        type:'bar',
+        data:{labels,datasets:[
+            {label:'Voice min',backgroundColor:'#ff6600',borderColor:'#ff6600',borderWidth:1,data:data1},
+            {label:'SMS',      backgroundColor:'#0066ff',borderColor:'#0066ff',borderWidth:1,data:data2},
+            {label:'Data MB',  backgroundColor:'#117a47',borderColor:'#117a47',borderWidth:1,data:data3},
+        ]},
+        options:{
+            responsive:true,
+            maintainAspectRatio:false,
+            plugins:{
+                legend:{
+                    position:'bottom',
+                    labels:{
+                        boxWidth:40,
+                        boxHeight:12,
+                        padding:15,
+                        font:{
+                            size:12,
+                            family:'-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                        }
+                    }
+                }
+            },
+            scales:{
+                y:{
+                    beginAtZero:true,
+                    ticks:{
+                        callback:function(value){
+                            return value.toLocaleString();
+                        }
+                    }
+                },
+                x:{
+                    ticks:{
+                        maxRotation:30,
+                        minRotation:30,
+                        autoSkip:false
+                    }
+                }
+            }
+        }
+    });
+    // Populate partner dropdown from this dataset
+    const pf = document.getElementById('partnerFilter');
+    if (pf.options.length<=1) rows.forEach(r=>{const o=document.createElement('option');o.value=r.partner;o.textContent=`${r.partner} — ${r.partner_name}`;pf.appendChild(o);});
+}
+
+function renderRevenue(rows) {
+    const ctx = document.getElementById('chartRevenue').getContext('2d');
+    if (charts.revenue) charts.revenue.destroy();
+    charts.revenue = new Chart(ctx, {
+        type:'line',
+        data:{labels:rows.map(r=>r.month),datasets:[
+            {label:'Inbound (we charge)', borderColor:PALETTE[2], backgroundColor:PALETTE[2]+'33', data:rows.map(r=>r.inbound), tension:.3, fill:true},
+            {label:'Outbound (we pay)',   borderColor:PALETTE[4], backgroundColor:PALETTE[4]+'33', data:rows.map(r=>r.outbound), tension:.3, fill:true},
+            {label:'Net',                 borderColor:PALETTE[1], data:rows.map(r=>r.net), tension:.3, borderDash:[5,5]},
+        ]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}
+    });
+}
+
+function renderTopDest(rows) {
+    const tb = document.getElementById('topDestBody');
+    if(!rows.length){tb.innerHTML='<tr><td colspan="6" class="text-muted text-center py-3">No data.</td></tr>';return;}
+    tb.innerHTML = rows.map(r=>`<tr>
+        <td class="text-black"><strong>${r.partner}</strong></td>
+        <td class="text-black">${r.service_type}</td>
+        <td class="text-black">${r.destination_type||'-'}</td>
+        <td class="text-end text-black">${fmt(r.events)}</td>
+        <td class="text-end text-black">${fmt(r.volume,3)}</td>
+        <td class="text-end text-black">${fmt(r.amount,2)}</td>
+    </tr>`).join('');
+}
+
+function renderAgeing(rows) {
+    const buckets = {'0-30':0,'31-60':0,'61-90':0,'90+':0};
+    rows.forEach(r=>{if(buckets[r.bucket]!=null) buckets[r.bucket]+=r.outstanding;});
+    const ctx = document.getElementById('chartAgeing').getContext('2d');
+    if (charts.ageing) charts.ageing.destroy();
+    charts.ageing = new Chart(ctx, {
+        type:'doughnut',
+        data:{labels:Object.keys(buckets),datasets:[{data:Object.values(buckets),backgroundColor:[PALETTE[2],PALETTE[1],PALETTE[5],PALETTE[4]]}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}
+    });
+    const tb = document.getElementById('ageingBody');
+    if(!rows.length){tb.innerHTML='<tr><td colspan="4" class="text-muted text-center py-3">No outstanding invoices.</td></tr>';return;}
+    const COL = {'0-30':'success','31-60':'info','61-90':'warning','90+':'danger'};
+    tb.innerHTML = rows.slice(0,20).map(r=>`<tr>
+        <td class="text-black"><a href="/interconnect/invoices/${r.invoice_id}/" class="text-decoration-none">${r.invoice_number}</a></td>
+        <td class="text-black">${r.partner}</td>
+        <td><span class="badge bg-${COL[r.bucket]||'secondary'}">${r.bucket}</span></td>
+        <td class="text-end text-black">${fmt(r.outstanding,2)} ${r.currency}</td>
+    </tr>`).join('');
+}
+
+function exportCSV(report) {
+    const d = dateRange();
+    const extra = report === 'top_destinations' ? {partner:document.getElementById('partnerFilter').value,limit:50} : {};
+    window.location = `{% url 'interconnect:reports_export' %}?${qs({report,...d,...extra})}`;
+}
+
+document.addEventListener('DOMContentLoaded', loadAll);
+</script>
+{% endblock %}

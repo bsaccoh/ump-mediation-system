@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Generate Invoice — Interconnect{% endblock %}
+{% block page_title %}Generate Invoice{% endblock %}
+{% block content %}
+{% if messages %}{% for m in messages %}<div class="alert alert-{{ m.tags|default:'info' }}">{{ m }}</div>{% endfor %}{% endif %}
+
+<div class="card">
+    <div class="card-header"><i class="bi bi-receipt"></i> Invoice Generation</div>
+    <div class="card-body">
+        <p class="text-muted">Pick a partner + cycle → run rating engine → produce invoice with PDF/CSV.</p>
+        <form method="post" class="row g-2">
+            {% csrf_token %}
+            <div class="col-md-4">
+                <label class="form-label small">Partner</label>
+                <select name="partner_id" class="form-select form-select-sm" required>
+                    <option value="">— select partner —</option>
+                    {% for p in partners %}<option value="{{ p.pk }}">{{ p.code }} — {{ p.name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small">Billing Cycle</label>
+                <select name="cycle_id" class="form-select form-select-sm" required>
+                    <option value="">— select cycle —</option>
+                    {% for c in cycles %}<option value="{{ c.pk }}">{{ c.partner.code }} — {{ c.period_start }} → {{ c.period_end }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small">Direction</label>
+                <select name="direction" class="form-select form-select-sm">
+                    {% for v, l in direction_choices %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-12 mt-3">
+                <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-play-fill"></i> Generate Invoice</button>
+            </div>
+        </form>
+        <hr>
+        <p class="small text-muted mb-0"><i class="bi bi-info-circle"></i> Rating engine + PDF rendering land on <strong>Day 4</strong>.</p>
+    </div>
+</div>
+{% endblock %}

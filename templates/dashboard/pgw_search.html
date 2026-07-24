@@ -27,9 +27,17 @@
                     <label class="form-label form-label-sm">IMSI</label>
                     <input type="text" name="imsi" class="form-control form-control-sm" placeholder="IMSI">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label form-label-sm">IMEI</label>
                     <input type="text" name="imei" class="form-control form-control-sm" placeholder="IMEI">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm">LAC</label>
+                    <input type="text" name="lac" class="form-control form-control-sm" placeholder="LAC">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm">Node ID</label>
+                    <input type="text" name="node_id" class="form-control form-control-sm" placeholder="Node ID">
                 </div>
             </div>
             <div class="row g-2 mb-2">
@@ -107,9 +115,10 @@
                         <th>Download</th>
                         <th>Total MB</th>
                         <th>RAT</th>
-                        <th>Technology</th>
-                        <th>Cell ID</th>
+                        <th>LAC</th>
+                        <th>Cell ID / ECI</th>
                         <th>TAC</th>
+                        <th>Rating Group</th>
                         <th>Roaming</th>
                         <th>Status</th>
                         <th></th>
@@ -196,20 +205,21 @@ function doSearch(page) {
         for (const r of data.records) {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td><code>${r.calling_number || '-'}</code></td>
-                <td><strong>${r.apn || '-'}</strong></td>
+                <td>${r.calling_number || '-'}</td>
+                <td>${r.apn || '-'}</td>
                 <td><small>${r.imsi || '-'}</small></td>
                 <td><small>${r.start_time || '-'}</small></td>
                 <td>${r.duration || 0}s</td>
                 <td><small>${formatBytes(r.data_volume_up)}</small></td>
                 <td><small>${formatBytes(r.data_volume_down)}</small></td>
-                <td><strong>${r.data_volume_mb || 0}</strong></td>
-                <td><small>${r.rat_type || '-'}</small></td>
+                <td>${r.data_volume_mb || 0}</td>
                 <td><small>${r.rat_type_name || '-'}</small></td>
-                <td><small>${r.cell_id || '-'}</small></td>
                 <td><small>${r.lac || '-'}</small></td>
-                <td>${r.is_roaming ? '<span class="badge bg-warning text-dark">Yes</span>' : '-'}</td>
-                <td><span class="badge bg-${r.status === 'VALID' ? 'success' : r.status === 'INVALID' ? 'danger' : 'warning'}">${r.status}</span></td>
+                <td><small>${r.cell_id || r.eci || '-'}</small></td>
+                <td><small>${r.tac || '-'}</small></td>
+                <td>${r.rating_group || '-'}</td>
+                <td>${r.is_roaming ? 'Yes' : '-'}</td>
+                <td>${r.status}</td>
                 <td><a href="/pgw/${r.id}/" class="btn btn-outline-primary btn-sm py-0">View</a></td>
             `;
             tbody.appendChild(tr);

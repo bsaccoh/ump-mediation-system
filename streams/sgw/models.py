@@ -21,11 +21,11 @@ class SGWRecord(models.Model):
 
     # Foreign keys
     file = models.ForeignKey(
-        'collection.CDRFile', on_delete=models.CASCADE,
+        'collection.CDRFile', on_delete=models.CASCADE, db_constraint=False,
         related_name='sgw_records', db_index=True
     )
     source = models.ForeignKey(
-        'collection.DataSource', on_delete=models.SET_NULL,
+        'collection.DataSource', on_delete=models.SET_NULL, db_constraint=False,
         null=True, blank=True, db_index=True
     )
 
@@ -33,11 +33,13 @@ class SGWRecord(models.Model):
     record_type = models.CharField(max_length=50, db_index=True)   # SGW-CDR
     service_type = models.CharField(max_length=20, default='DATA')  # Always DATA
     charging_id = models.CharField(max_length=50, null=True, blank=True)
+    rating_group = models.CharField(max_length=200, null=True, blank=True, db_index=True)
 
     # Subscriber
     calling_number = models.CharField(max_length=50, blank=True, db_index=True)  # MSISDN
     called_number = models.CharField(max_length=100, blank=True)                 # APN
     imsi = models.CharField(max_length=20, blank=True, db_index=True)
+    prepaid_flag = models.CharField(max_length=10, blank=True, db_index=True)
     imei = models.CharField(max_length=20, blank=True)
 
     # Timing
@@ -46,8 +48,8 @@ class SGWRecord(models.Model):
     duration = models.IntegerField(default=0)  # seconds
 
     # Data volumes (bytes)
-    data_volume_up = models.CharField(max_length=50, default='0')
-    data_volume_down = models.CharField(max_length=50, default='0')
+    data_volume_up = models.BigIntegerField(default=0)
+    data_volume_down = models.BigIntegerField(default=0)
 
     # APN / Network
     apn = models.CharField(max_length=100, blank=True, db_index=True)
@@ -59,7 +61,9 @@ class SGWRecord(models.Model):
 
     # Location
     cell_id = models.CharField(max_length=50, blank=True)
-    lac = models.CharField(max_length=20, blank=True)               # TAC for LTE
+    lac = models.CharField(max_length=20, blank=True)               # Location Area Code
+    tac = models.CharField(max_length=20, blank=True)               # Tracking Area Code (LTE)
+    eci = models.CharField(max_length=50, blank=True)               # E-UTRAN Cell Identity (LTE)
     serving_plmn = models.CharField(max_length=10, blank=True)
 
     # Cause

@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Traffic Matrix — UMP Mediation{% endblock %}
+{% block page_title %}Traffic Matrix{% endblock %}
+
+{% block extra_css %}
+<style>
+.tm-page { color: #20212b; }
+.tm-page .panel {
+    background: #ffffff; border: 1px solid #e6e8ed; border-radius: 6px;
+    margin-bottom: 12px; box-shadow: 0 1px 2px rgba(20,28,50,0.04);
+}
+.tm-page .panel-header {
+    color: #6c757d; font-size: 0.74rem; text-transform: uppercase;
+    letter-spacing: 0.04em; font-weight: 600;
+    padding: 10px 14px 6px;
+    border-bottom: 1px solid #f0f1f4;
+    display: flex; justify-content: space-between; align-items: center;
+}
+.tm-page .panel-body { padding: 10px 12px 12px; }
+
+.tm-toolbar {
+    background: #ffffff; border: 1px solid #e6e8ed; border-radius: 6px;
+    padding: 8px 14px; margin-bottom: 12px;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 8px;
+    box-shadow: 0 1px 2px rgba(20,28,50,0.04);
+}
+.tm-toolbar h2 { font-size: 1.05rem; font-weight: 600; margin: 0; }
+.tm-range-btn {
+    background: #f5f6f9; color: #4a5060; border: 1px solid #dfe1e6;
+    padding: 4px 10px; font-size: 0.78rem; font-weight: 500;
+    border-radius: 3px; cursor: pointer; transition: all 0.15s;
+}
+.tm-range-btn:hover { background: #e9ecef; }
+.tm-range-btn.active { background: #ff7f00; color: #fff; border-color: #ff7f00; }
+
+/* KPI strip */
+.tm-kpi { text-align: center; padding: 14px 8px; }
+.tm-kpi .v { font-family: ui-monospace, Menlo, Consolas, monospace;
+             font-size: 2rem; font-weight: 600; line-height: 1; }
+.tm-kpi .l { color: #6c757d; font-size: 0.72rem; font-weight: 600;
+             text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+.tm-kpi.blue   .v { color: #3b7dd8; }
+.tm-kpi.green  .v { color: #2eb265; }
+.tm-kpi.purple .v { color: #7c2fb0; }
+
+/* Matrix table */
+.tm-matrix { border-collapse: collapse; font-size: 0.85rem; width: 100%; }
+.tm-matrix th, .tm-matrix td {
+    padding: 6px 10px; border: 1px solid #e6e8ed;
+    text-align: right; font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+.tm-matrix th { background: #f8f9fa; color: #6c757d; font-weight: 600;
+                font-size: 0.74rem; text-transform: uppercase;
+                letter-spacing: 0.03em; text-align: center; }
+.tm-matrix thead th:first-child { text-align: left; }
+.tm-matrix tbody th { text-align: left; background: #f8f9fa; color: #20212b;
+                       font-family: -apple-system, sans-serif; font-size: 0.85rem; }
+/* Heatmap colouring — green scale */
+.tm-cell-0  { background: #ffffff; color: #c0c2c8; }
+.tm-cell-1  { background: #ebf7ef; }
+.tm-cell-2  { background: #c7ebd2; }
+.tm-cell-3  { background: #94dba6; }
+.tm-cell-4  { background: #5ec97d; color: #fff; }
+.tm-cell-5  { background: #2eb265; color: #fff; font-weight: 600; }
+.tm-cell-diag { outline: 2px solid #ff7f00; outline-offset: -2px; }
+
+.tm-page .small { font-size: 0.72rem; color: #8a8e9b; }
+.tm-page .total-row { background: #f0f1f4; font-weight: 600; }
+.tm-page .total-row td { font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tm-page">
+
+    <div class="tm-toolbar">
+        <h2><i class="bi bi-grid-3x3-gap"></i> Inter-operator Traffic Matrix</h2>
+        <div class="d-flex align-items-center gap-2">
+            <span class="small" id="tmLastUpdate"></span>
+            <div class="btn-group">
+                <button class="tm-range-btn" data-range="24h">24h</button>
+                <button class="tm-range-btn active" data-range="7d">7d</button>
+                <button class="tm-range-btn" data-range="30d">30d</button>
+                <button class="tm-range-btn" data-range="all">All</button>
+            </div>
+            <button class="tm-range-btn" id="tmRefresh"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+    </div>
+
+    <div id="tmLoading" class="text-center py-5 text-muted">
+        <div class="spinner-border"></div><div class="mt-2">Building matrix…</div>
+    </div>
+
+    <div id="tmContent" style="display:none;">
+
+        <!-- KPIs -->
+        <div class="row g-2 mb-2">
+            <div class="col-md-4"><div class="panel"><div class="tm-kpi blue">
+                <div class="l">Total Voice Calls</div>
+                <div class="v" id="kpiCalls">-</div>
+            </div></div></div>
+            <div class="col-md-4"><div class="panel"><div class="tm-kpi purple">
+                <div class="l">Total Voice Minutes</div>
+                <div class="v" id="kpiMinutes">-</div>
+            </div></div></div>
+            <div class="col-md-4"><div class="panel"><div class="tm-kpi green">
+                <div class="l">Total SMS</div>
+                <div class="v" id="kpiSms">-</div>
+            </div></div></div>
+        </div>
+
+        <!-- Voice matrix (calls) -->
+        <div class="panel">
+            <div class="panel-header">
+                <span>Voice Calls — From (rows) → To (columns)</span>
+                <span class="small">Cells coloured by relative volume · diagonal = on-net</span>
+            </div>
+            <div class="panel-body">
+                <div class="table-responsive">
+                    <table class="tm-matrix" id="tblVoice"></table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Voice minutes -->
+        <div class="panel">
+            <div class="panel-header"><span>Voice Minutes — From → To</span></div>
+            <div class="panel-body">
+                <div class="table-responsive">
+                    <table class="tm-matrix" id="tblMinutes"></table>
+                </div>
+            </div>
+        </div>
+
+        <!-- SMS matrix -->
+        <div class="panel">
+            <div class="panel-header"><span>SMS Messages — From → To</span></div>
+            <div class="panel-body">
+                <div class="table-responsive">
+                    <table class="tm-matrix" id="tblSms"></table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+let currentRange = '7d';
+
+function fmt(n) { return (n || 0).toLocaleString(); }
+
+function classifyCell(v, max) {
+    if (!v || v === 0) return 'tm-cell-0';
+    const r = v / max;
+    if (r > 0.6) return 'tm-cell-5';
+    if (r > 0.3) return 'tm-cell-4';
+    if (r > 0.1) return 'tm-cell-3';
+    if (r > 0.02) return 'tm-cell-2';
+    return 'tm-cell-1';
+}
+
+function renderMatrix(tableId, matrix, operators, rowTotals, colTotals) {
+    // Find the max cell value for heatmap scaling
+    let max = 0;
+    for (const fo of operators) {
+        for (const to of operators) {
+            const v = (matrix[fo] || {})[to] || 0;
+            if (v > max) max = v;
+        }
+    }
+    const t = document.getElementById(tableId);
+    let html = '<thead><tr><th>From \\ To</th>';
+    for (const op of operators) html += `<th>${op}</th>`;
+    html += '<th class="text-end">Σ Out</th></tr></thead><tbody>';
+    for (const fo of operators) {
+        html += `<tr><th>${fo}</th>`;
+        for (const to of operators) {
+            const v = (matrix[fo] || {})[to] || 0;
+            const cls = classifyCell(v, max);
+            const diag = (fo === to) ? ' tm-cell-diag' : '';
+            html += `<td class="${cls}${diag}">${v ? fmt(v) : '-'}</td>`;
+        }
+        html += `<td class="text-end" style="background:#f0f1f4;font-weight:600;">${fmt(rowTotals[fo])}</td>`;
+        html += '</tr>';
+    }
+    // Column totals row
+    html += '<tr class="total-row"><td><strong>Σ In</strong></td>';
+    let grand = 0;
+    for (const op of operators) {
+        const ct = colTotals[op] || 0;
+        grand += ct;
+        html += `<td>${fmt(ct)}</td>`;
+    }
+    html += `<td><strong>${fmt(grand)}</strong></td></tr>`;
+    html += '</tbody>';
+    t.innerHTML = html;
+}
+
+function fetchData() {
+    return fetch("{% url 'dashboard:traffic_matrix_api' %}" + '?range=' + currentRange)
+        .then(r => r.json())
+        .then(d => {
+            document.getElementById('tmLoading').style.display = 'none';
+            document.getElementById('tmContent').style.display = 'block';
+            document.getElementById('tmLastUpdate').textContent =
+                'updated ' + new Date().toLocaleTimeString();
+
+            document.getElementById('kpiCalls').textContent   = fmt(d.totals.voice_calls);
+            document.getElementById('kpiMinutes').textContent = fmt(d.totals.voice_minutes);
+            document.getElementById('kpiSms').textContent     = fmt(d.totals.sms_messages);
+
+            renderMatrix('tblVoice',   d.voice_matrix,  d.operators, d.by_from_voice, d.by_to_voice);
+            renderMatrix('tblMinutes', d.voice_minutes, d.operators, {}, {});
+            // For minutes table, recompute totals
+            const minRowT = {}, minColT = {};
+            for (const fo of d.operators) {
+                let s = 0;
+                for (const to of d.operators) s += (d.voice_minutes[fo] || {})[to] || 0;
+                minRowT[fo] = s;
+            }
+            for (const to of d.operators) {
+                let s = 0;
+                for (const fo of d.operators) s += (d.voice_minutes[fo] || {})[to] || 0;
+                minColT[to] = s;
+            }
+            renderMatrix('tblMinutes', d.voice_minutes, d.operators, minRowT, minColT);
+            renderMatrix('tblSms',     d.sms_matrix,    d.operators, d.by_from_sms, d.by_to_sms);
+        })
+        .catch(err => {
+            document.getElementById('tmLoading').innerHTML =
+                `<div class="text-danger">Failed to load: ${err.message}</div>`;
+        });
+}
+
+document.querySelectorAll('.tm-range-btn[data-range]').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tm-range-btn[data-range]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentRange = btn.dataset.range;
+        fetchData();
+    });
+});
+document.getElementById('tmRefresh').addEventListener('click', fetchData);
+
+fetchData();
+</script>
+{% endblock %}

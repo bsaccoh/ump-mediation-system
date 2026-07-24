@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}IMS #{{ record.pk }} - UMP Mediation{% endblock %}
+{% block page_title %}IMS CDR Record Detail{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>
+            <i class="bi bi-broadcast-pin"></i>
+            <span class="badge bg-{% if record.service_type == 'VOICE' %}primary{% elif record.service_type == 'SMS' %}success{% elif record.service_type == 'EVENT' %}info{% else %}secondary{% endif %}">{{ record.service_type }}</span>
+            <span class="badge bg-secondary">{{ record.record_type }}</span>
+            {% if record.sip_method %}<span class="badge bg-dark">{{ record.sip_method }}</span>{% endif %}
+            {% if record.role_of_node %}
+                {% if record.role_of_node == 'ORIGINATING' %}
+                    <span class="badge bg-primary">↑ ORIGINATING</span>
+                {% elif record.role_of_node == 'TERMINATING' %}
+                    <span class="badge bg-info">↓ TERMINATING</span>
+                {% else %}
+                    <span class="badge bg-light text-dark">{{ record.role_of_node }}</span>
+                {% endif %}
+            {% endif %}
+            <span class="badge bg-{% if record.status == 'VALID' %}success{% elif record.status == 'INVALID' %}danger{% else %}warning{% endif %}">{{ record.status }}</span>
+        </span>
+        <span class="text-muted small">Record #{{ record.pk }}</span>
+    </div>
+
+    <div class="card-body">
+        <div class="row">
+
+            <!-- Party Information -->
+            <div class="col-md-6">
+                <h6 class="text-muted border-bottom pb-1 mb-2"><i class="bi bi-people"></i> Party Information</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted" style="width:40%">SIP Method</td><td><strong>{{ record.sip_method|default:"-" }}</strong></td></tr>
+                    <tr><td class="text-muted">Role of Node</td><td>{{ record.role_of_node|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">Calling Number</td><td><code>{{ record.calling_number|default:"-" }}</code></td></tr>
+                    <tr><td class="text-muted">Called Number</td><td><code>{{ record.called_number|default:"-" }}</code></td></tr>
+                    <tr><td class="text-muted">Dialed Number</td><td><code>{{ record.dialed_number|default:"-" }}</code></td></tr>
+                    {% if record.charged_party %}
+                    <tr><td class="text-muted">Charged Party</td><td><code>{{ record.charged_party }}</code></td></tr>
+                    {% endif %}
+                    {% if record.calling_sip_uri %}
+                    <tr><td class="text-muted">Calling SIP URI</td><td><small><code>{{ record.calling_sip_uri }}</code></small></td></tr>
+                    {% endif %}
+                    {% if record.called_sip_uri %}
+                    <tr><td class="text-muted">Called SIP URI</td><td><small><code>{{ record.called_sip_uri }}</code></small></td></tr>
+                    {% endif %}
+                    <tr><td class="text-muted">Roaming</td><td>
+                        {% if record.roaming_indicator %}<span class="badge bg-warning text-dark">{{ record.roaming_indicator }}</span>{% else %}-{% endif %}
+                    </td></tr>
+                    <tr><td class="text-muted">Call Category</td><td>
+                        {% if record.call_category %}<span class="badge bg-info text-dark">{{ record.call_category }}</span>{% else %}-{% endif %}
+                    </td></tr>
+                </table>
+            </div>
+
+            <!-- Subscriber & Identifiers -->
+            <div class="col-md-6">
+                <h6 class="text-muted border-bottom pb-1 mb-2"><i class="bi bi-sim"></i> Served Subscriber &amp; Session</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted" style="width:40%">IMSI</td><td><code>{{ record.imsi|default:"-" }}</code></td></tr>
+                    <tr><td class="text-muted">MSISDN</td><td><code>{{ record.msisdn|default:"-" }}</code></td></tr>
+                    <tr><td class="text-muted">IMEI</td><td><code>{{ record.imei|default:"-" }}</code></td></tr>
+                    <tr><td class="text-muted">Private Identity (IMPI)</td><td><small><code>{{ record.private_user_identity|default:"-" }}</code></small></td></tr>
+                    <tr><td class="text-muted">Prepaid Flag</td><td>{{ record.prepaid_flag|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">Session-ID</td><td><small><code>{{ record.session_id|default:"-" }}</code></small></td></tr>
+                    <tr><td class="text-muted">ICID</td><td><small><code>{{ record.icid|default:"-" }}</code></small></td></tr>
+                    <tr><td class="text-muted">Sequence #</td><td>{{ record.sequence_number|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">Service Context</td><td><small>{{ record.service_context_id|default:"-" }}</small></td></tr>
+                    <tr><td class="text-muted">Served Subscriber Type</td><td>{{ record.served_subscriber_type|default:"-" }}</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="row mt-2">
+            <!-- A-party identifiers -->
+            <div class="col-md-6">
+                <h6 class="text-muted border-bottom pb-1 mb-2"><i class="bi bi-arrow-up-circle text-primary"></i> A-party (Calling)</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted" style="width:40%">Calling IMSI</td><td><code>{{ record.calling_imsi|default:"-" }}</code></td></tr>
+                    <tr><td class="text-muted">Calling MIN</td><td><code>{{ record.calling_min|default:"-" }}</code></td></tr>
+                    <tr><td class="text-muted">Calling IMPI</td><td><small><code>{{ record.calling_impi|default:"-" }}</code></small></td></tr>
+                </table>
+            </div>
+            <!-- B-party identifiers -->
+            <div class="col-md-6">
+                <h6 class="text-muted border-bottom pb-1 mb-2"><i class="bi bi-arrow-down-circle text-info"></i> B-party (Called)</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted" style="width:40%">Called IMSI</td><td><code>{{ record.called_imsi|default:"-" }}</code></td></tr>
+                    <tr><td class="text-muted">Called MIN</td><td><code>{{ record.called_min|default:"-" }}</code></td></tr>
+                    <tr><td class="text-muted">Called IMPI</td><td><small><code>{{ record.called_impi|default:"-" }}</code></small></td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="row mt-2">
+
+            <!-- Time & Duration -->
+            <div class="col-md-6">
+                <h6 class="text-muted border-bottom pb-1 mb-2"><i class="bi bi-clock"></i> Time &amp; Duration</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted" style="width:40%">Request Time</td><td>{{ record.request_time|date:"Y-m-d H:i:s"|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">Start Time</td><td>{{ record.start_time|date:"Y-m-d H:i:s"|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">End Time</td><td>{{ record.end_time|date:"Y-m-d H:i:s"|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">Duration</td><td><strong>{{ record.duration }}s</strong></td></tr>
+                    {% if record.ringing_duration %}
+                    <tr><td class="text-muted">Ringing Duration</td><td>{{ record.ringing_duration }}s</td></tr>
+                    {% endif %}
+                    <tr><td class="text-muted">Cause for Closing</td><td>
+                        {% if record.cause_for_closing %}<span class="badge bg-secondary">{{ record.cause_for_closing }}</span>{% else %}-{% endif %}
+                    </td></tr>
+                    {% if record.service_reason_code %}
+                    <tr><td class="text-muted">Service Reason Code</td><td>{{ record.service_reason_code }}</td></tr>
+                    {% endif %}
+                </table>
+            </div>
+
+            <!-- Network / Routing -->
+            <div class="col-md-6">
+                <h6 class="text-muted border-bottom pb-1 mb-2"><i class="bi bi-diagram-3"></i> Network &amp; Routing</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted" style="width:40%">Node Address</td><td><small>{{ record.node_address|default:"-" }}</small></td></tr>
+                    <tr><td class="text-muted">Originating IOI</td><td><small>{{ record.originating_ioi|default:"-" }}</small></td></tr>
+                    <tr><td class="text-muted">Terminating IOI</td><td><small>{{ record.terminating_ioi|default:"-" }}</small></td></tr>
+                    <tr><td class="text-muted">MSC Number</td><td>{{ record.msc_number|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">VLR Number</td><td>{{ record.vlr_number|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">Call Property</td><td>
+                        {% if record.call_property %}<span class="badge bg-light text-dark">{{ record.call_property }}</span>{% else %}-{% endif %}
+                    </td></tr>
+                    {% if record.np_routing_number %}
+                    <tr><td class="text-muted">NP Routing</td><td>{{ record.np_routing_number }}</td></tr>
+                    {% endif %}
+                    {% if record.carrier_code %}
+                    <tr><td class="text-muted">Carrier Code</td><td>{{ record.carrier_code }}</td></tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+
+        <div class="row mt-2">
+
+            <!-- Access Network -->
+            <div class="col-md-6">
+                <h6 class="text-muted border-bottom pb-1 mb-2"><i class="bi bi-broadcast"></i> Access Network</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted" style="width:40%">Technology</td><td>
+                        {% if record.technology %}
+                            {% if record.technology == 'EUTRAN' %}<span class="badge bg-primary">{{ record.technology }} (4G/LTE)</span>
+                            {% elif record.technology == 'NR' %}<span class="badge bg-danger">{{ record.technology }} (5G)</span>
+                            {% elif record.technology == 'UTRAN' %}<span class="badge bg-info">{{ record.technology }} (3G)</span>
+                            {% elif record.technology == 'GERAN' %}<span class="badge bg-secondary">{{ record.technology }} (2G)</span>
+                            {% elif record.technology == 'WLAN' %}<span class="badge bg-success">{{ record.technology }} (Wi-Fi)</span>
+                            {% else %}<span class="badge bg-light text-dark">{{ record.technology }}</span>{% endif %}
+                        {% else %}-{% endif %}
+                    </td></tr>
+                    <tr><td class="text-muted">Serving PLMN</td><td>
+                        {% if record.serving_plmn %}<code>{{ record.serving_plmn }}</code>
+                            {% if record.serving_plmn|slice:":3" == "619" %}<small class="text-muted ms-2">Sierra Leone</small>{% endif %}
+                        {% else %}-{% endif %}
+                    </td></tr>
+                    {% if record.technology == 'EUTRAN' or record.technology == 'NR' %}
+                    <tr><td class="text-muted">TAC</td><td><code>{{ record.tac|default:"-" }}</code></td></tr>
+                    {% else %}
+                    <tr><td class="text-muted">LAC</td><td><code>{{ record.lac|default:"-" }}</code></td></tr>
+                    {% endif %}
+                    <tr><td class="text-muted">Cell ID</td><td><code>{{ record.cell_id|default:"-" }}</code></td></tr>
+                    {% if record.technology == 'EUTRAN' or record.technology == 'NR' %}
+                    <tr><td class="text-muted">eNodeB ID</td><td><code>{{ record.enodeb_id|default:"-" }}</code></td></tr>
+                    {% endif %}
+                    <tr><td class="text-muted">UE IP</td><td><code>{{ record.ue_ip|default:"-" }}</code></td></tr>
+                    <tr><td class="text-muted">APN</td><td>{{ record.apn|default:"-" }}</td></tr>
+                </table>
+            </div>
+
+            <!-- Call Forwarding / Diversion -->
+            <div class="col-md-6">
+                <h6 class="text-muted border-bottom pb-1 mb-2"><i class="bi bi-arrow-return-right"></i> Forwarding &amp; Diversion</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted" style="width:40%">Forwarded To</td><td>
+                        {% if record.forwarded_number %}<strong class="text-primary">{{ record.forwarded_number }}</strong>{% else %}-{% endif %}
+                    </td></tr>
+                    <tr><td class="text-muted">Redirecting Number</td><td><code>{{ record.redirecting_number|default:"-" }}</code></td></tr>
+                    <tr><td class="text-muted">Diversion Reason</td><td>{{ record.diversion_reason|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">Diversion Count</td><td>{{ record.diversion_count|default:0 }}</td></tr>
+                    <tr><td class="text-muted">Supplementary Service</td><td>{{ record.supplementary_service|default:"-" }}</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="row mt-2">
+
+            <!-- Charging & Service -->
+            <div class="col-md-6">
+                <h6 class="text-muted border-bottom pb-1 mb-2"><i class="bi bi-cash-stack"></i> Charging &amp; Service</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted" style="width:40%">Charging Category</td><td>
+                        {% if record.charging_category %}<span class="badge bg-primary">{{ record.charging_category }}</span>{% else %}-{% endif %}
+                    </td></tr>
+                    <tr><td class="text-muted">Media Type</td><td>
+                        {% if record.media_type %}<span class="badge bg-info text-dark">{{ record.media_type }}</span>{% else %}-{% endif %}
+                    </td></tr>
+                    {% if record.access_network_info %}
+                    <tr><td class="text-muted">Access Network</td><td><small>{{ record.access_network_info|truncatechars:120 }}</small></td></tr>
+                    {% endif %}
+                    <tr><td class="text-muted">Online Charging Flag</td><td>{{ record.online_charging_flag|default:"-" }}</td></tr>
+                    {% if record.supplementary_service %}
+                    <tr><td class="text-muted">Supp. Service</td><td>{{ record.supplementary_service }}</td></tr>
+                    {% endif %}
+                    {% if record.diversion_reason %}
+                    <tr><td class="text-muted">Diversion Reason</td><td>{{ record.diversion_reason }}</td></tr>
+                    {% endif %}
+                    {% if record.diversion_count %}
+                    <tr><td class="text-muted">Diversion Count</td><td>{{ record.diversion_count }}</td></tr>
+                    {% endif %}
+                </table>
+            </div>
+
+            <!-- File Info -->
+            <div class="col-md-6">
+                <h6 class="text-muted border-bottom pb-1 mb-2"><i class="bi bi-file-earmark"></i> File Info</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted" style="width:40%">Source File</td><td>
+                        {% if record.file %}<a href="{% url 'collection:file_detail' record.file.pk %}">{{ record.file.filename|truncatechars:40 }}</a>
+                        {% else %}-{% endif %}
+                    </td></tr>
+                    <tr><td class="text-muted">Data Source</td><td>{{ record.source.name|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">Created</td><td>{{ record.created_at|date:"Y-m-d H:i:s" }}</td></tr>
+                    <tr><td class="text-muted">Paired CDR</td><td>
+                        {% if record.paired_record %}
+                            <a href="{% url 'ims:cdr_detail' record.paired_record.pk %}" class="btn btn-sm btn-outline-primary py-0 px-2">
+                                <i class="bi bi-link-45deg"></i> #{{ record.paired_record.pk }}
+                                <span class="badge bg-{% if record.paired_record.role_of_node == 'ORIGINATING' %}primary{% else %}info{% endif %} ms-1">
+                                    {{ record.paired_record.role_of_node }}
+                                </span>
+                            </a>
+                            <small class="text-muted d-block mt-1">
+                                Same ICID — {{ record.paired_record.calling_number|default:"-" }} → {{ record.paired_record.called_number|default:"-" }}
+                            </small>
+                        {% else %}
+                            <span class="text-muted">No pair found (ICID has no opposite-role record)</span>
+                        {% endif %}
+                    </td></tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Raw Data -->
+        <div class="row mt-2">
+            <div class="col-12">
+                <h6 class="text-muted border-bottom pb-1 mb-2"><i class="bi bi-code-square"></i> Raw Decoded Data</h6>
+                {% if record.raw_data %}
+                <pre class="bg-light p-2 rounded" style="max-height:300px; overflow-y:auto; font-size:0.75rem;">{{ record.raw_data|pprint }}</pre>
+                {% else %}
+                <p class="text-muted">No raw data available</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex gap-2">
+    {% if record.file %}
+    <a href="{% url 'collection:file_detail' record.file.pk %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Back to File
+    </a>
+    {% endif %}
+</div>
+{% endblock %}

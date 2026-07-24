@@ -3,7 +3,7 @@ import json
 
 from django import forms
 
-from .models import InputPortal, OutputPortal, Plugin, Resource
+from .models import InputPortal, OutputPortal, Plugin, Resource, OutputSchema, DistributionRule
 
 
 _TEXT = {'class': 'form-control'}
@@ -33,6 +33,14 @@ class InputPortalForm(forms.ModelForm):
             'duplicate_business_logic', 'file_compression_type', 'input_script',
             'large_file_access_descriptor'
         ]
+        help_texts = {
+            'directory': (
+                'File collection path — the directory to watch/poll for incoming '
+                'CDR files. For the per-operator layout use '
+                '{operator}/input/{vendor}/{ne} (e.g. orange/input/huawei/msc).'
+            ),
+            'file_pattern': 'Glob of files to collect, e.g. *.dat',
+        }
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control form-control-sm bg-light', 'placeholder': 'e.g. SL_INP | HMSC'}),
             'portal_type': forms.Select(attrs={'class': 'form-select form-select-sm bg-light'}),
@@ -87,19 +95,112 @@ class OutputPortalForm(forms.ModelForm):
             'host', 'port', 'username', 'password', 'directory',
             'is_active', 'description',
         ]
-        widgets = {
-            'name': forms.TextInput(attrs=_TEXT),
-            'portal_type': forms.Select(attrs=_SELECT),
-            'stream_type': forms.Select(attrs=_SELECT),
-            'output_format': forms.Select(attrs=_SELECT),
-            'host': forms.TextInput(attrs=_TEXT),
-            'port': forms.NumberInput(attrs=_NUMBER),
-            'username': forms.TextInput(attrs=_TEXT),
-            'password': forms.PasswordInput(attrs=_TEXT, render_value=True),
-            'directory': forms.TextInput(attrs=_TEXT),
-            'is_active': forms.CheckboxInput(attrs=_CHECKBOX),
-            'description': forms.Textarea(attrs=_TEXTAREA),
+        help_texts = {
+            'directory': (
+                'Output path. Absolute, or relative to the data dir. '
+                'Placeholders: {operator} {vendor} {ne} {stream} {portal} '
+                '{YYYY} {MM} {DD}. Leave blank to use the per-operator default '
+                '{operator}/output/{vendor}/{ne}.'
+            ),
         }
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control form-control-sm bg-light', 'placeholder': 'e.g. Billing_SFTP'}),
+            'portal_type': forms.Select(attrs={'class': 'form-select form-select-sm bg-light'}),
+            'stream_type': forms.Select(attrs={'class': 'form-select form-select-sm bg-light'}),
+            'output_format': forms.Select(attrs={'class': 'form-select form-select-sm bg-light'}),
+            'host': forms.TextInput(attrs={'class': 'form-control form-control-sm bg-light', 'placeholder': 'e.g. 10.0.0.5'}),
+            'port': forms.NumberInput(attrs={'class': 'form-control form-control-sm bg-light'}),
+            'username': forms.TextInput(attrs={'class': 'form-control form-control-sm bg-light'}),
+            'password': forms.PasswordInput(attrs={'class': 'form-control form-control-sm bg-light'}, render_value=True),
+            'directory': forms.TextInput(attrs={'class': 'form-control form-control-sm bg-light', 'placeholder': '/incoming/MSC'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'description': forms.Textarea(attrs={'class': 'form-control form-control-sm bg-light', 'rows': 2}),
+        }
+
+
+class OutputSchemaForm(forms.ModelForm):
+    mapping_json = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control form-control-sm bg-light font-monospace',
+            'rows': 8,
+            'placeholder': '{} for all fields, or {"MSISDN": "calling_number"}',
+        }),
+        help_text='JSON dict {output_column: source_field}. Empty {} = dump all model fields.',
+    )
+
+    class Meta:
+        model = OutputSchema
+        fields = ['name', 'stream_type', 'mapping_json', 'delimiter', 'include_header', 'quote_all', 'line_terminator']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control form-control-sm bg-light', 'placeholder': 'e.g. Billing Mapping'}),
+            'stream_type': forms.Select(attrs={'class': 'form-select form-select-sm bg-light'}),
+            'mapping_json': forms.Textarea(attrs={'class': 'form-control form-control-sm bg-light font-monospace', 'rows': 8, 'placeholder': '{"MSISDN": "subscriber_id", "Start_Time": "start_time"}'}),
+            'delimiter': forms.TextInput(attrs={'class': 'form-control form-control-sm bg-light', 'placeholder': ','}),
+            'include_header': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'quote_all': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'line_terminator': forms.TextInput(attrs={'class': 'form-control form-control-sm bg-light', 'placeholder': '\\n'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk and isinstance(self.instance.mapping_json, dict):
+            self.initial['mapping_json'] = json.dumps(self.instance.mapping_json, indent=2)
+        # Default new schemas to MSC instead of ALL so visual editor populates
+        if not (self.instance and self.instance.pk):
+            self.fields['stream_type'].initial = 'MSC'
+
+    def clean_mapping_json(self):
+        raw = self.cleaned_data.get('mapping_json')
+        if isinstance(raw, dict):
+            return raw
+        if not raw or not str(raw).strip():
+            return {}
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise forms.ValidationError(f'Invalid JSON: {exc}') from exc
+        if not isinstance(data, dict):
+            raise forms.ValidationError('Mapping must be a JSON object {output_column: source_field}.')
+        for k, v in data.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                raise forms.ValidationError('All keys and values must be strings.')
+        return data
+
+
+class DistributionRuleForm(forms.ModelForm):
+    class Meta:
+        model = DistributionRule
+        fields = ['name', 'stream_type', 'output_portal', 'output_schema', 'filter_logic',
+                  'is_active', 'priority', 'max_retries', 'retry_backoff_seconds']
+        help_texts = {
+            'filter_logic': 'JSON dict applied via Django ORM .filter(**kwargs). Empty matches all records.',
+            'max_retries': 'Total delivery attempts before giving up (1 = no retry).',
+            'retry_backoff_seconds': 'Comma-separated wait seconds between attempts, e.g. "2,5,10".',
+        }
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control form-control-sm bg-light', 'placeholder': 'e.g. MSC to Billing Rule'}),
+            'stream_type': forms.Select(attrs={'class': 'form-select form-select-sm bg-light'}),
+            'output_portal': forms.Select(attrs={'class': 'form-select form-select-sm bg-light'}),
+            'output_schema': forms.Select(attrs={'class': 'form-select form-select-sm bg-light'}),
+            'filter_logic': forms.Textarea(attrs={'class': 'form-control form-control-sm bg-light font-monospace', 'rows': 3, 'placeholder': '{"prepaid_flag": "POSTPAID", "is_roaming": false}'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'priority': forms.NumberInput(attrs={'class': 'form-control form-control-sm bg-light'}),
+            'max_retries': forms.NumberInput(attrs={'class': 'form-control form-control-sm bg-light', 'min': 1, 'max': 10}),
+            'retry_backoff_seconds': forms.TextInput(attrs={'class': 'form-control form-control-sm bg-light', 'placeholder': '2,5'}),
+        }
+
+    def clean_filter_logic(self):
+        raw = (self.cleaned_data.get('filter_logic') or '').strip()
+        if not raw:
+            return ''
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise forms.ValidationError(f'Invalid JSON: {exc}') from exc
+        if not isinstance(data, dict):
+            raise forms.ValidationError('filter_logic must be a JSON object')
+        return raw
 
 
 class PluginForm(forms.ModelForm):

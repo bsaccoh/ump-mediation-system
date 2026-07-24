@@ -270,7 +270,7 @@ INPUT_FIELDS = {
     },
 
     # -------------------------------------------------------------------------
-    # CFW (Call Forwarding) - Record Tag 0xAF
+    # CALL_FORWARDING (formerly CFW) - Record Tag 0xAF
     # Same layout as MOC
     # -------------------------------------------------------------------------
     'CFW': {
@@ -347,6 +347,7 @@ OUTPUT_FIELDS = [
     'LOAD_DATE', 'RAT_TYPE', 'PARTIAL_RECORD_NO',
     'CHARGING_CHARACTERISTICS', 'RESULT_CODE', 'LAC_IDENTIFIER',
     'ROAMING_ICR_INDICATOR', 'CALL_END_DATETIME',
+    'TAC', 'NODE_ID',
 ]
 
 
@@ -497,8 +498,8 @@ VALIDATION_RULES = {
     'ORIGINAL_CALL_TYPE': {
         'max_length': 20,
         'pattern': r'^[A-Z_]+$',
-        'required': True,
-        'description': 'Record type: MOC, MTC, SMSMO, SMSMT, GWIN, GWOUT, etc.',
+        'required': False,
+        'description': 'Record type: MOC, MTC, SMSMO, SMSMT, GWIN, GWOUT, etc. BIG_DATA uses CALL_TYPE.',
     },
     'NETWORK_ENTITY': {
         'max_length': 50,

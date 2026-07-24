@@ -44,6 +44,309 @@
             <strong>Error:</strong> {{ file.error_message }}
         </div>
         {% endif %}
+
+        {% if pair_capable and pair_key_populated %}
+        <div class="alert {% if pair_pct == 100 %}alert-success{% elif pair_pct >= 75 %}alert-info{% elif pair_pct >= 25 %}alert-warning{% else %}alert-secondary{% endif %} mt-2 mb-0 py-2 d-flex justify-content-between align-items-center">
+            <span>
+                <i class="bi bi-link-45deg"></i>
+                <strong>CDR-pair correlation:</strong>
+                {{ paired_count|intcomma }} of {{ pair_key_populated|intcomma }} records paired
+                <span class="badge bg-{% if pair_pct == 100 %}success{% elif pair_pct >= 75 %}primary{% elif pair_pct >= 25 %}warning text-dark{% else %}secondary{% endif %} ms-2">{{ pair_pct }}%</span>
+                {% if orphan_count %}
+                    <small class="text-muted ms-2">— {{ orphan_count|intcomma }} orphan{{ orphan_count|pluralize }} (no matching {{ pair_key_field }})</small>
+                {% endif %}
+            </span>
+            {% if record_decoder == 'IMS' %}
+                <a href="{% url 'ims:cdr_search' %}?paired=no&file_id={{ file.pk }}" class="btn btn-sm btn-outline-secondary py-0">
+                    <i class="bi bi-eye"></i> Show orphans
+                </a>
+            {% elif record_decoder == 'MSC' %}
+                <a href="{% url 'msc:cdr_search' %}?paired=no&file_id={{ file.pk }}" class="btn btn-sm btn-outline-secondary py-0">
+                    <i class="bi bi-eye"></i> Show orphans
+                </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if records %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-list-ul"></i> Decoded Records
+            <span class="badge bg-secondary">{{ record_decoder }}</span>
+            <small class="text-muted ms-2">Showing {{ records|length }} of {{ record_total|intcomma }}</small>
+        </span>
+        {% if record_decoder == 'IMS' %}
+            <a href="{% url 'ims:cdr_search' %}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-search"></i> All IMS Records
+            </a>
+        {% elif record_decoder == 'MSC' %}
+            <a href="{% url 'msc:cdr_search' %}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-search"></i> All MSC Records
+            </a>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+        {# ============================ IMS records ============================ #}
+        {% if record_decoder == 'IMS' %}
+        <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Record Type</th>
+                    <th>Service</th>
+                    <th>SIP Method</th>
+                    <th>Role</th>
+                    <th>Calling</th>
+                    <th>Called</th>
+                    <th>IMSI</th>
+                    <th>Start Time</th>
+                    <th class="text-end">Dur (s)</th>
+                    <th>Call Category</th>
+                    <th>Origin IOI</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in records %}
+                <tr>
+                    <td class="text-muted small">{{ r.pk }}</td>
+                    <td><span class="badge bg-secondary">{{ r.record_type }}</span></td>
+                    <td>
+                        {% if r.service_type == 'VOICE' %}<span class="badge bg-primary">{{ r.service_type }}</span>
+                        {% elif r.service_type == 'SMS' %}<span class="badge bg-success">{{ r.service_type }}</span>
+                        {% elif r.service_type == 'EVENT' %}<span class="badge bg-info">{{ r.service_type }}</span>
+                        {% else %}{{ r.service_type }}{% endif %}
+                    </td>
+                    <td><strong>{{ r.sip_method|default:"-" }}</strong></td>
+                    <td>
+                        {% if r.role_of_node == 'ORIGINATING' %}<span class="badge bg-primary">↑ O</span>
+                        {% elif r.role_of_node == 'TERMINATING' %}<span class="badge bg-info">↓ T</span>
+                        {% else %}<small>{{ r.role_of_node|default:"-" }}</small>{% endif %}
+                    </td>
+                    <td><code>{{ r.calling_number|default:"-"|truncatechars:18 }}</code></td>
+                    <td><code>{{ r.called_number|default:"-"|truncatechars:18 }}</code></td>
+                    <td><code class="small">{{ r.imsi|default:"-" }}</code></td>
+                    <td class="small">{{ r.start_time|date:"Y-m-d H:i:s"|default:"-" }}</td>
+                    <td class="text-end">{{ r.duration|default:0 }}</td>
+                    <td><small>{{ r.call_category|default:"-" }}</small></td>
+                    <td><small class="text-muted">{{ r.originating_ioi|default:"-"|truncatechars:30 }}</small></td>
+                    <td><a href="{% url 'ims:cdr_detail' r.pk %}" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:0.7rem;"><i class="bi bi-eye"></i></a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {# ============================ MSC records ============================ #}
+        {% elif record_decoder == 'MSC' %}
+        <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Type</th>
+                    <th>Service</th>
+                    <th>Direction</th>
+                    <th>Calling</th>
+                    <th>Called</th>
+                    <th>IMSI</th>
+                    <th>Start Time</th>
+                    <th class="text-end">Dur (s)</th>
+                    <th>MSC ID</th>
+                    <th>SMSC GT</th>
+                    <th>Category</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in records %}
+                <tr>
+                    <td class="text-muted small">{{ r.pk }}</td>
+                    <td><span class="badge bg-secondary">{{ r.record_type }}</span></td>
+                    <td>
+                        {% if r.service_type == 'VOICE' %}<span class="badge bg-primary">{{ r.service_type }}</span>
+                        {% elif r.service_type == 'SMS' %}<span class="badge bg-success">{{ r.service_type }}</span>
+                        {% else %}{{ r.service_type }}{% endif %}
+                    </td>
+                    <td><small>{{ r.call_direction|default:"-" }}</small></td>
+                    <td><code>{{ r.calling_number|default:"-"|truncatechars:18 }}</code></td>
+                    <td><code>{{ r.called_number|default:"-"|truncatechars:18 }}</code></td>
+                    <td><code class="small">{{ r.imsi|default:"-" }}</code></td>
+                    <td class="small">{{ r.start_time|date:"Y-m-d H:i:s"|default:"-" }}</td>
+                    <td class="text-end">{{ r.duration|default:0 }}</td>
+                    <td><small>{{ r.msc_id|default:"-" }}</small></td>
+                    <td><small>{{ r.smsc_address|default:"-" }}</small></td>
+                    <td><small>{{ r.call_category|default:"-" }}</small></td>
+                    <td><a href="{% url 'msc:cdr_detail' r.pk %}" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:0.7rem;"><i class="bi bi-eye"></i></a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {# ============================ Generic fallback ======================== #}
+        {% else %}
+        <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Record Type</th>
+                    <th>Service</th>
+                    <th>Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in records %}
+                <tr>
+                    <td class="text-muted small">{{ r.pk }}</td>
+                    <td><span class="badge bg-secondary">{{ r.record_type|default:"-" }}</span></td>
+                    <td>{{ r.service_type|default:"-" }}</td>
+                    <td class="small">{{ r.created_at|date:"Y-m-d H:i:s" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if proc_errors %}
+<div class="card mb-3 border-danger">
+    <div class="card-header bg-danger bg-opacity-10 d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-exclamation-triangle text-danger"></i>
+            <strong>Processing Errors</strong>
+            <small class="text-muted ms-2">Showing {{ proc_errors|length }} of {{ proc_error_total|intcomma }}</small>
+        </span>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th style="width:60px;">Row</th>
+                    <th style="width:80px;">Stage</th>
+                    <th>Error Class</th>
+                    <th>Message</th>
+                    <th>Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for err in proc_errors %}
+                <tr data-bs-toggle="collapse" data-bs-target="#err-detail-{{ err.pk }}"
+                    aria-expanded="false" style="cursor:pointer;">
+                    <td class="small">{{ err.record_seq|default:"-" }}</td>
+                    <td><span class="badge bg-secondary">{{ err.stage }}</span></td>
+                    <td><code class="small">{{ err.error_class }}</code></td>
+                    <td><small>{{ err.error_message|truncatechars:120 }}</small></td>
+                    <td class="small text-muted">{{ err.created_at|date:"H:i:s" }}</td>
+                </tr>
+                <tr class="collapse" id="err-detail-{{ err.pk }}">
+                    <td colspan="5" class="bg-light">
+                        {% if err.raw_hex %}
+                        <div class="mb-1"><strong class="small">Raw hex (first 100 B):</strong>
+                            <code class="small d-block bg-white p-2 mt-1" style="word-break:break-all;">{{ err.raw_hex }}</code>
+                        </div>
+                        {% endif %}
+                        {% if err.context %}
+                        <div><strong class="small">Context:</strong>
+                            <pre class="small bg-white p-2 mt-1 mb-0" style="max-height:120px; overflow-y:auto;">{{ err.context|pprint }}</pre>
+                        </div>
+                        {% endif %}
+                        <div class="mt-1"><strong class="small">Full message:</strong>
+                            <pre class="small bg-white p-2 mt-1 mb-0" style="white-space:pre-wrap;">{{ err.error_message }}</pre>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if proc_error_total > 10 %}
+    <div class="card-footer py-1 small text-muted">
+        <i class="bi bi-info-circle"></i> Capped at the most recent 10 errors.
+        A total of {{ proc_error_total|intcomma }} record(s) failed in this file
+        (max 50 stored per file).
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="card mb-3">
+    <div class="card-header">
+        <i class="bi bi-share"></i> Distribution Output
+    </div>
+    <div class="card-body p-0">
+        {% if distribution_logs %}
+        <table class="table table-sm mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Delivered At</th>
+                    <th>Rule</th>
+                    <th>Output Portal</th>
+                    <th>Filename</th>
+                    <th class="text-end">Records</th>
+                    <th class="text-end">Size</th>
+                    <th>Status</th>
+                    <th>Error</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in distribution_logs %}
+                <tr>
+                    <td>{{ log.delivered_at|date:"Y-m-d H:i:s" }}</td>
+                    <td>{{ log.rule.name|default:"-" }}</td>
+                    <td>
+                        {% if log.output_portal %}
+                            {{ log.output_portal.name }}
+                            <small class="text-muted d-block">{{ log.output_portal.portal_type }} → {{ log.output_portal.directory|default:log.output_portal.host }}</small>
+                        {% else %}-{% endif %}
+                    </td>
+                    <td>
+                        <code>{{ log.filename|default:"-" }}</code>
+                        {% if log.status == 'SUCCESS' and log.output_portal.portal_type == 'LOCAL' %}
+                        <div class="mt-1">
+                            <a href="{% url 'collection:distribution_log_view' log.id %}" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.75rem;">
+                                <i class="bi bi-eye"></i> View
+                            </a>
+                            <a href="{% url 'collection:distribution_log_download' log.id %}" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:0.75rem;">
+                                <i class="bi bi-download"></i> Download
+                            </a>
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">{{ log.record_count|intcomma }}</td>
+                    <td class="text-end">{{ log.file_size|filesizeformat }}</td>
+                    <td>
+                        <span class="badge bg-{% if log.status == 'SUCCESS' %}success{% elif log.status == 'FAILED' %}danger{% else %}secondary{% endif %}">
+                            {{ log.status }}
+                        </span>
+                    </td>
+                    <td>
+                        <small class="text-danger">{{ log.error|truncatechars:80 }}</small>
+                        {% if log.status == 'FAILED' and log.rule %}
+                        <div class="mt-1">
+                            <a href="{% url 'collection:distribution_log_retry' log.id %}"
+                               class="btn btn-xs btn-outline-warning py-0 px-2" style="font-size:0.75rem;"
+                               onclick="return confirm('Retry delivery for rule {{ log.rule.name }}?');">
+                                <i class="bi bi-arrow-clockwise"></i> Retry
+                            </a>
+                        </div>
+                        {% endif %}
+                        {% if log.retry_count > 0 %}
+                          <small class="text-muted d-block">Retries: {{ log.retry_count }}</small>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="p-3 text-muted">
+            No distribution attempts logged for this file. Either no DistributionRule matches its stream type,
+            or the file was processed before any rule existed (re-process to retry).
+        </div>
+        {% endif %}
     </div>
 </div>
 

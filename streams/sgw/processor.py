@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 from typing import Tuple, List
 
 from core.base_processor import BaseProcessor
+from core.utils.prepaid import normalize_prepaid_flag, derive_prepaid_from_cc
 from streams.pgw.decoder import PGWDecoder
 from streams.sgw.cdr_fields import VALIDATION_RULES, ENRICHMENT_RULES
 
@@ -104,6 +105,9 @@ class SGWProcessor(BaseProcessor):
             calling_number=str(raw.get('msisdn', ''))[:50],
             called_number=str(raw.get('apn', ''))[:100],
             imsi=str(raw.get('imsi', ''))[:20],
+            # Derive from chargingCharacteristics — P-flag (bit 3 of octet 1)
+            # set ⇒ PREPAID per 3GPP TS 32.298.  Same rule as PGW + SGSN.
+            prepaid_flag=derive_prepaid_from_cc(raw.get('charging_characteristics')),
             imei=str(raw.get('imei', '') or raw.get('imeisv', ''))[:20],
             start_time=start_time,
             end_time=end_time,
@@ -115,9 +119,18 @@ class SGWProcessor(BaseProcessor):
             rat_type=str(raw.get('rat_type', '') if raw.get('rat_type') is not None else '')[:20],
             sgw_address=str(raw.get('sgw_address', '') or raw.get('serving_node_address', ''))[:50],
             pgw_address=str(raw.get('pgw_address', ''))[:50],
-            node_id=str(raw.get('node_id', ''))[:100],
-            cell_id=str(raw.get('cell_id', '') or raw.get('eci', '') or '')[:50],
-            lac=str(raw.get('tac', '') or '')[:20],
+            node_id=(
+                f"{raw.get('node_id_82')} ({raw.get('node_id_int')})" if raw.get('node_id_82') and raw.get('node_id_int') else
+                raw.get('node_id_82') or raw.get('node_id_int') or raw.get('node_id') or ''
+            )[:100],
+            rating_group=(
+                str(raw['rating_group'])[:200] if 'rating_group' in raw else
+                ', '.join(str(rg) for rg in raw['rating_groups'])[:200] if raw.get('rating_groups') else None
+            ),
+            cell_id=str(raw.get('cell_id') or '')[:50],
+            lac=str(raw.get('lac') or '')[:20],
+            tac=str(raw.get('tac') or '')[:20],
+            eci=str(raw.get('eci') or '')[:50],
             serving_plmn=str(raw.get('serving_plmn', ''))[:10],
             cause_for_closing=str(raw.get('cause_for_closing_name', ''))[:50],
             is_roaming=raw.get('is_roaming', False),
@@ -221,16 +234,24 @@ class SGWProcessor(BaseProcessor):
             'stop_time': safe_str(raw.get('stop_time') or ''),
             'PREPAID_FLAG': safe_str(raw.get('PREPAID_FLAG', '1')),
             'SUBSCRIBER_CATEGORY': safe_str(raw.get('SUBSCRIBER_CATEGORY', '2')),
+            'rating_group': safe_str(raw.get('rating_group') or (
+                ', '.join(str(rg) for rg in raw['rating_groups']) if raw.get('rating_groups') else ''
+            )),
+            'service_data_list': raw.get('service_data_list', []),
+            'cell_id': safe_str(raw.get('cell_id', '')),
+            'lac': safe_str(raw.get('lac', '')),
+            'tac': safe_str(raw.get('tac', '')),
+            'eci': safe_str(raw.get('eci', '')),
         }
 
     # SGW CSV output columns
     CSV_COLUMNS = [
         'PREPAID_FLAG', 'SUBSCRIBER_CATEGORY', 'RECORD_TYPE', 'SERVICE_TYPE',
         'NETWORK_RECORD_ID', 'MSISDN', 'IMSI', 'IMEI', 'APN', 'PDN_TYPE',
-        'SGW_ADDR', 'PGW_ADDR', 'RAT_TYPE', 'CELL_ID', 'TAC',
+        'SGW_ADDR', 'PGW_ADDR', 'RAT_TYPE', 'LAC', 'CELL_ID', 'TAC',
         'DATA_VOL_UP', 'DATA_VOL_DOWN', 'START_DATETIME', 'END_DATETIME',
         'DURATION', 'CAUSE_FOR_REC_CLOSING', 'CHARGING_ID', 'NODE_ID',
-        'CHARGING_CHAR', 'SERVING_PLMN',
+        'CHARGING_CHAR', 'SERVING_PLMN', 'RATING_GROUP',
     ]
 
     CSV_FIELD_MAP = {
@@ -247,6 +268,7 @@ class SGWProcessor(BaseProcessor):
         'SGW_ADDR': 'sgw_address',
         'PGW_ADDR': 'pgw_address',
         'RAT_TYPE': 'rat_type_name',
+        'LAC': 'lac',
         'CELL_ID': 'cell_id',
         'TAC': 'tac',
         'DATA_VOL_UP': 'total_data_volume_uplink',
@@ -259,6 +281,7 @@ class SGWProcessor(BaseProcessor):
         'NODE_ID': 'node_id',
         'CHARGING_CHAR': 'charging_characteristics',
         'SERVING_PLMN': 'serving_plmn',
+        'RATING_GROUP': 'rating_group',
     }
 
     def _write_decoded_csv(self, records: list, source_path: str, stream: str) -> None:

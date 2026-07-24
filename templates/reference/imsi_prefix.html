@@ -120,12 +120,12 @@ function loadData() {
                 document.getElementById('pagBar').style.cssText = 'display:none !important'; return;
             }
             tbody.innerHTML = data.records.map(r => `<tr>
-                <td><strong><code>${r.prefix}</code></strong></td>
-                <td>${r.mcc}</td><td>${r.mnc}</td>
-                <td><code>${r.mcc}${r.mnc}</code></td>
-                <td>${r.operator}</td><td>${r.country}</td>
-                <td>${r.is_home ? '<span class="badge bg-success">Home</span>' : '<span class="badge bg-info">Roamer</span>'}</td>
-                <td>${r.enabled ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Disabled</span>'}</td>
+                <td class="text-black">${r.prefix}</td>
+                <td class="text-black">${r.mcc}</td><td class="text-black">${r.mnc}</td>
+                <td class="text-black">${r.mcc}${r.mnc}</td>
+                <td class="text-black">${r.operator}</td><td class="text-black">${r.country}</td>
+                <td class="text-black">${r.is_home ? 'Home' : 'Roamer'}</td>
+                <td class="text-black">${r.enabled ? 'Active' : 'Disabled'}</td>
                 <td class="text-end">
                     <button class="btn btn-xs btn-outline-primary py-0 px-1 me-1" onclick='editEntry(${JSON.stringify(r).replace(/'/g,"\\'")})'><i class="bi bi-pencil"></i></button>
                     <button class="btn btn-xs btn-outline-danger py-0 px-1" onclick="deleteEntry(${r.id})"><i class="bi bi-trash"></i></button>

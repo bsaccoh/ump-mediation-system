@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}QoS / KPIs — Regulatory{% endblock %}
+{% block page_title %}QoS / KPIs{% endblock %}
+
+{% block content %}
+<style>
+.kpi-card{border-left:4px solid #0d6efd;}
+.kpi-num{font-size:1.6rem;font-weight:600;color:#212529;}
+.kpi-lbl{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:#6c757d;}
+.report-card .card-header{background:#fafafa;border-bottom:1px solid #eee;font-weight:600;}
+</style>
+
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small mb-1">From</label>
+                <input type="date" id="dateFrom" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">To</label>
+                <input type="date" id="dateTo" class="form-control form-control-sm">
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary btn-sm" onclick="loadAll()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-outline-secondary btn-sm" onclick="recomputeToday()"><i class="bi bi-cpu"></i> Recompute Today</button>
+            </div>
+            <div class="col-auto small text-muted">
+                Computed from MSC call records (result_code based).
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="alertBox" class="alert" style="display:none;"></div>
+
+<div class="row g-3 mb-3" id="kpiRow"></div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card report-card">
+            <div class="card-header"><i class="bi bi-graph-up-arrow"></i> ASR — Answer Seizure Ratio</div>
+            <div class="card-body" style="height:300px"><canvas id="chartASR"></canvas></div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card report-card">
+            <div class="card-header"><i class="bi bi-stopwatch"></i> ACD — Average Call Duration</div>
+            <div class="card-body" style="height:300px"><canvas id="chartACD"></canvas></div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card report-card">
+            <div class="card-header"><i class="bi bi-x-octagon"></i> Drop Rate</div>
+            <div class="card-body" style="height:300px"><canvas id="chartDrop"></canvas></div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card report-card">
+            <div class="card-header"><i class="bi bi-pie-chart"></i> Call Outcome Distribution</div>
+            <div class="card-body" style="height:300px"><canvas id="chartOutcome"></canvas></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+let charts = {};
+function getCSRF() { return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''; }
+function showAlert(msg, type='success') {
+    const b=document.getElementById('alertBox'); b.className=`alert alert-${type}`; b.textContent=msg; b.style.display='block';
+    setTimeout(()=>b.style.display='none',4000);
+}
+function fmt(n,dp=2){return parseFloat(n||0).toLocaleString(undefined,{minimumFractionDigits:dp,maximumFractionDigits:dp});}
+
+// Default to last 30 days
+(function(){
+    const today = new Date();
+    const ago = new Date(today.getTime() - 30*86400*1000);
+    document.getElementById('dateFrom').value = ago.toISOString().slice(0,10);
+    document.getElementById('dateTo').value = today.toISOString().slice(0,10);
+})();
+
+function loadAll() {
+    const start = document.getElementById('dateFrom').value;
+    const end = document.getElementById('dateTo').value;
+    fetch(`{% url 'regulatory:qos_api' %}?granularity=DAILY&start=${start}&end=${end}`)
+        .then(r=>r.json()).then(d=>{
+            if(!d.success){showAlert(d.error||'Load failed','danger');return;}
+            const rows = d.data||[];
+            renderKPIs(rows);
+            renderCharts(rows);
+        });
+}
+
+function renderKPIs(rows){
+    const total = rows.reduce((a,r)=>a+(r.total_calls||0),0);
+    const success = rows.reduce((a,r)=>a+(r.successful_calls||0),0);
+    const dropped = rows.reduce((a,r)=>a+(r.dropped_calls||0),0);
+    const asr = total ? (success/total)*100 : 0;
+    const drop = total ? (dropped/total)*100 : 0;
+    const valid = rows.filter(r=>r.successful_calls>0);
+    const acd = valid.length ? valid.reduce((a,r)=>a+r.acd_seconds,0)/valid.length : 0;
+    document.getElementById('kpiRow').innerHTML = [
+        ['Total Calls',        fmt(total,0)],
+        ['ASR (%)',            fmt(asr,2)],
+        ['Avg Drop Rate (%)',  fmt(drop,2)],
+        ['Avg Call Duration (s)', fmt(acd,1)],
+        ['Days Reported',      rows.length],
+    ].map(([lbl,val])=>`<div class="col"><div class="card kpi-card"><div class="card-body py-2"><div class="kpi-lbl">${lbl}</div><div class="kpi-num">${val}</div></div></div></div>`).join('');
+}
+
+function renderCharts(rows){
+    const labels = rows.map(r=>r.date);
+    drawLine('chartASR','asr','ASR (%)','#198754',labels,rows.map(r=>r.asr_pct));
+    drawLine('chartACD','acd','ACD (s)','#0d6efd',labels,rows.map(r=>r.acd_seconds));
+    drawLine('chartDrop','drop','Drop Rate (%)','#dc3545',labels,rows.map(r=>r.drop_rate_pct));
+    // Stacked outcome distribution
+    const ctx = document.getElementById('chartOutcome').getContext('2d');
+    if (charts.outcome) charts.outcome.destroy();
+    charts.outcome = new Chart(ctx, {
+        type:'bar',
+        data:{labels, datasets:[
+            {label:'Successful', data:rows.map(r=>r.successful_calls), backgroundColor:'#198754'},
+            {label:'Dropped',    data:rows.map(r=>r.dropped_calls), backgroundColor:'#fd7e14'},
+            {label:'Failed',     data:rows.map(r=>r.failed_calls), backgroundColor:'#dc3545'},
+        ]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{x:{stacked:true},y:{stacked:true}}}
+    });
+}
+
+function drawLine(canvasId, key, label, color, labels, data){
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    if (charts[key]) charts[key].destroy();
+    charts[key] = new Chart(ctx,{
+        type:'line',
+        data:{labels, datasets:[{label, data, borderColor:color, backgroundColor:color+'33', tension:0.3, fill:true}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}
+    });
+}
+
+function recomputeToday(){
+    const today = new Date().toISOString().slice(0,10);
+    const params = new URLSearchParams({csrfmiddlewaretoken:getCSRF(), date:today});
+    fetch("{% url 'regulatory:qos_refresh' %}", {method:'POST', body:params, headers:{'X-CSRFToken':getCSRF()}})
+        .then(r=>r.json()).then(d=>{
+            if(d.success){showAlert(`Recomputed ${d.date}: ASR ${fmt(d.asr_pct,2)}% drop ${fmt(d.drop_rate_pct,2)}%`,'success');loadAll();}
+            else showAlert(d.error||'Refresh failed','danger');
+        });
+}
+
+document.addEventListener('DOMContentLoaded', loadAll);
+</script>
+{% endblock %}

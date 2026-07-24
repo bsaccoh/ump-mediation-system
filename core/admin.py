@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, AuditLog, Alert
+from .models import User, AuditLog, Alert, JobRecord
 
 
 @admin.register(User)
@@ -40,3 +40,16 @@ class AlertAdmin(admin.ModelAdmin):
     @admin.display(description='Message')
     def message_short(self, obj):
         return obj.message[:100]
+
+
+@admin.register(JobRecord)
+class JobRecordAdmin(admin.ModelAdmin):
+    list_display = ('id', 'job_type', 'label', 'status', 'progress_pct',
+                    'submitted_at', 'started_at', 'finished_at', 'submitted_by')
+    list_filter = ('status', 'job_type')
+    search_fields = ('label', 'celery_task_id', 'job_type',
+                     'result_entity_type', 'result_entity_id')
+    readonly_fields = ('celery_task_id', 'submitted_at', 'started_at',
+                        'finished_at', 'params', 'result', 'error_message',
+                        'result_entity_type', 'result_entity_id', 'result_url')
+    date_hierarchy = 'submitted_at'

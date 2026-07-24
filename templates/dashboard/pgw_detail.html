@@ -35,6 +35,7 @@
                     <tr><td class="text-muted">PDN Type</td><td>{{ record.pdn_type|default:"-" }}</td></tr>
                     <tr><td class="text-muted">RAT Type</td><td>{{ record.rat_type|default:"-" }}</td></tr>
                     <tr><td class="text-muted">Cause for Closing</td><td>{{ record.cause_for_closing|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">Rating Group</td><td>{% if record.rating_group %}<span class="badge bg-secondary">{{ record.rating_group }}</span>{% else %}-{% endif %}</td></tr>
                 </table>
             </div>
         </div>
@@ -70,8 +71,10 @@
                     <tr><td class="text-muted">SGW Address</td><td><code>{{ record.sgw_address|default:"-" }}</code></td></tr>
                     <tr><td class="text-muted">Node ID</td><td>{{ record.node_id|default:"-" }}</td></tr>
                     <tr><td class="text-muted">Serving PLMN</td><td>{{ record.serving_plmn|default:"-" }}</td></tr>
-                    <tr><td class="text-muted">Cell ID</td><td>{{ record.cell_id|default:"-" }}</td></tr>
-                    <tr><td class="text-muted">TAC</td><td>{{ record.lac|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">LAC</td><td>{{ record.lac|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">Cell ID / ECI</td><td>{{ record.cell_id|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">TAC</td><td>{{ record.tac|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">ECI</td><td>{{ record.eci|default:"-" }}</td></tr>
                 </table>
             </div>
 

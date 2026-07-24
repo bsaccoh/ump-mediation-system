@@ -19,6 +19,7 @@
                     <label class="form-label small fw-bold">Stream</label>
                     <select name="stream" id="streamSelect" class="form-select form-select-sm" onchange="onStreamChange()">
                         <option value="MSC" selected>MSC (Voice/SMS)</option>
+                        <option value="IMS">IMS (VoLTE/VoBB)</option>
                         <option value="PGW">PGW (4G Data)</option>
                         <option value="SGSN">SGSN (2G/3G Data)</option>
                         <option value="SGW">SGW (4G S-GW)</option>
@@ -80,12 +81,6 @@
                             <li><hr class="dropdown-divider my-1"></li>
                             <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="GWOUT"> GWOUT (Gateway Out)</label></li>
                             <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="GWIN"> GWIN (Gateway In)</label></li>
-                            <li><hr class="dropdown-divider my-1"></li>
-                            <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="EXT"> EXT</label></li>
-                            <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="MTRF"> MTRF</label></li>
-                            <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="EMERG"> EMERG</label></li>
-                            <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="LOCUPD"> LOCUPD</label></li>
-                            <li><label class="dropdown-item px-2 py-1"><input type="checkbox" class="form-check-input me-2 rt-check" value="SS"> SS (Supplementary)</label></li>
                         </ul>
                     </div>
                 </div>
@@ -140,6 +135,46 @@
                         <option value="">All</option>
                         <option value="SGW-CDR">SGW-CDR</option>
                     </select>
+                </div>
+
+                <!-- IMS filters (hidden by default) -->
+                <div class="col-md-2" id="filterImsServiceType" style="display:none;">
+                    <label class="form-label small fw-bold">Service Type</label>
+                    <select name="service_type" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="VOICE">Voice</option>
+                        <option value="SMS">SMS</option>
+                        <option value="EVENT">Event</option>
+                    </select>
+                </div>
+                <div class="col-md-2" id="filterImsSipMethod" style="display:none;">
+                    <label class="form-label small fw-bold">SIP Method</label>
+                    <select name="sip_method" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="INVITE">INVITE (Voice)</option>
+                        <option value="MESSAGE">MESSAGE (SMS)</option>
+                        <option value="REGISTER">REGISTER</option>
+                        <option value="SUBSCRIBE">SUBSCRIBE</option>
+                        <option value="NOTIFY">NOTIFY</option>
+                        <option value="BYE">BYE</option>
+                        <option value="UPDATE">UPDATE</option>
+                        <option value="OPTIONS">OPTIONS</option>
+                        <option value="REFER">REFER</option>
+                    </select>
+                </div>
+                <div class="col-md-2" id="filterImsRole" style="display:none;">
+                    <label class="form-label small fw-bold">Role of Node</label>
+                    <select name="role_of_node" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="ORIGINATING">Originating</option>
+                        <option value="TERMINATING">Terminating</option>
+                        <option value="PROXY">Proxy</option>
+                        <option value="B2BUA">B2BUA</option>
+                    </select>
+                </div>
+                <div class="col-md-2" id="filterImsSession" style="display:none;">
+                    <label class="form-label small fw-bold">Session-ID</label>
+                    <input type="text" name="session_id" class="form-control form-control-sm" placeholder="Call-ID contains...">
                 </div>
 
                 <div class="col-md-2">
@@ -206,6 +241,14 @@
     <div class="col-md-3"><div class="card stat-card py-2"><div class="value text-info" id="statDownloadSGW">0</div><div class="label">Download</div></div></div>
 </div>
 
+<!-- Stats Bar (IMS) -->
+<div id="statsIMS" class="row mb-3" style="display:none;">
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="value text-primary" id="statTotalIMS">0</div><div class="label">Records Found</div></div></div>
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="value text-info" id="statVoiceIMS">0</div><div class="label">Voice</div></div></div>
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="value text-success" id="statSmsIMS">0</div><div class="label">SMS</div></div></div>
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="value text-warning" id="statEventIMS">0</div><div class="label">Event</div></div></div>
+</div>
+
 <!-- Message -->
 <div id="messageBox" class="alert alert-info" style="display:none;"></div>
 
@@ -268,12 +311,21 @@ function onStreamChange() {
     document.getElementById('filterSgwRatType').style.display = stream === 'SGW' ? '' : 'none';
     document.getElementById('filterSgwRecordType').style.display = stream === 'SGW' ? '' : 'none';
 
+    // IMS-specific filters
+    document.getElementById('filterImsServiceType').style.display = stream === 'IMS' ? '' : 'none';
+    document.getElementById('filterImsSipMethod').style.display   = stream === 'IMS' ? '' : 'none';
+    document.getElementById('filterImsRole').style.display        = stream === 'IMS' ? '' : 'none';
+    document.getElementById('filterImsSession').style.display     = stream === 'IMS' ? '' : 'none';
+
     // Called Number label
     const labelCalled = document.getElementById('labelCalled');
     const inputCalled = document.getElementById('inputCalled');
     if (stream === 'PGW' || stream === 'SGSN' || stream === 'SGW') {
         labelCalled.textContent = 'Called / APN';
         inputCalled.placeholder = 'e.g. internet';
+    } else if (stream === 'IMS') {
+        labelCalled.textContent = 'Called Number';
+        inputCalled.placeholder = '+232... or partial';
     } else {
         labelCalled.textContent = 'Called Number';
         inputCalled.placeholder = 'e.g. 23290...';
@@ -287,10 +339,18 @@ function updateTableHeaders(stream) {
     const thead = document.getElementById('tableHead');
     if (stream === 'MSC') {
         thead.innerHTML = `<tr>
-            <th>Record Type</th><th>Service</th><th>Direction</th>
+            <th>Record Type</th><th>Service</th><th>Category</th><th>Roaming</th>
             <th>Calling</th><th>Called</th><th>IMSI</th>
-            <th>Start Time</th><th>Duration</th><th>MSC</th>
-            <th>Status</th><th></th>
+            <th>Start Time</th><th>Duration</th><th>MSC</th><th>SMSC GT</th>
+            <th></th>
+        </tr>`;
+    } else if (stream === 'IMS') {
+        thead.innerHTML = `<tr>
+            <th>Record</th><th>Service</th><th>Method</th><th>Role</th>
+            <th>Calling</th><th>Called</th><th>IMSI</th>
+            <th>Start Time</th><th>Dur</th>
+            <th>Category</th><th>Charging</th><th>Origin IOI</th>
+            <th></th>
         </tr>`;
     } else if (stream === 'PGW') {
         thead.innerHTML = `<tr>
@@ -342,6 +402,7 @@ function clearForm() {
 
     document.getElementById('resultsBody').innerHTML = '<tr><td colspan="13" class="text-center py-4 text-muted">Select a stream and click Search</td></tr>';
     document.getElementById('statsMSC').style.display = 'none';
+    document.getElementById('statsIMS').style.display = 'none';
     document.getElementById('statsPGW').style.display = 'none';
     document.getElementById('statsSGSN').style.display = 'none';
     document.getElementById('statsSGW').style.display = 'none';
@@ -422,7 +483,7 @@ function doSearch() {
 
     saveSearchState();
 
-    const colCount = stream === 'MSC' ? 11 : 13;
+    const colCount = stream === 'MSC' ? 12 : (stream === 'IMS' ? 13 : 13);
     document.getElementById('resultsBody').innerHTML = `<tr><td colspan="${colCount}" class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Searching ${stream}...</td></tr>`;
 
     fetch("{% url 'dashboard:cdr_search_api' %}", {
@@ -443,6 +504,7 @@ function doSearch() {
         // Stats
         const s = data.stats;
         document.getElementById('statsMSC').style.display = 'none';
+        document.getElementById('statsIMS').style.display = 'none';
         document.getElementById('statsPGW').style.display = 'none';
         document.getElementById('statsSGSN').style.display = 'none';
         document.getElementById('statsSGW').style.display = 'none';
@@ -451,6 +513,12 @@ function doSearch() {
             document.getElementById('statDuration').textContent = (s.total_duration || 0).toLocaleString();
             document.getElementById('statAvgDuration').textContent = s.avg_duration || 0;
             document.getElementById('statsMSC').style.display = data.records.length > 0 ? 'flex' : 'none';
+        } else if (stream === 'IMS') {
+            document.getElementById('statTotalIMS').textContent = (s.total_records || 0).toLocaleString();
+            document.getElementById('statVoiceIMS').textContent = (s.voice_count || 0).toLocaleString();
+            document.getElementById('statSmsIMS').textContent   = (s.sms_count   || 0).toLocaleString();
+            document.getElementById('statEventIMS').textContent = (s.event_count || 0).toLocaleString();
+            document.getElementById('statsIMS').style.display = data.records.length > 0 ? 'flex' : 'none';
         } else if (stream === 'PGW') {
             document.getElementById('statTotalPGW').textContent = (s.total_records || 0).toLocaleString();
             document.getElementById('statDataMB').textContent = (s.total_data_mb || 0) + ' MB';
@@ -489,18 +557,47 @@ function doSearch() {
         let html = '';
         if (stream === 'MSC') {
             data.records.forEach(r => {
+                const statusClass = r.status === 'VALID' ? 'success' : r.status === 'INVALID' ? 'danger' : 'secondary';
                 html += `<tr>
                     <td>${r.record_type || '-'}</td>
                     <td>${r.service_type || '-'}</td>
-                    <td>${r.call_direction || '-'}</td>
+                    <td>${r.call_category || '-'}</td>
+                    <td>${r.roaming_indicator || '-'}</td>
                     <td>${r.calling_number || '-'}</td>
                     <td>${r.called_number || '-'}</td>
-                    <td>${r.imsi || '-'}</td>
-                    <td>${r.start_time || '-'}</td>
+                    <td><small>${r.imsi || '-'}</small></td>
+                    <td><small>${r.start_time || '-'}</small></td>
                     <td>${r.duration != null ? r.duration + 's' : '-'}</td>
-                    <td>${r.msc_id || '-'}</td>
-                    <td>${r.status || '-'}</td>
+                    <td><small>${r.msc_id || '-'}</small></td>
+                    <td><small>${r.smsc_address || '-'}</small></td>
                     <td><a href="/record/msc/${r.id}/" class="btn btn-sm btn-outline-secondary py-0 px-1"><i class="bi bi-eye"></i></a></td>
+                </tr>`;
+            });
+        } else if (stream === 'IMS') {
+            data.records.forEach(r => {
+                let svcBadge = '<span class="badge bg-secondary">'+ (r.service_type||'-') +'</span>';
+                if (r.service_type === 'VOICE') svcBadge = '<span class="badge bg-primary">VOICE</span>';
+                else if (r.service_type === 'SMS') svcBadge = '<span class="badge bg-success">SMS</span>';
+                else if (r.service_type === 'EVENT') svcBadge = '<span class="badge bg-info">EVENT</span>';
+                let roleBadge = '<small>'+ (r.role_of_node||'-') +'</small>';
+                if (r.role_of_node === 'ORIGINATING') roleBadge = '<span class="badge bg-primary">↑ O</span>';
+                else if (r.role_of_node === 'TERMINATING') roleBadge = '<span class="badge bg-info">↓ T</span>';
+                const origIoi = (r.originating_ioi || '-');
+                const origIoiShort = origIoi.length > 28 ? origIoi.substring(0, 28) + '…' : origIoi;
+                html += `<tr>
+                    <td><span class="badge bg-secondary">${r.record_type || '-'}</span></td>
+                    <td>${svcBadge}</td>
+                    <td><strong>${r.sip_method || '-'}</strong></td>
+                    <td>${roleBadge}</td>
+                    <td><code>${r.calling_number || '-'}</code></td>
+                    <td><code>${r.called_number || '-'}</code></td>
+                    <td><small><code>${r.imsi || '-'}</code></small></td>
+                    <td><small>${r.start_time || '-'}</small></td>
+                    <td>${r.duration != null ? r.duration + 's' : '-'}</td>
+                    <td><small>${r.call_category || '-'}</small></td>
+                    <td><small>${r.charging_category || '-'}</small></td>
+                    <td title="${origIoi}"><small class="text-muted">${origIoiShort}</small></td>
+                    <td><a href="/ims/${r.id}/" class="btn btn-sm btn-outline-secondary py-0 px-1"><i class="bi bi-eye"></i></a></td>
                 </tr>`;
             });
         } else if (stream === 'PGW') {

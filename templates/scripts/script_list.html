@@ -4,6 +4,15 @@
 {% block page_title %}Scripts{% endblock %}
 
 {% block content %}
+<div class="alert alert-warning d-flex align-items-start mb-3 py-2 px-3" role="alert" style="font-size:0.85rem;">
+    <i class="bi bi-exclamation-triangle-fill me-2 mt-1"></i>
+    <div>
+        <strong>Snippet library — not a live editor.</strong>
+        Saving a script here updates a stored copy in the database only. It does
+        <strong>not</strong> modify the production decoders/processors that run on uploaded CDR files
+        (those live under <code>streams/</code> on disk and are managed via git/deploy).
+    </div>
+</div>
 <!-- Stat Cards -->
 <div class="row mb-4">
     <div class="col-md-3">

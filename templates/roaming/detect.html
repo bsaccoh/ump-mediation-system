@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Roamer Detection{% endblock %}
+{% block page_title %}Roamer Detection{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header"><i class="bi bi-search"></i> Scan CDRs for Inbound Roamers</div>
+    <div class="card-body pb-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small mb-1">From</label>
+                <input type="date" id="dateFrom" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">To</label>
+                <input type="date" id="dateTo" class="form-control form-control-sm">
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary btn-sm" onclick="runDetection()"><i class="bi bi-search"></i> Run Detection</button>
+            </div>
+        </div>
+        <div class="mt-2 small text-muted">
+            <i class="bi bi-info-circle"></i> Identifies inbound roamers by IMSI prefix (MCC ≠ 619 = Sierra Leone). Each (MCC,MNC) pair is attributed to a roaming partner if one is configured.
+        </div>
+    </div>
+</div>
+
+<div id="alertBox" class="alert" style="display:none;"></div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>PLMN</th><th>MCC</th><th>MNC</th>
+                        <th>Partner</th>
+                        <th class="text-end">Records</th>
+                        <th class="text-end">Voice (min)</th>
+                        <th class="text-end">SMS</th>
+                        <th class="text-end">Data (MB)</th>
+                        <th>Sample IMSIs</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="9" class="text-center py-4 text-muted">Pick a date range and click Run Detection.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function getCSRF() { return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''; }
+function showAlert(msg, type='success') {
+    const b=document.getElementById('alertBox'); b.className=`alert alert-${type}`; b.textContent=msg; b.style.display='block';
+    setTimeout(()=>b.style.display='none',5000);
+}
+function fmt(n,dp=2){return parseFloat(n||0).toLocaleString(undefined,{minimumFractionDigits:dp,maximumFractionDigits:dp});}
+
+// Default to last 30 days
+(function(){
+    const today = new Date(); const ago = new Date(today.getTime() - 30*86400*1000);
+    document.getElementById('dateFrom').value = ago.toISOString().slice(0,10);
+    document.getElementById('dateTo').value = today.toISOString().slice(0,10);
+})();
+
+function runDetection() {
+    const start = document.getElementById('dateFrom').value;
+    const end = document.getElementById('dateTo').value;
+    if(!start || !end){showAlert('Pick a date range first.','warning');return;}
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm"></div> Scanning CDRs…</td></tr>';
+    fetch(`{% url 'roaming:detect_api' %}?start=${start}&end=${end}`)
+        .then(r=>r.json()).then(d=>{
+            if(!d.success){showAlert(d.error||'Detection failed','danger');tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">Detection failed.</td></tr>';return;}
+            const rows = d.data||[];
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">No inbound roamers in this window.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = rows.map(r => {
+                const partnerCell = r.partner_code
+                    ? `<span class="badge bg-success">${r.partner_code}</span> <span class="small text-muted">${r.partner_name}</span>`
+                    : `<span class="badge bg-warning text-dark">Unattributed</span>`;
+                return `<tr>
+                    <td class="text-black"><strong>${r.plmn}</strong></td>
+                    <td class="text-black"><code>${r.mcc}</code></td>
+                    <td class="text-black"><code>${r.mnc}</code></td>
+                    <td>${partnerCell}</td>
+                    <td class="text-end text-black"><strong>${fmt(r.record_count,0)}</strong></td>
+                    <td class="text-end text-black">${fmt(r.voice_minutes,2)}</td>
+                    <td class="text-end text-black">${fmt(r.sms_count,0)}</td>
+                    <td class="text-end text-black">${fmt(r.data_mb,2)}</td>
+                    <td class="text-black small"><code>${(r.sample_imsis||[]).slice(0,3).join(', ')}</code></td>
+                </tr>`;
+            }).join('');
+            showAlert(`Scanned ${rows.reduce((a,r)=>a+r.record_count,0).toLocaleString()} records across ${rows.length} PLMN(s).`,'success');
+        });
+}
+</script>
+{% endblock %}

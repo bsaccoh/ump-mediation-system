@@ -39,11 +39,16 @@ INSTALLED_APPS = [
     'core',
     'collection',
     'streams.msc',
+    'streams.ims',
     'streams.pgw',
     'streams.sgsn',
     'streams.sgw',
+    'streams.cbs',
     'processing',
     'reference',
+    'interconnect',
+    'regulatory',
+    'roaming',
     'dashboard',
     'api',
     'portals',
@@ -57,6 +62,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.OperatorContextMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -74,6 +80,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'core.context_processors.operators',
             ],
         },
     },
@@ -85,16 +92,56 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # DATABASE
 # =============================================================================
 
-DATABASES = {
-    'default': {
-        'ENGINE': os.environ.get('DB_ENGINE', 'django.db.backends.sqlite3'),
-        'NAME': os.environ.get('DB_NAME', str(BASE_DIR / 'db.sqlite3')),
-        'USER': os.environ.get('DB_USER', ''),
-        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-        'HOST': os.environ.get('DB_HOST', ''),
-        'PORT': os.environ.get('DB_PORT', ''),
+# Per-service database split (see C:\Users\…\plans\sprightly-launching-bachman.md).
+# All four DBs share host/user/password via env vars; only NAME differs.
+_DB_ENGINE   = os.environ.get('DB_ENGINE',   'django.db.backends.postgresql')
+_DB_USER     = os.environ.get('DB_USER',     'ump_user')
+_DB_PASSWORD = os.environ.get('DB_PASSWORD', 'ump_pass_2026')
+_DB_HOST     = os.environ.get('DB_HOST',     'localhost')
+_DB_PORT     = os.environ.get('DB_PORT',     '5432')
+
+
+def _db(name_env_var: str, default_name: str) -> dict:
+    return {
+        'ENGINE': _DB_ENGINE,
+        'NAME':   os.environ.get(name_env_var, default_name),
+        'USER':   _DB_USER,
+        'PASSWORD': _DB_PASSWORD,
+        'HOST':   _DB_HOST,
+        'PORT':   _DB_PORT,
     }
+
+
+DATABASES = {
+    'default':       _db('DB_NAME',              'ump_mediation'),
+    'interconnect':  _db('DB_NAME_INTERCONNECT', 'ump_interconnect'),
+    'regulatory':    _db('DB_NAME_REGULATORY',   'ump_regulatory'),
+    'roaming':       _db('DB_NAME_ROAMING',      'ump_roaming'),
 }
+
+# -----------------------------------------------------------------------------
+# Multi-operator data-plane databases
+# -----------------------------------------------------------------------------
+# Decoded CDR records (streams: msc/ims/pgw/sgsn/sgw/cbs) are isolated per
+# operator in a `mediation_{code}` database. The set of operators is declared
+# here (env-driven) because DATABASES is built before the DB is reachable — keep
+# this list in sync with the reference.Operator registry (provision_operator
+# does both). The control plane (auth, collection, reference, portals, core,
+# dashboard, …) stays in `default`.
+OPERATORS = [
+    o.strip().lower()
+    for o in os.environ.get('OPERATORS', 'orange,africell,qcell').split(',')
+    if o.strip()
+]
+# Active operator used by the router when no per-request/per-file context is set.
+DEFAULT_OPERATOR = os.environ.get('DEFAULT_OPERATOR', OPERATORS[0] if OPERATORS else 'orange')
+
+for _op in OPERATORS:
+    DATABASES[f'mediation_{_op}'] = _db(
+        f'DB_NAME_MEDIATION_{_op.upper()}', f'ump_mediation_{_op}'
+    )
+
+DATABASE_ROUTERS = ['config.db_router.ServiceRouter']
 
 # =============================================================================
 # AUTH
@@ -120,7 +167,7 @@ LOGOUT_REDIRECT_URL = '/accounts/login/'
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
-USE_TZ = True
+USE_TZ = False  # CDR streams store naive timestamps; keep DB + ORM in lock-step.
 
 # =============================================================================
 # STATIC & MEDIA FILES
@@ -165,10 +212,16 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 # Default beat schedule (can be overridden via django_celery_beat admin)
+# COLLECTION_INTERVAL_SECONDS controls how often input trees are scanned + decoded.
+_COLLECTION_INTERVAL = float(os.environ.get('COLLECTION_INTERVAL_SECONDS', '600'))
 CELERY_BEAT_SCHEDULE = {
     'poll-sftp-sources': {
         'task': 'collection.tasks.poll_sftp_sources',
         'schedule': 300.0,  # Every 5 minutes
+    },
+    'scheduled-collection': {
+        'task': 'collection.tasks.scheduled_collection',
+        'schedule': _COLLECTION_INTERVAL,  # default every 10 minutes
     },
 }
 
@@ -188,9 +241,21 @@ FAILED_DIR = DATA_DIR / 'failed'
 ARCHIVE_DIR = DATA_DIR / 'archive'
 
 # Processing
-CDR_BATCH_SIZE = 500          # Records per DB commit batch
+CDR_BATCH_SIZE = 2000         # Records per DB commit batch (was 500, increased for PostgreSQL)
 CDR_MAX_RETRIES = 3           # Max processing retries per file
 CDR_RAW_DATA_MAX_LEN = 4000  # Max chars for raw_data JSON field
+
+# Persist decoded records to the database?
+#   False           — DECODE-ONLY: decode -> render output CSV straight from
+#                     memory, NO DB inserts. ~10x faster; the DB write was ~90%
+#                     of processing time. (No dashboard data / CDR-pair
+#                     correlation while off — those read the DB.)
+#   True  (default) — decode -> store records in DB -> dispatch output from DB
+#                     (enables dashboards/search/correlation).
+# Toggle without code changes:  set env CDR_PERSIST_RECORDS=False
+CDR_PERSIST_RECORDS = os.environ.get('CDR_PERSIST_RECORDS', 'True').lower() in (
+    '1', 'true', 'yes', 'on',
+)
 
 # File upload
 FILE_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024  # 100MB

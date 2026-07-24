@@ -62,6 +62,9 @@
         .stat-card { text-align: center; padding: 1.2rem; }
         .stat-card .value { font-size: 2rem; font-weight: 700; color: #1a237e; }
         .stat-card .label { font-size: 0.8rem; color: #6c757d; }
+        
+        /* Global Table Styling */
+        table tbody { font-size: 0.85rem; }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -117,7 +120,33 @@
                             <i class="bi bi-activity"></i><span class="nav-link-text"> Processing Queue</span>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/collection/distribution' in request.path %}active{% endif %}" href="{% url 'collection:distribution_dashboard' %}" title="Distribution Logs">
+                            <i class="bi bi-send-check"></i><span class="nav-link-text"> Distribution Logs</span>
+                        </a>
+                    </li>
                 </ul>
+            </li>
+
+            <!-- File Registry (standalone) -->
+            <li class="nav-item">
+                <a class="nav-link {% if '/file-registry' in request.path %}active{% endif %}" href="{% url 'dashboard:file_registry' %}" title="File Registry">
+                    <i class="bi bi-archive"></i><span class="nav-link-text"> File Registry</span>
+                </a>
+            </li>
+
+            <!-- Analytics (standalone) -->
+            <li class="nav-item">
+                <a class="nav-link {% if '/analytics' in request.path %}active{% endif %}" href="{% url 'dashboard:analytics' %}" title="Analytics">
+                    <i class="bi bi-graph-up-arrow"></i><span class="nav-link-text"> Analytics</span>
+                </a>
+            </li>
+
+            <!-- Background Jobs (standalone) -->
+            <li class="nav-item">
+                <a class="nav-link {% if '/jobs' in request.path %}active{% endif %}" href="{% url 'core:job_list' %}" title="Background Jobs">
+                    <i class="bi bi-gear-wide-connected"></i><span class="nav-link-text"> Background Jobs</span>
+                </a>
             </li>
 
             <!-- Reference Data Dropdown -->
@@ -130,6 +159,16 @@
                     <i class="bi bi-chevron-down chevron"></i>
                 </a>
                 <ul class="nav-sub collapse {% if '/reference/' in request.path %}show{% endif %}" id="refMenu">
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/reference/operators' in request.path %}active{% endif %}" href="{% url 'reference:operators' %}" title="Operators">
+                            <i class="bi bi-building-gear"></i><span class="nav-link-text"> Operators</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/reference/source-patterns' in request.path %}active{% endif %}" href="{% url 'reference:source_patterns' %}" title="Source Patterns">
+                            <i class="bi bi-funnel"></i><span class="nav-link-text"> Source Patterns</span>
+                        </a>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link {% if '/reference/mcc-mnc' in request.path %}active{% endif %}" href="{% url 'reference:mcc_mnc' %}" title="MCC / MNC">
                             <i class="bi bi-globe"></i><span class="nav-link-text"> MCC / MNC</span>
@@ -146,8 +185,159 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if '/reference/vendors' in request.path %}active{% endif %}" href="{% url 'reference:vendor_list' %}" title="Vendors">
+                            <i class="bi bi-building"></i><span class="nav-link-text"> Vendors</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {% if '/reference/trunks' in request.path %}active{% endif %}" href="{% url 'reference:trunks' %}" title="Trunks">
                             <i class="bi bi-diagram-3"></i><span class="nav-link-text"> Trunks</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+
+            <!-- Interconnect Dropdown -->
+            <li class="nav-item">
+                <a class="nav-link nav-dropdown-toggle {% if '/interconnect/' in request.path %}{% else %}collapsed{% endif %}"
+                   data-bs-toggle="collapse" href="#interconnectMenu" role="button" title="Interconnect"
+                   aria-expanded="{% if '/interconnect/' in request.path %}true{% else %}false{% endif %}">
+                    <i class="bi bi-diagram-2"></i>
+                    <span class="nav-text">Interconnect</span>
+                    <i class="bi bi-chevron-down chevron"></i>
+                </a>
+                <ul class="nav-sub collapse {% if '/interconnect/' in request.path %}show{% endif %}" id="interconnectMenu">
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/interconnect/traffic-matrix' in request.path %}active{% endif %}" href="{% url 'interconnect:traffic_matrix' %}" title="Traffic Matrix">
+                            <i class="bi bi-grid-3x3-gap"></i><span class="nav-link-text"> Traffic Matrix</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/interconnect/partners' in request.path %}active{% endif %}" href="{% url 'interconnect:partner_list' %}" title="Partners">
+                            <i class="bi bi-people"></i><span class="nav-link-text"> Partners</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/interconnect/rates' in request.path %}active{% endif %}" href="{% url 'interconnect:rate_list' %}" title="Rates & Charging">
+                            <i class="bi bi-cash-coin"></i><span class="nav-link-text"> Rates &amp; Charging</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/interconnect/exchange-rates' in request.path %}active{% endif %}" href="{% url 'interconnect:exchange_rate_list' %}" title="Exchange Rates">
+                            <i class="bi bi-currency-exchange"></i><span class="nav-link-text"> Exchange Rates</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/interconnect/cycles' in request.path %}active{% endif %}" href="{% url 'interconnect:cycle_list' %}" title="Billing Cycles">
+                            <i class="bi bi-calendar3"></i><span class="nav-link-text"> Billing Cycles</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/interconnect/invoice-generate' in request.path %}active{% endif %}" href="{% url 'interconnect:invoice_generate' %}" title="Invoice Generation">
+                            <i class="bi bi-receipt"></i><span class="nav-link-text"> Invoice Generation</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/interconnect/invoices' in request.path %}active{% endif %}" href="{% url 'interconnect:invoice_list' %}" title="Invoicing">
+                            <i class="bi bi-file-earmark-text"></i><span class="nav-link-text"> Invoicing</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/interconnect/reconciliation' in request.path %}active{% endif %}" href="{% url 'interconnect:reconciliation_list' %}" title="Reconciliation">
+                            <i class="bi bi-arrow-left-right"></i><span class="nav-link-text"> Reconciliation</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/interconnect/settlement' in request.path %}active{% endif %}" href="{% url 'interconnect:settlement_list' %}" title="Settlement">
+                            <i class="bi bi-wallet2"></i><span class="nav-link-text"> Settlement</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/interconnect/reports' in request.path %}active{% endif %}" href="{% url 'interconnect:reports_view' %}" title="Reports">
+                            <i class="bi bi-bar-chart"></i><span class="nav-link-text"> Reports</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+
+            <!-- Regulatory Dropdown -->
+            <li class="nav-item">
+                <a class="nav-link nav-dropdown-toggle {% if '/regulatory/' in request.path %}{% else %}collapsed{% endif %}"
+                   data-bs-toggle="collapse" href="#regulatoryMenu" role="button" title="Regulatory"
+                   aria-expanded="{% if '/regulatory/' in request.path %}true{% else %}false{% endif %}">
+                    <i class="bi bi-shield-check"></i>
+                    <span class="nav-text">Regulatory</span>
+                    <i class="bi bi-chevron-down chevron"></i>
+                </a>
+                <ul class="nav-sub collapse {% if '/regulatory/' in request.path %}show{% endif %}" id="regulatoryMenu">
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/regulatory/reports' in request.path %}active{% endif %}" href="{% url 'regulatory:report_list' %}" title="NATCOM Reports">
+                            <i class="bi bi-file-earmark-bar-graph"></i><span class="nav-link-text"> NATCOM Reports</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/regulatory/levy' in request.path %}active{% endif %}" href="{% url 'regulatory:levy_list' %}" title="Levy & USF">
+                            <i class="bi bi-cash-stack"></i><span class="nav-link-text"> Levy &amp; USF</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/regulatory/retail' in request.path %}active{% endif %}" href="{% url 'regulatory:retail_list' %}" title="Retail Revenue">
+                            <i class="bi bi-shop"></i><span class="nav-link-text"> Retail Revenue</span>
+                        </a>
+                    </li>
+                    {% if user.can_lawful_intercept %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/regulatory/intercept' in request.path %}active{% endif %}" href="{% url 'regulatory:intercept_list' %}" title="Lawful Intercept">
+                            <i class="bi bi-shield-lock"></i><span class="nav-link-text"> Lawful Intercept</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/regulatory/qos' in request.path %}active{% endif %}" href="{% url 'regulatory:qos_view' %}" title="QoS / KPIs">
+                            <i class="bi bi-speedometer2"></i><span class="nav-link-text"> QoS / KPIs</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+
+            <!-- Roaming Dropdown -->
+            <li class="nav-item">
+                <a class="nav-link nav-dropdown-toggle {% if '/roaming/' in request.path %}{% else %}collapsed{% endif %}"
+                   data-bs-toggle="collapse" href="#roamingMenu" role="button" title="Roaming"
+                   aria-expanded="{% if '/roaming/' in request.path %}true{% else %}false{% endif %}">
+                    <i class="bi bi-globe2"></i>
+                    <span class="nav-text">Roaming</span>
+                    <i class="bi bi-chevron-down chevron"></i>
+                </a>
+                <ul class="nav-sub collapse {% if '/roaming/' in request.path %}show{% endif %}" id="roamingMenu">
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/roaming/partners' in request.path %}active{% endif %}" href="{% url 'roaming:partner_list' %}" title="Roaming Partners">
+                            <i class="bi bi-people"></i><span class="nav-link-text"> Partners</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/roaming/detect' in request.path %}active{% endif %}" href="{% url 'roaming:detect' %}" title="Detection">
+                            <i class="bi bi-search"></i><span class="nav-link-text"> Detection</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/roaming/cycles' in request.path %}active{% endif %}" href="{% url 'roaming:cycle_list' %}" title="Cycles">
+                            <i class="bi bi-calendar3"></i><span class="nav-link-text"> Cycles</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/roaming/files' in request.path %}active{% endif %}" href="{% url 'roaming:file_list' %}" title="Files">
+                            <i class="bi bi-file-earmark-binary"></i><span class="nav-link-text"> Files</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/roaming/disputes' in request.path %}active{% endif %}" href="{% url 'roaming:dispute_list' %}" title="Disputes">
+                            <i class="bi bi-exclamation-diamond"></i><span class="nav-link-text"> Disputes</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/roaming/reports' in request.path %}active{% endif %}" href="{% url 'roaming:reports_view' %}" title="Reports">
+                            <i class="bi bi-bar-chart"></i><span class="nav-link-text"> Reports</span>
                         </a>
                     </li>
                 </ul>
@@ -181,8 +371,8 @@
                                 </a>
                             </li>
                             <li>
-                                <a class="nav-link {% if '/portals/output-portal' in request.path %}active{% endif %}"
-                                   href="{% url 'portals:output_portal_list' %}" title="Output Portal"
+                                <a class="nav-link {% if '/portals/output' in request.path %}active{% endif %}"
+                                   href="{% url 'portals:output_portal_ide' %}" title="Output Portal"
                                    style="padding-left:3.5rem;">
                                     <i class="bi bi-arrow-up-circle"></i><span class="nav-link-text"> Output Portal</span>
                                 </a>
@@ -226,10 +416,50 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if '/business-logic/' in request.path %}active{% endif %}"
-                           href="{% url 'businesslogic:rule_list' %}" title="Business Logic">
-                            <i class="bi bi-lightbulb"></i><span class="nav-link-text"> Business Logic</span>
+                        <a class="nav-link nav-dropdown-toggle {% if '/business-logic/' not in request.path %}collapsed{% endif %}"
+                           data-bs-toggle="collapse" href="#logicMenu" role="button" title="Business Logic"
+                           aria-expanded="{% if '/business-logic/' in request.path %}true{% else %}false{% endif %}">
+                            <i class="bi bi-lightbulb"></i>
+                            <span class="nav-text">Business Logic</span>
+                            <i class="bi bi-chevron-down chevron"></i>
                         </a>
+                        <ul class="nav-sub collapse {% if '/business-logic/' in request.path %}show{% endif %}" id="logicMenu">
+                            <li class="nav-item">
+                                <a class="nav-link {% if '/business-logic/business/' in request.path %}active{% endif %}"
+                                   href="{% url 'businesslogic:business_rules' %}" title="Business Rules"
+                                   style="padding-left:3.5rem;">
+                                    <i class="bi bi-gear-wide-connected"></i><span class="nav-link-text"> Business Rules</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if '/business-logic/correlation/' in request.path %}active{% endif %}"
+                                   href="{% url 'businesslogic:correlation_rules' %}" title="Correlation Rules"
+                                   style="padding-left:3.5rem;">
+                                    <i class="bi bi-diagram-3"></i><span class="nav-link-text"> Correlation Rules</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if '/business-logic/detection/' in request.path %}active{% endif %}"
+                                   href="{% url 'businesslogic:detection_rules' %}" title="Detection Rules"
+                                   style="padding-left:3.5rem;">
+                                    <i class="bi bi-shield-exclamation"></i><span class="nav-link-text"> Detection Rules</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if '/business-logic/error-handling/' in request.path %}active{% endif %}"
+                                   href="{% url 'businesslogic:error_handling' %}" title="Error Handling"
+                                   style="padding-left:3.5rem;">
+                                    <i class="bi bi-bug"></i><span class="nav-link-text"> Error Handling</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.path == '/business-logic/' %}active{% endif %}"
+                                   href="{% url 'businesslogic:rule_list' %}" title="All Rules"
+                                   style="padding-left:3.5rem;">
+                                    <i class="bi bi-list-ul"></i><span class="nav-link-text"> All Rules</span>
+                                </a>
+                            </li>
+                        </ul>
                     </li>
                 </ul>
             </li>
@@ -242,6 +472,17 @@
             <h5 class="mb-0">{% block page_title %}Dashboard{% endblock %}</h5>
             <div class="d-flex align-items-center gap-3">
                 {% if user.is_authenticated %}
+                {% if OPERATORS %}
+                <form method="post" action="{% url 'dashboard:set_operator' %}" class="m-0">
+                    {% csrf_token %}
+                    <select name="operator" class="form-select form-select-sm" style="width:auto;display:inline-block"
+                            title="Active operator" onchange="this.form.submit()">
+                        {% for op in OPERATORS %}
+                        <option value="{{ op }}" {% if op == ACTIVE_OPERATOR %}selected{% endif %}>{{ op|capfirst }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+                {% endif %}
                 <span class="text-muted small me-1" title="Last Login" style="font-size: 0.75rem;"><i class="bi bi-clock-history"></i> {{ user.last_login|date:"M d, Y H:i" }}</span>
                 <span class="text-muted"><i class="bi bi-person-circle"></i> {{ user.username }}</span>
                 <a href="{% url 'logout' %}" class="btn btn-sm btn-outline-secondary">Logout</a>

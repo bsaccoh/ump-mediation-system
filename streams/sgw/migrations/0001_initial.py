@@ -43,8 +43,8 @@ class Migration(migrations.Migration):
                 ('raw_data', models.JSONField(blank=True, default=dict)),
                 ('status', models.CharField(choices=[('VALID', 'Valid'), ('INVALID', 'Invalid'), ('DUPLICATE', 'Duplicate')], default='VALID', max_length=10)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('file', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='sgw_records', to='collection.cdrfile')),
-                ('source', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='collection.datasource')),
+                ('file', models.ForeignKey(db_constraint=False, on_delete=django.db.models.deletion.CASCADE, related_name='sgw_records', to='collection.cdrfile')),
+                ('source', models.ForeignKey(blank=True, db_constraint=False, null=True, on_delete=django.db.models.deletion.SET_NULL, to='collection.datasource')),
             ],
             options={
                 'verbose_name': 'SGW CDR Record',

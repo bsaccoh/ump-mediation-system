@@ -1,0 +1,317 @@
+{% extends "base.html" %}
+{% block title %}Lawful Intercept — Regulatory{% endblock %}
+{% block page_title %}Lawful Intercept{% endblock %}
+
+{% block content %}
+<div class="alert alert-warning d-flex align-items-center" role="alert">
+    <i class="bi bi-shield-lock-fill me-2 fs-4"></i>
+    <div>
+        <strong>Restricted access.</strong> Every action on this page is recorded in the audit log.
+        Subscribers' CDRs may only be queried under a lawful basis (court order / warrant).
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-shield-lock"></i> LEA Requests</span>
+        <span class="badge bg-secondary" id="totalBadge">{{ total }} requests</span>
+    </div>
+    <div class="card-body pb-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search case / agency / officer / MSISDN / IMSI / IMEI…" oninput="loadData()">
+            </div>
+            <div class="col-md-2">
+                <select id="filterStatus" class="form-select form-select-sm" onchange="loadData()">
+                    <option value="">All Statuses</option>
+                    {% for v,l in status_choices %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary btn-sm" onclick="openModal()"><i class="bi bi-plus-lg"></i> New Request</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="alertBox" class="alert" style="display:none;"></div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Case</th><th>Agency</th><th>Officer</th>
+                                <th>Target (MSISDN / IMSI / IMEI)</th>
+                                <th>Scope</th><th>Status</th><th class="text-end">Extractions</th><th width="220"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <tr><td colspan="8" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm"></div> Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer d-flex justify-content-between align-items-center" id="pagBar" style="display:none !important;">
+                <small class="text-muted">Showing <span id="pagShowing"></span> of <span id="pagTotal"></span></small>
+                <nav><ul class="pagination pagination-sm mb-0" id="pagNums"></ul></nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit/Create modal -->
+<div class="modal fade" id="entryModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title" id="modalTitle">New LEA Request</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="hidden" id="entryId">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Case Number <span class="text-danger">*</span></label>
+                        <input type="text" id="fCase" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Requesting Agency <span class="text-danger">*</span></label>
+                        <input type="text" id="fAgency" class="form-control form-control-sm" placeholder="Sierra Leone Police / ACC / etc.">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Officer Name</label>
+                        <input type="text" id="fOfficerName" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Officer Contact</label>
+                        <input type="text" id="fOfficerContact" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold">Legal Basis</label>
+                        <input type="text" id="fLegal" class="form-control form-control-sm" placeholder="Court order ref / warrant number">
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Filter MSISDN</label>
+                        <input type="text" id="fMsisdn" class="form-control form-control-sm" placeholder="23276576003">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Filter IMSI</label>
+                        <input type="text" id="fImsi" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Filter IMEI</label>
+                        <input type="text" id="fImei" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Filter Cell ID</label>
+                        <input type="text" id="fCell" class="form-control form-control-sm">
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Period Start <span class="text-danger">*</span></label>
+                        <input type="datetime-local" id="fStart" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Period End <span class="text-danger">*</span></label>
+                        <input type="datetime-local" id="fEnd" class="form-control form-control-sm">
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Status</label>
+                        <select id="fStatus" class="form-select form-select-sm">
+                            {% for v,l in status_choices %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold">Notes</label>
+                        <textarea id="fNotes" class="form-control form-control-sm" rows="2"></textarea>
+                    </div>
+                </div>
+                <div id="modalError" class="alert alert-danger mt-2" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="saveEntry()"><i class="bi bi-save"></i> Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Preview drawer -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Query Preview <small class="text-muted ms-2" id="previewCount"></small></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body" style="max-height:60vh;overflow:auto">
+                <table class="table table-sm small mb-0">
+                    <thead class="table-light"><tr id="previewHead"></tr></thead>
+                    <tbody id="previewBody"></tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <small class="text-muted me-auto"><i class="bi bi-info-circle"></i> Preview capped at 100 rows. Click Export to produce the full evidentiary CSV.</small>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary btn-sm" id="previewExportBtn"><i class="bi bi-download"></i> Export Full CSV</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentPage = 1;
+const STATUS_COLORS = {OPEN:'warning',IN_PROGRESS:'info',FULFILLED:'success',DENIED:'danger'};
+function getCSRF() { return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''; }
+function showAlert(msg, type='success') {
+    const b=document.getElementById('alertBox'); b.className=`alert alert-${type}`; b.textContent=msg; b.style.display='block';
+    setTimeout(()=>b.style.display='none',5000);
+}
+function fmtDT(s){return s? s.slice(0,16).replace('T',' ') : '—';}
+
+function loadData() {
+    const q = document.getElementById('searchInput').value;
+    const status = document.getElementById('filterStatus').value;
+    fetch(`{% url 'regulatory:intercept_api' %}?q=${encodeURIComponent(q)}&status=${status}&page=${currentPage}`)
+        .then(r=>r.json()).then(data=>{
+            document.getElementById('totalBadge').textContent = data.total + ' requests';
+            const tbody = document.getElementById('tableBody');
+            if (!data.records.length) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">No requests yet. Click New Request to log the first.</td></tr>';
+                document.getElementById('pagBar').style.cssText='display:none !important'; return;
+            }
+            tbody.innerHTML = data.records.map(r => {
+                const c = STATUS_COLORS[r.status]||'secondary';
+                const tgt = [r.filter_msisdn,r.filter_imsi,r.filter_imei].filter(x=>x).join(' / ') || '<span class="text-muted">—</span>';
+                return `<tr>
+                    <td class="text-black"><a href="/regulatory/intercept/${r.id}/" class="text-decoration-none"><strong>${r.case_number}</strong></a></td>
+                    <td class="text-black">${r.requesting_agency}</td>
+                    <td class="text-black small">${r.officer_name||'-'}<br><span class="text-muted">${r.officer_contact||''}</span></td>
+                    <td class="text-black small"><code>${tgt}</code>${r.filter_cell_id?'<br><span class="text-muted small">cell ' + r.filter_cell_id + '</span>':''}</td>
+                    <td class="text-black small">${fmtDT(r.filter_start)} → ${fmtDT(r.filter_end)}</td>
+                    <td><span class="badge bg-${c}">${r.status}</span></td>
+                    <td class="text-end text-black">${r.extractions}</td>
+                    <td class="text-end text-nowrap">
+                        <button class="btn btn-xs btn-outline-primary py-0 px-1" title="Execute (preview)" onclick="executeRequest(${r.id})"><i class="bi bi-play-fill"></i></button>
+                        <button class="btn btn-xs btn-outline-success py-0 px-1" title="Export CSV" onclick="exportRequest(${r.id})"><i class="bi bi-download"></i></button>
+                        <button class="btn btn-xs btn-outline-secondary py-0 px-1" title="Edit" onclick='editEntry(${JSON.stringify(r).replace(/'/g,"\\'")})'><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-xs btn-outline-danger py-0 px-1" title="Delete" onclick="deleteEntry(${r.id})"><i class="bi bi-trash"></i></button>
+                    </td>
+                </tr>`;
+            }).join('');
+            buildPagination(data.page, data.pages, data.total);
+        });
+}
+
+function buildPagination(page, pages, total) {
+    const bar = document.getElementById('pagBar');
+    if (pages<=1){bar.style.cssText='display:none !important';return;}
+    bar.style.cssText='display:flex !important';
+    document.getElementById('pagShowing').textContent=`${(page-1)*25+1}–${Math.min(page*25,total)}`;
+    document.getElementById('pagTotal').textContent=total;
+    let html=`<li class="page-item ${page<=1?'disabled':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${page-1})">‹</a></li>`;
+    for(let i=Math.max(1,page-2);i<=Math.min(pages,page+2);i++)
+        html+=`<li class="page-item ${i===page?'active':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${i})">${i}</a></li>`;
+    html+=`<li class="page-item ${page>=pages?'disabled':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${page+1})">›</a></li>`;
+    document.getElementById('pagNums').innerHTML=html;
+}
+function goPage(p){currentPage=p;loadData();}
+
+function openModal(r=null) {
+    document.getElementById('entryId').value = r?.id||'';
+    document.getElementById('fCase').value = r?.case_number||'';
+    document.getElementById('fAgency').value = r?.requesting_agency||'';
+    document.getElementById('fOfficerName').value = r?.officer_name||'';
+    document.getElementById('fOfficerContact').value = r?.officer_contact||'';
+    document.getElementById('fLegal').value = r?.legal_basis||'';
+    document.getElementById('fMsisdn').value = r?.filter_msisdn||'';
+    document.getElementById('fImsi').value = r?.filter_imsi||'';
+    document.getElementById('fImei').value = r?.filter_imei||'';
+    document.getElementById('fCell').value = r?.filter_cell_id||'';
+    document.getElementById('fStart').value = r?.filter_start ? r.filter_start.slice(0,16) : '';
+    document.getElementById('fEnd').value = r?.filter_end ? r.filter_end.slice(0,16) : '';
+    document.getElementById('fStatus').value = r?.status||'OPEN';
+    document.getElementById('fNotes').value = r?.notes||'';
+    document.getElementById('modalTitle').textContent = r?'Edit LEA Request':'New LEA Request';
+    document.getElementById('modalError').style.display='none';
+    new bootstrap.Modal(document.getElementById('entryModal')).show();
+}
+function editEntry(r){openModal(r);}
+
+function saveEntry() {
+    const params = new URLSearchParams({
+        csrfmiddlewaretoken:getCSRF(), id:document.getElementById('entryId').value,
+        case_number:document.getElementById('fCase').value.trim(),
+        requesting_agency:document.getElementById('fAgency').value.trim(),
+        officer_name:document.getElementById('fOfficerName').value.trim(),
+        officer_contact:document.getElementById('fOfficerContact').value.trim(),
+        legal_basis:document.getElementById('fLegal').value.trim(),
+        filter_msisdn:document.getElementById('fMsisdn').value.trim(),
+        filter_imsi:document.getElementById('fImsi').value.trim(),
+        filter_imei:document.getElementById('fImei').value.trim(),
+        filter_cell_id:document.getElementById('fCell').value.trim(),
+        filter_start:document.getElementById('fStart').value,
+        filter_end:document.getElementById('fEnd').value,
+        status:document.getElementById('fStatus').value,
+        notes:document.getElementById('fNotes').value.trim(),
+    });
+    fetch("{% url 'regulatory:intercept_save' %}", {method:'POST',body:params,headers:{'X-CSRFToken':getCSRF()}})
+        .then(r=>r.json()).then(d=>{
+            if(d.success){bootstrap.Modal.getInstance(document.getElementById('entryModal')).hide();showAlert('Saved.');loadData();}
+            else{document.getElementById('modalError').textContent=d.error;document.getElementById('modalError').style.display='block';}
+        });
+}
+
+function executeRequest(id) {
+    const params = new URLSearchParams({csrfmiddlewaretoken:getCSRF(), limit:'100'});
+    fetch(`/regulatory/intercept/${id}/execute/`, {method:'POST', body:params, headers:{'X-CSRFToken':getCSRF()}})
+        .then(r=>r.json()).then(d=>{
+            if(!d.success){showAlert(d.error||'Execute failed','danger');return;}
+            const rows = d.rows||[];
+            document.getElementById('previewCount').textContent = `(${d.count} rows shown)`;
+            if (!rows.length) {
+                document.getElementById('previewHead').innerHTML = '<th></th>';
+                document.getElementById('previewBody').innerHTML = '<tr><td class="text-center py-4 text-muted">No CDRs match this scope.</td></tr>';
+            } else {
+                const keys = Object.keys(rows[0]);
+                document.getElementById('previewHead').innerHTML = keys.map(k=>`<th>${k}</th>`).join('');
+                document.getElementById('previewBody').innerHTML = rows.map(r=>'<tr>'+keys.map(k=>`<td class="small">${r[k]||''}</td>`).join('')+'</tr>').join('');
+            }
+            const btn = document.getElementById('previewExportBtn');
+            btn.onclick = () => { bootstrap.Modal.getInstance(document.getElementById('previewModal')).hide(); exportRequest(id); };
+            new bootstrap.Modal(document.getElementById('previewModal')).show();
+        });
+}
+
+function exportRequest(id) {
+    const params = new URLSearchParams({csrfmiddlewaretoken:getCSRF()});
+    fetch(`/regulatory/intercept/${id}/export/`, {method:'POST', body:params, headers:{'X-CSRFToken':getCSRF()}})
+        .then(r=>r.json()).then(d=>{
+            if(d.success){
+                if (d.job_url) {
+                    showAlert((d.message||'Export queued.') + ' Redirecting to job…','info');
+                    setTimeout(()=>window.location=d.job_url, 600);
+                } else if (d.extraction_id) {
+                    // Legacy sync path (in case the rollout is partial)
+                    showAlert(`Exported ${d.record_count||0} records.`,'success');
+                    loadData();
+                    window.location = `/regulatory/intercept/extraction/${d.extraction_id}/download/`;
+                } else {
+                    showAlert('Export queued.','info');
+                    loadData();
+                }
+            } else {
+                showAlert(d.error||'Export failed','danger');
+            }
+        });
+}
+
+function deleteEntry(id) {
+    if(!confirm('Delete this LEA request? All extraction logs will also be deleted.'))return;
+    fetch(`{% url 'regulatory:intercept_delete' 0 %}`.replace('/0/',`/${id}/`),{method:'POST',headers:{'X-CSRFToken':getCSRF()}})
+        .then(r=>r.json()).then(d=>{if(d.success){showAlert('Deleted.');loadData();}});
+}
+
+document.addEventListener('DOMContentLoaded', loadData);
+</script>
+{% endblock %}

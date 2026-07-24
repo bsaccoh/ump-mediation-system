@@ -1,0 +1,696 @@
+{% extends "base.html" %}
+
+{% block title %}Output Portals IDE - UMP Mediation{% endblock %}
+
+{% block content %}
+<style>
+    .ide-container {
+        display: flex;
+        height: calc(100vh - 140px);
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        overflow: hidden;
+        margin-top: -0.5rem;
+    }
+    .ide-sidebar {
+        width: 250px;
+        background: #f8f9fa;
+        border-right: 1px solid #dee2e6;
+        display: flex;
+        flex-direction: column;
+    }
+    .ide-sidebar-header {
+        padding: 0.75rem 1rem;
+        background: #e9ecef;
+        border-bottom: 1px solid #dee2e6;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    .ide-list-container {
+        flex: 1;
+        overflow-y: auto;
+    }
+    .ide-list-item {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem 1rem;
+        color: #495057;
+        text-decoration: none;
+        border-bottom: 1px solid #f1f3f5;
+        font-size: 0.85rem;
+    }
+    .ide-list-item:hover {
+        background: #e9ecef;
+        color: #212529;
+    }
+    .ide-list-item.active {
+        background: #e7f5ff;
+        color: #0b7285;
+        font-weight: 600;
+        border-left: 3px solid #1c7ed6;
+    }
+    .ide-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+        overflow-y: auto;
+    }
+    .ide-main-header {
+        padding: 0.75rem 1.5rem;
+        border-bottom: 1px solid #dee2e6;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #fdfdfd;
+    }
+    .ide-content {
+        padding: 1.5rem;
+        flex: 1;
+    }
+    .form-group label {
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: #495057;
+        margin-bottom: 0.25rem;
+    }
+    .form-group {
+        margin-bottom: 1rem;
+    }
+    .help-text {
+        font-size: 0.75rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+
+</style>
+
+<div class="ide-container">
+    <!-- Left Pane: Portal List -->
+    <div class="ide-sidebar">
+        <div class="ide-sidebar-header">
+            <span>Output Systems</span>
+            <a href="{% url 'portals:output_portal_ide' %}" class="btn btn-sm btn-outline-primary py-0 px-2" title="New Output Portal">
+                <i class="bi bi-plus-lg"></i>
+            </a>
+        </div>
+        <div class="ide-list-container">
+            {% for portal in portals %}
+            <a href="{% url 'portals:output_portal_ide_edit' portal.pk %}" class="ide-list-item {% if active_portal and active_portal.pk == portal.pk %}active{% endif %}">
+                {% if portal.is_active %}
+                <i class="bi bi-check-circle-fill text-success me-2" style="font-size:0.75rem;"></i>
+                {% else %}
+                <i class="bi bi-dash-circle-fill text-danger me-2" style="font-size:0.75rem;"></i>
+                {% endif %}
+                <i class="bi bi-box-arrow-right text-muted me-2"></i>
+                {{ portal.name }}
+            </a>
+            {% endfor %}
+            {% if not portals %}
+            <div class="text-muted text-center p-3 small">No portals configured.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Right Pane: Configuration -->
+    <div class="ide-main">
+        <div class="ide-main-header">
+            <div>
+                {% if active_portal %}
+                <h5 class="mb-0 d-flex align-items-center gap-2">
+                    <i class="bi bi-box-arrow-right text-success"></i>
+                    {{ active_portal.name }} | <small class="text-muted">{{ active_portal.stream_type }}</small>
+                    <div class="form-check form-switch mb-0 ms-2" title="Enable / Disable portal">
+                        <input class="form-check-input" type="checkbox" id="headerToggle"
+                               {% if active_portal.is_active %}checked{% endif %}
+                               onchange="togglePortalStatus({{ active_portal.pk }}, this)">
+                        <label class="form-check-label fw-semibold" id="headerToggleLabel"
+                               for="headerToggle"
+                               style="color:{% if active_portal.is_active %}#198754{% else %}#dc3545{% endif %}">
+                            {% if active_portal.is_active %}Enabled{% else %}Disabled{% endif %}
+                        </label>
+                    </div>
+                </h5>
+                {% else %}
+                <h5 class="mb-0 text-muted"><i class="bi bi-plus-circle"></i> Create New Output Portal</h5>
+                {% endif %}
+            </div>
+
+            <div class="d-flex gap-2">
+                <a href="{% url 'portals:output_portal_ide' %}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-plus-lg"></i> New Portal
+                </a>
+                {% if active_portal %}
+                <form method="post" action="{% url 'portals:output_portal_delete' active_portal.pk %}" onsubmit="return confirm('Delete this portal?');" class="m-0">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i> Delete</button>
+                </form>
+                {% endif %}
+                <button type="button" class="btn btn-sm btn-success" onclick="document.getElementById('portalForm').submit();">
+                    <i class="bi bi-save"></i> Save
+                </button>
+            </div>
+        </div>
+
+        <div class="ide-content">
+            <form method="post" id="portalForm">
+                {% csrf_token %}
+
+                {% if form.errors %}
+                <div class="alert alert-danger">
+                    <strong><i class="bi bi-exclamation-triangle-fill"></i> Please correct the following errors:</strong>
+                    <ul class="mb-0 mt-1">
+                        {% for field in form %}
+                            {% for error in field.errors %}
+                                <li><strong>{{ field.label }}</strong>: {{ error }}</li>
+                            {% endfor %}
+                        {% endfor %}
+                        {% for error in form.non_field_errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <!-- Nav tabs (same structure as Input Portal) -->
+                <ul class="nav nav-tabs mb-4" id="outputTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="portal-tab" data-bs-toggle="tab" data-bs-target="#portal-pane" type="button" role="tab">Portal</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="routing-tab" data-bs-toggle="tab" data-bs-target="#routing-pane" type="button" role="tab">Routing</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="protocol-tab" data-bs-toggle="tab" data-bs-target="#protocol-pane" type="button" role="tab">Protocol</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="output-tab" data-bs-toggle="tab" data-bs-target="#output-pane" type="button" role="tab">Output</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="dispatch-tab" data-bs-toggle="tab" data-bs-target="#dispatch-pane" type="button" role="tab">Dispatch</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link disabled" id="monitor-tab" data-bs-toggle="tab" data-bs-target="#monitor-pane" type="button" role="tab">Monitor</button>
+                    </li>
+                </ul>
+
+                <!-- Tab panes -->
+                <div class="tab-content" id="outputTabsContent">
+
+                    <!-- Tab 1: Portal -->
+                    <div class="tab-pane fade show active" id="portal-pane" role="tabpanel">
+                        <div class="row">
+                            <div class="col-md-6 form-group">
+                                <label for="{{ form.name.id_for_label }}">Portal Name / Alias</label>
+                                {{ form.name }}
+                                {{ form.name.errors }}
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label for="{{ form.stream_type.id_for_label }}">Stream Type</label>
+                                {{ form.stream_type }}
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-12 form-group">
+                                <label for="{{ form.description.id_for_label }}">Description</label>
+                                {{ form.description }}
+                                {{ form.description.errors }}
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-md-12">
+                                <div class="form-check form-switch">
+                                    {{ form.is_active }}
+                                    <label class="form-check-label fw-bold text-success" for="{{ form.is_active.id_for_label }}">Status Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab 2: Routing -->
+                    <div class="tab-pane fade" id="routing-pane" role="tabpanel">
+                        <div class="d-flex align-items-center mb-3 text-muted">
+                            <span class="pe-2">All Routes</span>
+                            <div class="flex-grow-1 border-bottom"></div>
+                        </div>
+
+                        <div class="mb-3 d-flex align-items-center gap-2">
+                            <span>Route Rotation Enabled</span>
+                            <span class="badge bg-danger text-white">False <i class="bi bi-x"></i></span>
+                        </div>
+
+                        <!-- Primary Route -->
+                        <div class="card border-success mb-2">
+                            <div class="card-header text-white py-2" style="background:linear-gradient(135deg,#1a237e,#0d47a1);cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#primaryRoute">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>Primary <i class="bi bi-check-circle-fill text-white ms-1"></i></span>
+                                    <i class="bi bi-chevron-down"></i>
+                                </div>
+                            </div>
+                            <div class="collapse show" id="primaryRoute">
+                                <div class="card-body bg-light">
+                                    <div class="row">
+                                        <div class="col-md-6 form-group">
+                                            <label>Status</label>
+                                            <select class="form-select form-select-sm bg-light">
+                                                <option selected>Enabled</option>
+                                                <option>Disabled</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6 form-group">
+                                            <label for="{{ form.portal_type.id_for_label }}">Resource Class</label>
+                                            {{ form.portal_type }}
+                                            {{ form.portal_type.errors }}
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-12 form-group">
+                                            <label for="{{ form.host.id_for_label }}">Node Name / Host</label>
+                                            {{ form.host }}
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6 form-group">
+                                            <label for="{{ form.username.id_for_label }}">Login Phrase / Name</label>
+                                            {{ form.username }}
+                                            {{ form.username.errors }}
+                                        </div>
+                                        <div class="col-md-6 form-group">
+                                            <label for="{{ form.password.id_for_label }}">Security Phrase / Password</label>
+                                            {{ form.password }}
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-12 form-group">
+                                            <label for="{{ form.directory.id_for_label }}">Disk / Directory / Path</label>
+                                            {{ form.directory }}
+                                            {{ form.directory.errors }}
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6 form-group">
+                                            <label for="{{ form.port.id_for_label }}">Port</label>
+                                            {{ form.port }}
+                                            {{ form.port.errors }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Secondary Route -->
+                        <div class="card border-warning mb-2">
+                            <div class="card-header bg-warning text-dark py-2 d-flex justify-content-between align-items-center">
+                                <span>Secondary <i class="bi bi-x-circle-fill text-danger ms-1"></i></span>
+                                <i class="bi bi-chevron-right"></i>
+                            </div>
+                        </div>
+
+                        <!-- Tertiary Route -->
+                        <div class="card border-secondary mb-2">
+                            <div class="card-header bg-secondary text-white py-2 d-flex justify-content-between align-items-center">
+                                <span>Tertiary <i class="bi bi-dash-circle-fill text-dark ms-1"></i></span>
+                                <i class="bi bi-chevron-right"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab 3: Protocol -->
+                    <div class="tab-pane fade" id="protocol-pane" role="tabpanel">
+                        <h6 class="text-muted mb-3 border-bottom pb-2">Protocol - (FDI) Flexible Distribution Interface</h6>
+                        <div class="row mb-3">
+                            <div class="col-md-8 form-group">
+                                <label>Script Name</label>
+                                <input type="text" class="form-control form-control-sm bg-light" name="script_name"
+                                       placeholder="e.g. fdi_sftp.sh" value="">
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <label>Connect Timeout (seconds)</label>
+                                <input type="number" class="form-control form-control-sm bg-light" name="connect_timeout"
+                                       placeholder="30" value="">
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="enable_transcript" id="enable_transcript">
+                                    <label class="form-check-label text-muted" for="enable_transcript">Enable Transcript</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card border-success mt-4">
+                            <div class="card-header text-white py-2" style="background:linear-gradient(135deg,#1a237e,#0d47a1);cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#fdiParams">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>FDI Parameters</span>
+                                    <i class="bi bi-chevron-down"></i>
+                                </div>
+                            </div>
+                            <div class="collapse show" id="fdiParams">
+                                <div class="card-body bg-light">
+                                    <div class="row">
+                                        <div class="col-md-6 form-group">
+                                            <label>FILE_PATTERN</label>
+                                            <input type="text" class="form-control form-control-sm bg-light" name="file_pattern"
+                                                   placeholder="e.g. CDR_*.csv">
+                                        </div>
+                                        <div class="col-md-6 form-group">
+                                            <label>DISPOSITION</label>
+                                            <select class="form-select form-select-sm bg-light" name="disposition">
+                                                <option value="">---------</option>
+                                                <option>MOVE</option>
+                                                <option>COPY</option>
+                                                <option>DELETE</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6 form-group">
+                                            <label>RENAME_EXT</label>
+                                            <input type="text" class="form-control form-control-sm bg-light" name="rename_ext"
+                                                   placeholder="e.g. .sent">
+                                        </div>
+                                        <div class="col-md-6 form-group">
+                                            <label>MOVE_TO</label>
+                                            <input type="text" class="form-control form-control-sm bg-light" name="move_to"
+                                                   placeholder="e.g. /archive">
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6 form-group">
+                                            <label>RMV_PREFIX</label>
+                                            <input type="text" class="form-control form-control-sm bg-light" name="rmv_prefix">
+                                        </div>
+                                        <div class="col-md-6 form-group">
+                                            <label>REG_PATTERN</label>
+                                            <input type="text" class="form-control form-control-sm bg-light" name="reg_pattern">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab 4: Output -->
+                    <div class="tab-pane fade" id="output-pane" role="tabpanel">
+                        <!-- Output Format -->
+                        <div class="row mb-3">
+                            <div class="col-md-4 form-group">
+                                <label for="{{ form.output_format.id_for_label }}">Output Format</label>
+                                {{ form.output_format }}
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <label>File Compression</label>
+                                <select class="form-select form-select-sm bg-light" name="file_compression">
+                                    <option value="">None</option>
+                                    <option>GZIP</option>
+                                    <option>ZIP</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <label>Output Script</label>
+                                <input type="text" class="form-control form-control-sm bg-light" name="output_script"
+                                       placeholder="e.g. post_process.sh">
+                            </div>
+                        </div>
+
+                        <hr class="my-3">
+
+                        <!-- Distribution Rules section -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0 text-muted">Distribution Rules</h6>
+                            {% if active_portal %}
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addRuleModal">
+                                <i class="bi bi-plus"></i> Add Rule
+                            </button>
+                            {% endif %}
+                        </div>
+                        <table class="table table-sm table-hover border mb-4">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Rule Name</th>
+                                    <th>Stream</th>
+                                    <th>Schema</th>
+                                    <th>Priority</th>
+                                    <th title="Max attempts / backoff">Retry</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for rule in rules %}
+                                {% if rule.output_portal == active_portal %}
+                                <tr>
+                                    <td>{{ rule.name }}</td>
+                                    <td><span class="badge bg-info text-dark">{{ rule.stream_type }}</span></td>
+                                    <td>{{ rule.output_schema.name }}</td>
+                                    <td>{{ rule.priority }}</td>
+                                    <td><small class="text-muted">{{ rule.max_retries }}× / {{ rule.retry_backoff_seconds|default:"—" }}</small></td>
+                                    <td>
+                                        {% if rule.is_active %}
+                                        <span class="text-success"><i class="bi bi-check-circle-fill"></i></span>
+                                        {% else %}
+                                        <span class="text-danger"><i class="bi bi-x-circle-fill"></i></span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        <a href="{% url 'portals:distribution_rule_edit' rule.pk %}" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.75rem;"><i class="bi bi-pencil"></i> Edit</a>
+                                        <form method="post" action="{% url 'portals:distribution_rule_delete' rule.pk %}" class="d-inline" onsubmit="return confirm('Delete rule {{ rule.name }}?');">
+                                            {% csrf_token %}
+                                            <button class="btn btn-xs btn-outline-danger py-0 px-2" style="font-size:0.75rem;"><i class="bi bi-trash"></i></button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                                {% empty %}
+                                <tr><td colspan="7" class="text-center text-muted py-3">No rules configured yet.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+
+                        <!-- Schema Mapping section -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0 text-muted">Schema Mapping</h6>
+                            <a href="{% url 'portals:output_schema_create' %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-plus"></i> Create Schema
+                            </a>
+                        </div>
+                        <table class="table table-sm table-hover border mb-4">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Schema Name</th>
+                                    <th>Stream Type</th>
+                                    <th>Delimiter</th>
+                                    <th>Fields Count</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for schema in schemas %}
+                                <tr>
+                                    <td>{{ schema.name }}</td>
+                                    <td><span class="badge bg-secondary">{{ schema.stream_type }}</span></td>
+                                    <td><code>{{ schema.delimiter }}</code></td>
+                                    <td>{{ schema.mapping_json|length }}</td>
+                                    <td class="text-end">
+                                        <a href="{% url 'portals:output_schema_edit' schema.pk %}" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.75rem;"><i class="bi bi-pencil"></i> Edit</a>
+                                        <form method="post" action="{% url 'portals:output_schema_delete' schema.pk %}" class="d-inline" onsubmit="return confirm('Delete schema {{ schema.name }}?');">
+                                            {% csrf_token %}
+                                            <button class="btn btn-xs btn-outline-danger py-0 px-2" style="font-size:0.75rem;"><i class="bi bi-trash"></i></button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="5" class="text-center text-muted py-3">No schemas defined yet.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Tab 5: Dispatch -->
+                    <div class="tab-pane fade" id="dispatch-pane" role="tabpanel">
+                        <div class="row mb-4">
+                            <div class="col-md-12">
+                                <div class="form-check form-switch d-flex align-items-center gap-2">
+                                    <label class="form-check-label fw-bold mb-0">Dispatch Status</label>
+                                    <input class="form-check-input" type="checkbox" name="dispatch_status" id="dispatchStatus">
+                                    <span class="badge bg-success">Enabled <i class="bi bi-check"></i></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mb-4">
+                            <div class="col-md-6 form-group">
+                                <label>Dispatch Method</label>
+                                <select class="form-select form-select-sm bg-light" name="dispatch_method">
+                                    <option value="">---------</option>
+                                    <option>PUSH</option>
+                                    <option>PULL</option>
+                                    <option>STREAM</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label>Schedule Type</label>
+                                <select class="form-select form-select-sm bg-light" name="schedule_type">
+                                    <option value="">---------</option>
+                                    <option>INTERVAL</option>
+                                    <option>CRON</option>
+                                    <option>ON_DEMAND</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label class="fw-bold mb-2">Base Time</label>
+                                <input type="time" class="form-control form-control-sm bg-light" name="base_time">
+
+                                <div class="mt-4 form-group">
+                                    <label>Do Not Dispatch On</label>
+                                    <select class="form-select form-select-sm bg-light" name="do_not_dispatch_on" multiple>
+                                        <option>Monday</option>
+                                        <option>Tuesday</option>
+                                        <option>Wednesday</option>
+                                        <option>Thursday</option>
+                                        <option>Friday</option>
+                                        <option>Saturday</option>
+                                        <option>Sunday</option>
+                                    </select>
+                                    <small class="text-muted">None Selected</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-4">
+                                    <label>Interval (Minutes)</label>
+                                    <input type="number" class="form-control form-control-sm bg-light" name="interval_mins" placeholder="15">
+                                </div>
+                                <div class="form-group">
+                                    <label>No Dispatch Intervals</label>
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <span class="text-muted small" style="width:50px;">Time 1</span>
+                                        <input type="text" class="form-control form-control-sm bg-light" placeholder="00:00" disabled>
+                                        <input type="text" class="form-control form-control-sm bg-light" placeholder="00:00" disabled>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <span class="text-muted small" style="width:50px;">Time 2</span>
+                                        <input type="text" class="form-control form-control-sm bg-light" placeholder="00:00" disabled>
+                                        <input type="text" class="form-control form-control-sm bg-light" placeholder="00:00" disabled>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <span class="text-muted small" style="width:50px;">Time 3</span>
+                                        <input type="text" class="form-control form-control-sm bg-light" placeholder="00:00" disabled>
+                                        <input type="text" class="form-control form-control-sm bg-light" placeholder="00:00" disabled>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row border-top pt-3">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>Pending Processing Throttling</label>
+                                    <div class="mt-2">
+                                        <span class="badge bg-danger">False <i class="bi bi-x"></i></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <label>Start Throttling Counts</label>
+                                <input type="number" class="form-control form-control-sm bg-light" name="start_throttling_counts">
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <label>End Throttling Counts</label>
+                                <input type="number" class="form-control form-control-sm bg-light" name="end_throttling_counts">
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function togglePortalStatus(pk, checkbox) {
+    const label = document.getElementById('headerToggleLabel');
+    const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+    fetch(`/portals/output/${pk}/toggle/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.is_active) {
+            label.textContent = 'Enabled';
+            label.style.color = '#198754';
+            checkbox.checked = true;
+        } else {
+            label.textContent = 'Disabled';
+            label.style.color = '#dc3545';
+            checkbox.checked = false;
+        }
+        const formField = document.getElementById('{{ form.is_active.id_for_label }}');
+        if (formField) formField.checked = data.is_active;
+    })
+    .catch(() => { checkbox.checked = !checkbox.checked; });
+}
+</script>
+
+<!-- Modal: Add Rule -->
+<div class="modal fade" id="addRuleModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'portals:distribution_rule_create' %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Distribution Rule</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    {% for field in rule_form %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-primary">Save Rule</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Add Schema -->
+<div class="modal fade" id="addSchemaModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'portals:output_schema_create' %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Create Output Schema</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    {% for field in schema_form %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-primary">Create Schema</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

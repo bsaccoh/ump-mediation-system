@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Distribution: {{ log.filename }}{% endblock %}
+{% block page_title %}Delivered File{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-file-earmark-spreadsheet"></i> {{ log.filename }}</span>
+        <a href="{% url 'collection:distribution_log_download' log.id %}" class="btn btn-sm btn-primary">
+            <i class="bi bi-download"></i> Download
+        </a>
+    </div>
+    <div class="card-body">
+        <table class="table table-sm">
+            <tr><td class="text-muted" style="width:180px;">Source CDR File</td><td><a href="{% url 'collection:file_detail' log.cdr_file_id %}">{{ log.cdr_file.filename }}</a></td></tr>
+            <tr><td class="text-muted">Rule</td><td>{{ log.rule.name|default:"-" }}</td></tr>
+            <tr><td class="text-muted">Output Portal</td><td>{{ log.output_portal.name }} ({{ log.output_portal.portal_type }} / {{ log.output_portal.output_format }})</td></tr>
+            <tr><td class="text-muted">Path on Disk</td><td><code>{{ path }}</code></td></tr>
+            <tr><td class="text-muted">Records</td><td>{{ log.record_count|intcomma }}</td></tr>
+            <tr><td class="text-muted">Size</td><td>{{ log.file_size|filesizeformat }}</td></tr>
+            <tr><td class="text-muted">Delivered</td><td>{{ log.delivered_at|date:"Y-m-d H:i:s" }}</td></tr>
+            <tr><td class="text-muted">Status</td><td><span class="badge bg-{% if log.status == 'SUCCESS' %}success{% elif log.status == 'FAILED' %}danger{% else %}secondary{% endif %}">{{ log.status }}</span></td></tr>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-table"></i> File Preview — showing {{ shown|intcomma }} of {{ total_records|intcomma }} rows</span>
+        <form method="get" class="d-flex gap-2 align-items-center m-0">
+            <label class="text-muted small">Rows:</label>
+            <input type="number" name="rows" value="{{ shown }}" min="10" max="5000" step="10" class="form-control form-control-sm" style="width:100px;">
+            <button class="btn btn-sm btn-outline-secondary">Reload</button>
+        </form>
+    </div>
+    <div class="card-body p-0" style="overflow:auto; max-height:70vh;">
+        {% if header_cells %}
+        <table class="table table-sm table-striped table-bordered mb-0" style="font-size:0.85rem;">
+            <thead class="table-dark sticky-top">
+                <tr>
+                    <th style="width:50px;">#</th>
+                    {% for h in header_cells %}<th>{{ h }}</th>{% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for cells in row_cells %}
+                <tr>
+                    <td class="text-muted">{{ forloop.counter }}</td>
+                    {% for c in cells %}<td>{{ c }}</td>{% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <pre class="m-0 p-3" style="font-size:0.8rem;">{{ header }}
+{% for r in rows_raw %}{{ r }}
+{% endfor %}</pre>
+        {% endif %}
+    </div>
+</div>
+
+<a href="{% url 'collection:file_detail' log.cdr_file_id %}" class="btn btn-outline-secondary mt-3">
+    <i class="bi bi-arrow-left"></i> Back to File Detail
+</a>
+{% endblock %}

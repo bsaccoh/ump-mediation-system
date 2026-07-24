@@ -74,6 +74,26 @@ INPUT_FIELDS = {
         'tag': '9f27', 'type': 'timestamp',
         'description': 'Session stop time',
     },
+    'pdn_address': {
+        'tag': 0x89, 'type': 'constructed',
+        'description': 'PDP/PDN Address (constructed)',
+    },
+    'local_sequence_number': {
+        'tag': 0x94, 'type': 'integer',
+        'description': 'Local sequence number',
+    },
+    'record_sequence_number': {
+        'tag': 0x90, 'type': 'integer',
+        'description': 'Record sequence number',
+    },
+    'charging_characteristics': {
+        'tag': 0x97, 'type': 'string',
+        'description': 'Charging characteristics',
+    },
+    'ms_timezone': {
+        'tag': '9f1f', 'type': 'string',
+        'description': 'MS Timezone',
+    },
 }
 
 
@@ -138,6 +158,50 @@ OUTPUT_FIELDS = {
     'charging_id': {
         'type': 'bigint',
         'description': 'PGW charging identifier',
+    },
+    'pdn_address': {
+        'type': 'string', 'max_length': 50,
+        'description': 'PDP/PDN Address',
+    },
+    'qci': {
+        'type': 'integer',
+        'description': 'QoS Class Identifier',
+    },
+    'local_sequence_number': {
+        'type': 'bigint',
+        'description': 'Local sequence number',
+    },
+    'selection_mode': {
+        'type': 'integer',
+        'description': 'APN selection mode',
+    },
+    'ch_selection_mode': {
+        'type': 'integer',
+        'description': 'Charging characteristics selection mode',
+    },
+    'dynamic_address_flag': {
+        'type': 'boolean',
+        'description': 'Dynamic address flag',
+    },
+    'ims_signaling_context': {
+        'type': 'boolean',
+        'description': 'IMS signaling context flag',
+    },
+    'serving_node_type': {
+        'type': 'integer',
+        'description': 'Serving node type (MME, SGSN, etc.)',
+    },
+    'max_requested_bw_ul': {
+        'type': 'bigint',
+        'description': 'Max requested bandwidth uplink',
+    },
+    'max_requested_bw_dl': {
+        'type': 'bigint',
+        'description': 'Max requested bandwidth downlink',
+    },
+    'rule_name': {
+        'type': 'string', 'max_length': 200,
+        'description': 'Huawei service rule name',
     },
 }
 

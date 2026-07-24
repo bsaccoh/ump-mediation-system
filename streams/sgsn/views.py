@@ -166,6 +166,7 @@ def sgsn_search_api(request):
             'lac': rec.lac,
             'rac': rec.rac,
             'is_roaming': rec.is_roaming,
+            'rating_group': rec.rating_group or '',
             'status': rec.status,
         })
 
@@ -220,6 +221,7 @@ EXPORT_COLUMNS = [
     ('cause_for_closing', 'Cause'),
     ('is_roaming', 'Roaming'),
     ('charging_id', 'Charging ID'),
+    ('rating_group', 'Rating Group'),
     ('status', 'Status'),
 ]
 

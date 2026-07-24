@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Background Jobs{% endblock %}
+{% block page_title %}Background Jobs{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-gear-wide-connected"></i> Background Jobs</span>
+        <span class="badge bg-secondary" id="totalBadge">{{ total }} job{{ total|pluralize }}</span>
+    </div>
+    <div class="card-body pb-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search type / label..." oninput="loadData()">
+            </div>
+            <div class="col-md-3">
+                <select id="filterStatus" class="form-select form-select-sm" onchange="loadData()">
+                    <option value="">All Statuses</option>
+                    {% for v,l in status_choices %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-auto small text-muted">
+                <i class="bi bi-info-circle"></i> Auto-refreshes every 3s while non-terminal jobs are listed.
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th><th>Type</th><th>Label</th><th>Status</th>
+                        <th class="text-end">Progress</th><th>Submitted</th>
+                        <th>By</th><th class="text-end">Duration</th><th width="80"></th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="9" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm"></div> Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center" id="pagBar" style="display:none !important;">
+        <small class="text-muted">Showing <span id="pagShowing"></span> of <span id="pagTotal"></span></small>
+        <nav><ul class="pagination pagination-sm mb-0" id="pagNums"></ul></nav>
+    </div>
+</div>
+
+<script>
+let currentPage = 1;
+let autoRefreshTimer = null;
+const STATUS_COLORS = {PENDING:'secondary',RUNNING:'primary',SUCCESS:'success',FAILURE:'danger',REVOKED:'dark'};
+
+function fmtDuration(s) {
+    if (s == null) return '-';
+    if (s < 1) return (s*1000).toFixed(0)+'ms';
+    if (s < 60) return s.toFixed(1)+'s';
+    return Math.floor(s/60)+'m ' + (s%60).toFixed(0)+'s';
+}
+function fmtTime(s) { return s ? s.slice(0,19).replace('T',' ') : '-'; }
+
+function loadData() {
+    const q = document.getElementById('searchInput').value;
+    const status = document.getElementById('filterStatus').value;
+    fetch(`{% url 'core:job_api' %}?q=${encodeURIComponent(q)}&status=${status}&page=${currentPage}`)
+        .then(r=>r.json()).then(data=>{
+            document.getElementById('totalBadge').textContent = data.total + ' job' + (data.total === 1 ? '' : 's');
+            const tbody = document.getElementById('tableBody');
+            if (!data.records.length) {
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">No jobs yet. Submit one from any of the business pages.</td></tr>';
+                document.getElementById('pagBar').style.cssText='display:none !important';
+                stopAutoRefresh();
+                return;
+            }
+            tbody.innerHTML = data.records.map(r => {
+                const c = STATUS_COLORS[r.status] || 'secondary';
+                const dur = fmtDuration(r.duration_seconds);
+                const linkBtn = r.result_url ? `<a class="btn btn-xs btn-outline-success py-0 px-1" href="${r.result_url}" title="Open result"><i class="bi bi-box-arrow-up-right"></i></a>` : '';
+                return `<tr>
+                    <td class="text-black"><a href="/jobs/${r.id}/" class="text-decoration-none">#${r.id}</a></td>
+                    <td class="text-black small"><code>${r.job_type}</code></td>
+                    <td class="text-black">${r.label}</td>
+                    <td><span class="badge bg-${c}">${r.status_display}</span></td>
+                    <td class="text-end text-black">${r.progress_pct}%</td>
+                    <td class="text-black small">${fmtTime(r.submitted_at)}</td>
+                    <td class="text-black small">${r.submitted_by||'-'}</td>
+                    <td class="text-end text-black small">${dur}</td>
+                    <td class="text-end text-nowrap">
+                        <a class="btn btn-xs btn-outline-primary py-0 px-1" href="/jobs/${r.id}/" title="View"><i class="bi bi-eye"></i></a>
+                        ${linkBtn}
+                    </td>
+                </tr>`;
+            }).join('');
+            buildPagination(data.page, data.pages, data.total);
+
+            // Auto-refresh while any visible job is still pending/running
+            const hasActive = data.records.some(r => !['SUCCESS','FAILURE','REVOKED'].includes(r.status));
+            if (hasActive) startAutoRefresh(); else stopAutoRefresh();
+        });
+}
+
+function buildPagination(page, pages, total) {
+    const bar = document.getElementById('pagBar');
+    if (pages<=1){bar.style.cssText='display:none !important';return;}
+    bar.style.cssText='display:flex !important';
+    document.getElementById('pagShowing').textContent=`${(page-1)*25+1}–${Math.min(page*25,total)}`;
+    document.getElementById('pagTotal').textContent=total;
+    let html=`<li class="page-item ${page<=1?'disabled':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${page-1})">‹</a></li>`;
+    for(let i=Math.max(1,page-2);i<=Math.min(pages,page+2);i++)
+        html+=`<li class="page-item ${i===page?'active':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${i})">${i}</a></li>`;
+    html+=`<li class="page-item ${page>=pages?'disabled':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${page+1})">›</a></li>`;
+    document.getElementById('pagNums').innerHTML=html;
+}
+function goPage(p){currentPage=p;loadData();}
+
+function startAutoRefresh() {
+    if (autoRefreshTimer) return;
+    autoRefreshTimer = setInterval(loadData, 3000);
+}
+function stopAutoRefresh() {
+    if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+}
+
+document.addEventListener('DOMContentLoaded', loadData);
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopAutoRefresh();
+    else loadData();
+});
+</script>
+{% endblock %}

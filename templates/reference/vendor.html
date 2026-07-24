@@ -1,0 +1,453 @@
+{% extends "base.html" %}
+{% block title %}Vendors — Reference Data{% endblock %}
+{% block page_title %}Vendors{% endblock %}
+
+{% block content %}
+<div id="alertBox" class="alert" style="display:none;"></div>
+
+<!-- Header bar -->
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-building"></i> Vendor Configuration
+            <span class="badge bg-secondary ms-1" id="totalBadge">{{ total }}</span>
+        </span>
+        <button class="btn btn-primary btn-sm" onclick="openVendorModal()">
+            <i class="bi bi-plus-lg"></i> Add Vendor
+        </button>
+    </div>
+    <div class="card-body py-2">
+        <div class="row g-2">
+            <div class="col-md-4">
+                <input type="text" id="searchInput" class="form-control form-control-sm"
+                       placeholder="Search vendor name or code…" oninput="loadVendors()">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vendor table -->
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover table-sm mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th style="width:32px;"></th>
+                    <th>Vendor Name</th>
+                    <th>Code</th>
+                    <th>Description</th>
+                    <th>Portals</th>
+                    <th>Status</th>
+                    <th style="width:90px;"></th>
+                </tr>
+            </thead>
+            <tbody id="vendorTableBody">
+                <tr><td colspan="7" class="text-center py-4 text-muted">
+                    <div class="spinner-border spinner-border-sm"></div> Loading…
+                </td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center" id="pagBar" style="display:none;">
+        <small class="text-muted">Showing <span id="pagShowing"></span> of <span id="pagTotal"></span></small>
+        <nav><ul class="pagination pagination-sm mb-0" id="pagNums"></ul></nav>
+    </div>
+</div>
+
+<!-- ===== Vendor Modal ===== -->
+<div class="modal fade" id="vendorModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="vendorModalTitle">Add Vendor</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="vId">
+                <div class="mb-2">
+                    <label class="form-label form-label-sm fw-bold">Vendor Name <span class="text-danger">*</span></label>
+                    <input type="text" id="vName" class="form-control form-control-sm" placeholder="e.g. SL BIGDATA">
+                    <div class="form-text">Full name shown in the Distribution tree.</div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label form-label-sm fw-bold">Code <span class="text-danger">*</span></label>
+                    <input type="text" id="vCode" class="form-control form-control-sm" placeholder="e.g. SL_BIGDATA">
+                    <div class="form-text">Short uppercase identifier (auto-generated from name if blank).</div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label form-label-sm fw-bold">Description</label>
+                    <textarea id="vDescription" class="form-control form-control-sm" rows="2"
+                              placeholder="e.g. Downstream big-data platform"></textarea>
+                </div>
+                <div class="mb-1">
+                    <label class="form-label form-label-sm fw-bold">Status</label>
+                    <select id="vEnabled" class="form-select form-select-sm">
+                        <option value="true">Enabled</option>
+                        <option value="false">Disabled</option>
+                    </select>
+                </div>
+                <div id="vendorModalError" class="alert alert-danger mt-2" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary btn-sm" onclick="saveVendor()">
+                    <i class="bi bi-save"></i> Save Vendor
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Portal Modal ===== -->
+<div class="modal fade" id="portalModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="portalModalTitle">Add Output Portal</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="pId">
+                <input type="hidden" id="pVendorId">
+                <div class="alert alert-info py-1 mb-2" style="font-size:.82rem;">
+                    <i class="bi bi-info-circle"></i>
+                    This portal will appear automatically in
+                    <strong>File Registry → Distribution</strong> under the selected vendor.
+                </div>
+                <div class="mb-2">
+                    <label class="form-label form-label-sm fw-bold">Vendor</label>
+                    <input type="text" id="pVendorName" class="form-control form-control-sm" readonly>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label form-label-sm fw-bold">Portal Label <span class="text-danger">*</span></label>
+                    <input type="text" id="pLabel" class="form-control form-control-sm" placeholder="e.g. HMSC">
+                    <div class="form-text">Short display label shown in the tree (e.g. HMSC, PGW).</div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label form-label-sm fw-bold">Portal Name / ID</label>
+                    <input type="text" id="pName" class="form-control form-control-sm" placeholder="Auto-generated from vendor code + label">
+                    <div class="form-text">Unique identifier. Leave blank to auto-generate.</div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label form-label-sm fw-bold">CDR Stream <span class="text-danger">*</span></label>
+                    <select id="pDecoderType" class="form-select form-select-sm">
+                        {% for val, label in decoder_choices %}
+                        {% if val != 'AUTO' and val != 'CSV' %}
+                        <option value="{{ val }}">{{ label }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">Which CDR stream this destination receives.</div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label form-label-sm fw-bold">Output Portal (delivery connection)</label>
+                    <select id="pOutputPortal" class="form-select form-select-sm">
+                        <option value="">— None (display only) —</option>
+                    </select>
+                    <div class="form-text">Links this tree leaf to a real delivery connection so File Registry counts and view-file links work.</div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label form-label-sm fw-bold">Status</label>
+                    <select id="pEnabled" class="form-select form-select-sm">
+                        <option value="true">Enabled</option>
+                        <option value="false">Disabled</option>
+                    </select>
+                </div>
+                <div class="mb-1">
+                    <label class="form-label form-label-sm fw-bold">Description</label>
+                    <textarea id="pDescription" class="form-control form-control-sm" rows="1" placeholder="Optional notes"></textarea>
+                </div>
+                <div id="portalModalError" class="alert alert-danger mt-2" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-success btn-sm" onclick="savePortal()">
+                    <i class="bi bi-save"></i> Save Portal
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentPage = 1;
+function getCSRF() { return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''; }
+
+function showAlert(msg, type='success') {
+    const b = document.getElementById('alertBox');
+    b.className = `alert alert-${type}`;
+    b.textContent = msg;
+    b.style.display = 'block';
+    setTimeout(() => b.style.display = 'none', 4000);
+}
+
+// ===== Vendor CRUD =====
+
+function loadVendors() {
+    const q = document.getElementById('searchInput').value;
+    fetch(`{% url 'reference:vendor_api' %}?q=${encodeURIComponent(q)}&page=${currentPage}`)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('totalBadge').textContent = data.total;
+            const tbody = document.getElementById('vendorTableBody');
+            if (!data.records.length) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No vendors configured yet.</td></tr>';
+                document.getElementById('pagBar').style.display = 'none';
+                return;
+            }
+            tbody.innerHTML = data.records.map(v => `
+                <tr>
+                    <td class="text-center">
+                        <button class="btn btn-link btn-sm p-0 text-muted expand-btn"
+                                onclick="togglePortals(${v.id}, this)" title="Show portals">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </td>
+                    <td><strong>${v.name}</strong></td>
+                    <td><code class="text-primary">${v.code}</code></td>
+                    <td><small class="text-muted">${v.description || '—'}</small></td>
+                    <td>
+                        <span class="badge bg-${v.portal_count > 0 ? 'info text-dark' : 'light text-muted'}">${v.portal_count} portal${v.portal_count !== 1 ? 's' : ''}</span>
+                        <button class="btn btn-link btn-sm p-0 ms-1 text-success" onclick="openPortalModal(${v.id}, '${v.name.replace(/'/g,'\\\'')}')" title="Add portal">
+                            <i class="bi bi-plus-circle"></i>
+                        </button>
+                    </td>
+                    <td>${v.enabled
+                        ? '<span class="badge bg-success">Enabled</span>'
+                        : '<span class="badge bg-secondary">Disabled</span>'}</td>
+                    <td class="text-end">
+                        <button class="btn btn-outline-primary btn-sm py-0 px-1 me-1"
+                                onclick='editVendor(${JSON.stringify(v).replace(/'/g, "\\'")})'
+                                title="Edit"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-outline-danger btn-sm py-0 px-1"
+                                onclick="deleteVendor(${v.id})"
+                                title="Delete"><i class="bi bi-trash"></i></button>
+                    </td>
+                </tr>
+                <tr id="portals_row_${v.id}" style="display:none;">
+                    <td></td>
+                    <td colspan="6" class="p-0">
+                        <div id="portals_panel_${v.id}" class="px-3 py-2 bg-light border-bottom"></div>
+                    </td>
+                </tr>
+            `).join('');
+            buildPagination(data.page, data.pages, data.total);
+        });
+}
+
+function openVendorModal(v=null) {
+    document.getElementById('vId').value = v?.id || '';
+    document.getElementById('vName').value = v?.name || '';
+    document.getElementById('vCode').value = v?.code || '';
+    document.getElementById('vDescription').value = v?.description || '';
+    document.getElementById('vEnabled').value = v?.enabled === false ? 'false' : 'true';
+    document.getElementById('vendorModalTitle').textContent = v ? 'Edit Vendor' : 'Add Vendor';
+    document.getElementById('vendorModalError').style.display = 'none';
+    // Auto-generate code from name
+    document.getElementById('vName').oninput = function() {
+        if (!document.getElementById('vId').value) {
+            document.getElementById('vCode').value =
+                this.value.trim().toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+        }
+    };
+    new bootstrap.Modal(document.getElementById('vendorModal')).show();
+}
+function editVendor(v) { openVendorModal(v); }
+
+function saveVendor() {
+    const params = new URLSearchParams({
+        csrfmiddlewaretoken: getCSRF(),
+        id: document.getElementById('vId').value,
+        name: document.getElementById('vName').value.trim(),
+        code: document.getElementById('vCode').value.trim(),
+        description: document.getElementById('vDescription').value.trim(),
+        enabled: document.getElementById('vEnabled').value,
+    });
+    fetch("{% url 'reference:vendor_save' %}", { method: 'POST', body: params, headers: { 'X-CSRFToken': getCSRF() } })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                bootstrap.Modal.getInstance(document.getElementById('vendorModal')).hide();
+                showAlert('Vendor saved.');
+                loadVendors();
+            } else {
+                document.getElementById('vendorModalError').textContent = data.error;
+                document.getElementById('vendorModalError').style.display = 'block';
+            }
+        });
+}
+
+function deleteVendor(id) {
+    if (!confirm('Delete this vendor? All portals must be removed first.')) return;
+    fetch(`{% url 'reference:vendor_delete' 0 %}`.replace('/0/', `/${id}/`),
+          { method: 'POST', headers: { 'X-CSRFToken': getCSRF() } })
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) { showAlert('Vendor deleted.'); loadVendors(); }
+            else showAlert(d.error, 'danger');
+        });
+}
+
+// ===== Inline portal panel =====
+
+function togglePortals(vendorId, btn) {
+    const row = document.getElementById(`portals_row_${vendorId}`);
+    const icon = btn.querySelector('i');
+    if (row.style.display === 'none') {
+        row.style.display = '';
+        icon.className = 'bi bi-chevron-down';
+        loadPortalPanel(vendorId);
+    } else {
+        row.style.display = 'none';
+        icon.className = 'bi bi-chevron-right';
+    }
+}
+
+window._outputPortalCache = [];
+
+function loadPortalPanel(vendorId) {
+    const panel = document.getElementById(`portals_panel_${vendorId}`);
+    panel.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Loading portals…';
+    fetch(`{% url 'reference:vendor_portals_api' 0 %}`.replace('/0/', `/${vendorId}/`))
+        .then(r => r.json())
+        .then(data => {
+            window._outputPortalCache = data.output_portals || [];
+            const vName = data.vendor_name;
+            const escapedVName = vName.replace(/'/g, "\\'");
+            let tableHtml = '';
+            if (!data.portals.length) {
+                tableHtml = `<p class="text-muted mb-1" style="font-size:.82rem;">No portals yet.</p>`;
+            } else {
+                const rows = data.portals.map(p => `
+                    <tr>
+                        <td><span class="badge bg-info text-dark">${p.decoder_type}</span></td>
+                        <td><strong>${p.label}</strong></td>
+                        <td><code style="font-size:.78rem;">${p.name}</code></td>
+                        <td>${p.output_portal_name
+                            ? `<span class="badge bg-primary" title="Linked delivery connection">${p.output_portal_name}</span>`
+                            : '<span class="text-muted small">— unlinked —</span>'}</td>
+                        <td>${p.enabled
+                            ? '<span class="badge bg-success">Active</span>'
+                            : '<span class="badge bg-secondary">Disabled</span>'}</td>
+                        <td><small class="text-muted">${p.description || ''}</small></td>
+                        <td class="text-end">
+                            <button class="btn btn-outline-primary btn-sm py-0 px-1 me-1"
+                                    onclick='editPortal(${JSON.stringify(p).replace(/'/g,"\\'")}, "${vName.replace(/"/g,'\\"')}")'>
+                                <i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-outline-danger btn-sm py-0 px-1"
+                                    onclick="deletePortal(${p.id},${vendorId})">
+                                <i class="bi bi-trash"></i></button>
+                        </td>
+                    </tr>`).join('');
+                tableHtml = `
+                    <table class="table table-sm table-bordered mb-1" style="font-size:.8rem;">
+                        <thead class="table-secondary">
+                            <tr><th>Stream</th><th>Label</th><th>Name/ID</th><th>Output Portal</th><th>Status</th><th>Notes</th><th></th></tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>`;
+            }
+            panel.innerHTML = `
+                ${tableHtml}
+                <button class="btn btn-success btn-sm mt-1" onclick="openPortalModal(${vendorId},'${escapedVName}')">
+                    <i class="bi bi-plus-lg"></i> Add Portal
+                </button>`;
+        });
+}
+
+// ===== Portal CRUD =====
+
+function openPortalModal(vendorId, vendorName, p=null) {
+    document.getElementById('pId').value = p?.id || '';
+    document.getElementById('pVendorId').value = vendorId;
+    document.getElementById('pVendorName').value = vendorName;
+    document.getElementById('pLabel').value = p?.label || '';
+    document.getElementById('pName').value = p?.name || '';
+    document.getElementById('pDecoderType').value = p?.decoder_type || 'MSC';
+    // Populate Output Portal dropdown from cached list
+    const opSel = document.getElementById('pOutputPortal');
+    opSel.innerHTML = '<option value="">— None (display only) —</option>';
+    (window._outputPortalCache || []).forEach(op => {
+        const opt = document.createElement('option');
+        opt.value = op.id;
+        opt.textContent = `${op.name} (${op.portal_type} / ${op.stream_type})`;
+        opSel.appendChild(opt);
+    });
+    opSel.value = p?.output_portal_id || '';
+    document.getElementById('pEnabled').value = p?.enabled === false ? 'false' : 'true';
+    document.getElementById('pDescription').value = p?.description || '';
+    document.getElementById('portalModalTitle').textContent = p ? 'Edit Output Portal' : 'Add Output Portal';
+    document.getElementById('portalModalError').style.display = 'none';
+    // Auto-generate name from vendor code + label
+    document.getElementById('pLabel').oninput = function() {
+        if (!document.getElementById('pId').value) {
+            const vendorCode = document.getElementById('vCode').value ||
+                               vendorName.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+            document.getElementById('pName').value =
+                (vendorCode + '_' + this.value.trim().toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, ''));
+        }
+    };
+    new bootstrap.Modal(document.getElementById('portalModal')).show();
+}
+
+function editPortal(p, vendorName) {
+    openPortalModal(p.vendor_id, vendorName, p);
+}
+
+function savePortal() {
+    const params = new URLSearchParams({
+        csrfmiddlewaretoken: getCSRF(),
+        id: document.getElementById('pId').value,
+        vendor_id: document.getElementById('pVendorId').value,
+        label: document.getElementById('pLabel').value.trim(),
+        name: document.getElementById('pName').value.trim(),
+        decoder_type: document.getElementById('pDecoderType').value,
+        enabled: document.getElementById('pEnabled').value,
+        description: document.getElementById('pDescription').value.trim(),
+        output_portal_id: document.getElementById('pOutputPortal').value,
+    });
+    fetch("{% url 'reference:portal_save' %}", { method: 'POST', body: params, headers: { 'X-CSRFToken': getCSRF() } })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                bootstrap.Modal.getInstance(document.getElementById('portalModal')).hide();
+                showAlert('Portal saved. It will appear in File Registry → Distribution automatically.');
+                loadVendors();
+                const vendorId = document.getElementById('pVendorId').value;
+                setTimeout(() => loadPortalPanel(vendorId), 200);
+            } else {
+                document.getElementById('portalModalError').textContent = data.error;
+                document.getElementById('portalModalError').style.display = 'block';
+            }
+        });
+}
+
+function deletePortal(id, vendorId) {
+    if (!confirm('Delete this portal?')) return;
+    fetch(`{% url 'reference:portal_delete' 0 %}`.replace('/0/', `/${id}/`),
+          { method: 'POST', headers: { 'X-CSRFToken': getCSRF() } })
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) { showAlert('Portal deleted.'); loadVendors(); loadPortalPanel(vendorId); }
+            else showAlert(d.error, 'danger');
+        });
+}
+
+// ===== Pagination =====
+
+function buildPagination(page, pages, total) {
+    const bar = document.getElementById('pagBar');
+    if (pages <= 1) { bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    document.getElementById('pagShowing').textContent = `${(page-1)*25+1}–${Math.min(page*25, total)}`;
+    document.getElementById('pagTotal').textContent = total;
+    let html = `<li class="page-item ${page<=1?'disabled':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${page-1})">‹</a></li>`;
+    for (let i = Math.max(1, page-2); i <= Math.min(pages, page+2); i++)
+        html += `<li class="page-item ${i===page?'active':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${i})">${i}</a></li>`;
+    html += `<li class="page-item ${page>=pages?'disabled':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${page+1})">›</a></li>`;
+    document.getElementById('pagNums').innerHTML = html;
+}
+function goPage(p) { currentPage = p; loadVendors(); }
+
+document.addEventListener('DOMContentLoaded', loadVendors);
+</script>
+{% endblock %}

@@ -1,75 +1,156 @@
 # UMP Mediation System
 
-A Django-based Usage and Mediation Platform (UMP) for telecommunications CDR (Call Detail Records) processing.
+A Django-based **Usage & Mediation Platform (UMP)** for telecom CDR (Call Detail
+Record) processing. It collects binary/text CDRs from network elements, decodes
+them, classifies/enriches records, and distributes formatted output to downstream
+systems — with **multi-operator** and **multi-vendor** support.
 
-## Summary
+> Full feature list: see **[FEATURES.md](FEATURES.md)**.
 
-This system mediates and processes Call Detail Records from multiple network elements in a telecom environment. It collects, decodes, validates, enriches, and processes CDRs from various network streams including:
+---
 
-- **MSC** (Mobile Switching Center) - Voice and SMS records
-- **PGW** (Packet Gateway) - 4G data usage records
-- **SGSN** (Serving GPRS Support Node) - 2G/3G data records
-- **SGW** (Serving Gateway) - 4G S-GW data records
+## What it does
 
-## Key Features
+```
+collect → classify → decode → (validate/enrich) → render → distribute
+```
 
-- **Multi-stream CDR processing** with dedicated handlers for each network element
-- **SFTP-based file collection** with automated polling
-- **Decoding and validation** of binary CDR formats
-- **Data enrichment** through reference data lookups
-- **Business rule engine** for custom validation and transformation logic
-- **Web dashboard** for monitoring and management
-- **REST API** for external integrations
-- **Audit logging** and alerting system
-- **Asynchronous task processing** via Celery
+Supported network elements / decoders:
 
-## Technology Stack
+| Stream | Source | Notes |
+|--------|--------|-------|
+| **MSC**  | Huawei MSOFTX3000 (ASN.1/BER) | Voice + SMS |
+| **IMS**  | Huawei ATS9900 | VoLTE / VoBB |
+| **PGW**  | 3GPP PS-domain | 4G data |
+| **SGSN** | 3GPP PS-domain | 2G/3G data |
+| **SGW**  | 3GPP PS-domain | 4G S-GW |
+| **CBS / OCS** | Huawei charging | Pipe-delimited |
 
-- **Backend**: Django + Django REST Framework
-- **Database**: SQLite (configurable for PostgreSQL/MySQL)
-- **Task Queue**: Celery with Redis
-- **Frontend**: Django Templates + Bootstrap
+## Key features
 
-## Architecture
+- **Multi-stream decoding** with a dedicated handler per network element.
+- **Multi-operator / multi-vendor** — per-operator databases, directory layout, home identity, and filename-driven classification.
+- **Decode-only mode (default)** — render output files with no DB writes (~10× faster); flip on persistence for dashboards/search.
+- **Parallel batch processing** across CPU cores, with hash-based duplicate detection and archive-on-success.
+- **Configurable output** — portals, field-mapping schemas, and distribution rules with per-downstream filters.
+- **Prepaid/postpaid classification** from CAMEL (MSC) and chargingCharacteristics (PGW/SGSN/SGW), gated to home subscribers.
+- **Collection** via manual upload, SFTP polling, local folder scan; scheduled or one-click UI trigger.
+- **Dashboards** (processing volume + 7 KPI charts), background jobs, audit logging, REST API.
 
-The system is organized into modular Django apps:
+## Technology stack
+
+- **Backend:** Django + Django REST Framework
+- **Database:** PostgreSQL (per-service + per-operator); SQLite in-memory for tests
+- **Task queue:** Celery + Redis (optional — sync/subprocess fallback when absent)
+- **Frontend:** Django templates + Bootstrap 5 + Chart.js
+
+## Apps
 
 | App | Purpose |
 |-----|---------|
-| `core` | Base models, user management, audit logs, alerts |
-| `collection` | SFTP file collection and ingestion |
-| `streams/` | MSC, PGW, SGSN, SGW CDR processing |
-| `processing` | Validation and enrichment rules |
-| `businesslogic` | Business rule engine |
-| `reference` | Reference data management (MCC, MNC, SMSC) |
-| `dashboard` | Web UI and monitoring |
+| `core` | Base models, users, audit, JobRecord, operator context, DB router |
+| `collection` | File ingestion (upload/SFTP/local), CDRFile tracking, dispatch, duplicates |
+| `streams/{msc,ims,pgw,sgsn,sgw,cbs}` | Per-element decoders + processors |
+| `processing` | Validation / enrichment rules |
+| `businesslogic` | Business rule engine + scripts |
+| `reference` | Operators, Source Patterns, MCC/MNC, IMSI, numbering, trunks, vendors |
+| `portals` | Input/Output portals, output schemas, distribution rules |
+| `interconnect` | Interconnect partners, rates, billing cycles, invoices |
+| `regulatory` | NATCOM reports + LEA extraction |
+| `roaming` | Inbound-roamer detection, roaming settlement files |
+| `dashboard` | Web UI, KPIs, search, processing queue |
 | `api` | REST API endpoints |
-| `portals` | User portal interfaces |
 
-## Development
+## Quick start
 
 ```bash
-# Install dependencies
-pip install django djangorestframework django-celery-beat redis
+# 1. Install dependencies
+pip install django djangorestframework django-celery-beat redis psycopg2-binary
 
-# Run migrations
+# 2. Configure the database via env vars (see below), then migrate
 python manage.py migrate
 
-# Start development server
-python manage.py runserver
+# 3. Seed operators + classification patterns
+python manage.py seed_operators
 
-# Start Celery worker (optional)
+# 4. (per additional operator) create + migrate its database
+python manage.py provision_operator africell
+
+# 5. Run the dev server
+python manage.py runserver 0.0.0.0:8000
+
+# 6. (optional) Celery worker + beat for async + scheduled collection
 celery -A config worker -l info
+celery -A config beat   -l info
 ```
 
-## Environment Variables
+Default admin: create one with `python manage.py createsuperuser`.
 
-- `DJANGO_SECRET_KEY` - Django secret key
-- `DJANGO_DEBUG` - Enable debug mode (True/False)
-- `DB_ENGINE` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` / `DB_HOST` / `DB_PORT` - Database config
-- `CELERY_BROKER_URL` - Redis broker URL
-- `USE_CELERY` - Enable async processing
+## Processing CDRs
+
+```bash
+# Drop files into the per-operator input tree:
+#   data/<operator>/input/<vendor>/<network_element>/<file>.dat
+
+# Decode everything in parallel (decode-only, skip-done, archive-on-success):
+python manage.py process_batch --workers 8
+
+# Or from the UI: dashboard → "Run collection now"
+# Or scheduled: Celery beat task `scheduled_collection`
+```
+
+Output lands in `data/<operator>/output/<vendor>/<network_element>/<downstream>/`.
+
+## Directory layout
+
+```
+data/{operator}/input/{vendor}/{ne}/        # incoming CDR files (original names)
+data/{operator}/output/{vendor}/{ne}/...    # decoded output, per downstream
+data/{operator}/archive/{vendor}/{ne}/      # processed inputs
+data/{operator}/duplicates/{vendor}/{ne}/   # duplicate inputs
+```
+
+## Configuration (UI)
+
+- **Operators** — `/reference/operators/` (or `seed_operators`)
+- **Source Patterns** (filename → operator/vendor/NE/decoder) — `/reference/source-patterns/`
+- **Input / Output Portals**, schemas, rules — `/portals/`
+- Django admin — `/admin/`
+
+## Environment variables
+
+| Variable | Purpose |
+|----------|---------|
+| `DJANGO_SECRET_KEY` | Django secret key |
+| `DJANGO_DEBUG` | Debug mode (`True`/`False`) |
+| `DB_ENGINE` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` / `DB_HOST` / `DB_PORT` | Database config |
+| `DB_NAME_INTERCONNECT` / `DB_NAME_REGULATORY` / `DB_NAME_ROAMING` | Per-service DB names |
+| `OPERATORS` | Comma-separated operator codes (default `orange,africell,qcell`) |
+| `DEFAULT_OPERATOR` | Home operator that uses the `default` DB (default `orange`) |
+| `DB_NAME_MEDIATION_{CODE}` | Override a per-operator DB name (default `ump_mediation_{code}`) |
+| `CDR_PERSIST_RECORDS` | Store decoded records in the DB (default `False` = decode-only) |
+| `MSC_OUTPUT_RECORD_TYPES` | Comma-separated MSC types to keep in output |
+| `COLLECTION_INTERVAL_SECONDS` | Scheduled-collection interval (default `600`) |
+| `CELERY_BROKER_URL` / `USE_CELERY` | Celery broker + enable async |
+
+## Management commands
+
+| Command | Purpose |
+|---------|---------|
+| `process_batch` | Parallel decode of input trees (dedup + archive) |
+| `collect_local` | Register files found in the input tree |
+| `clear_cdr [--files]` | Wipe records (and optionally data dirs) for testing |
+| `provision_operator <code> [--all]` | Create + migrate an operator's database |
+| `seed_operators` | Seed operators + classification patterns |
+| `backfill_prepaid_flag` | Recompute prepaid flag from CAMEL on stored records |
+
+## Testing
+
+```bash
+python manage.py test --settings=config.test_settings
+```
+Uses in-memory SQLite + eager Celery, so no Postgres/Redis is required.
 
 ## License
 
-Private project - All rights reserved.
+Private project — All rights reserved.

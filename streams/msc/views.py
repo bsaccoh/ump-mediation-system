@@ -28,6 +28,7 @@ def _build_cdr_queryset(params):
     imei = params.get('imei', '').strip()
     service_type = params.get('service_type', '').strip()
     record_type = params.get('record_type', '').strip()
+    prepaid_flag = params.get('prepaid_flag', '').strip().upper()
     source_id = params.get('source_id', '').strip()
     start_date = params.get('start_date', '').strip()
     end_date = params.get('end_date', '').strip()
@@ -52,8 +53,12 @@ def _build_cdr_queryset(params):
         filters.append(f'service={service_type}')
     if record_type:
         variant_groups = {
-            'SMSMT': ['SMSMT', 'SIP_SMSMT', 'SMSMT_GW'],
-            'SMSMO': ['SMSMO', 'SIP_SMSMO', 'SMSMO_IW'],
+            'SMS-MT': ['SMS-MT', 'SMSMT', 'SIP_SMSMT', 'SMSMT_GW'],
+            'SMSMT': ['SMS-MT', 'SMSMT', 'SIP_SMSMT', 'SMSMT_GW'],
+            'SMS-MO': ['SMS-MO', 'SMSMO', 'SIP_SMSMO', 'SMSMO_IW'],
+            'SMSMO': ['SMS-MO', 'SMSMO', 'SIP_SMSMO', 'SMSMO_IW'],
+            'CallForwarding': ['CallForwarding', 'CALL_FORWARDING', 'ROAMING_FORWARDING', 'CFW', 'MTRF'],
+            'CF': ['CallForwarding', 'CALL_FORWARDING', 'ROAMING_FORWARDING', 'CFW', 'MTRF'],
         }
         types = [t.strip() for t in record_type.split(',') if t.strip()]
         all_types = []
@@ -65,6 +70,9 @@ def _build_cdr_queryset(params):
                 all_types.append(t)
         query = query.filter(record_type__in=all_types)
         filters.append(f'type={",".join(types)}')
+    if prepaid_flag in ('PREPAID', 'POSTPAID'):
+        query = query.filter(prepaid_flag=prepaid_flag)
+        filters.append(f'prepaid_flag={prepaid_flag}')
     if source_id:
         query = query.filter(source_id=source_id)
         filters.append(f'source={source_id}')
@@ -102,7 +110,7 @@ def cdr_search(request):
     total_records = MSCRecord.objects.count()
     sources = DataSource.objects.filter(enabled=True).order_by('name')
 
-    return render(request, 'dashboard/cdr_search.html', {
+    return render(request, 'dashboard/msc_search.html', {
         'total_records': total_records,
         'sources': sources,
     })
@@ -154,8 +162,10 @@ def cdr_search_api(request):
             'imsi': rec.imsi,
             'imei': rec.imei,
             'msc_id': rec.msc_id,
+            'smsc_address': rec.smsc_address,
             'cell_id': rec.cell_id,
             'lac': rec.lac,
+            'tac': rec.tac,
             'start_time': rec.start_time.strftime('%Y-%m-%d %H:%M:%S') if rec.start_time else '',
             'end_time': rec.end_time.strftime('%Y-%m-%d %H:%M:%S') if rec.end_time else '',
             'duration': rec.duration,
@@ -163,12 +173,18 @@ def cdr_search_api(request):
             'terminating_trunk': rec.terminating_trunk,
             'result_code': rec.result_code,
             'rat_type': rec.rat_type,
+            'forwarded_number': rec.forwarded_number,
+            'redirecting_number': rec.redirecting_number,
+            'call_category': rec.call_category,
+            'prepaid_flag': rec.prepaid_flag,
             'status': rec.status,
         })
 
     stats = query.aggregate(
         total_duration=Sum('duration'),
         avg_duration=Avg('duration'),
+        voice_count=Count('id', filter=Q(service_type='VOICE')),
+        sms_count=Count('id', filter=Q(service_type='SMS')),
     )
     pages = (total + per_page - 1) // per_page
 
@@ -180,6 +196,8 @@ def cdr_search_api(request):
             'total_records': total,
             'total_duration': stats['total_duration'] or 0,
             'avg_duration': round(stats['avg_duration'] or 0, 2),
+            'voice_count': stats['voice_count'] or 0,
+            'sms_count': stats['sms_count'] or 0,
         },
     })
 
@@ -191,10 +209,13 @@ def cdr_search_api(request):
 EXPORT_COLUMNS = [
     ('record_type', 'Record Type'),
     ('service_type', 'Service Type'),
+    ('call_category', 'Category'),
     ('call_direction', 'Direction'),
     ('calling_number', 'Calling Number'),
     ('called_number', 'Called Number'),
     ('dialed_number', 'Dialed Number'),
+    ('forwarded_number', 'Forwarded To'),
+    ('redirecting_number', 'Redirecting No'),
     ('charged_msisdn', 'Charged MSISDN'),
     ('imsi', 'IMSI'),
     ('imei', 'IMEI'),
@@ -204,6 +225,7 @@ EXPORT_COLUMNS = [
     ('msc_id', 'MSC ID'),
     ('cell_id', 'Cell ID'),
     ('lac', 'LAC'),
+    ('tac', 'TAC'),
     ('rat_type', 'RAT Type'),
     ('originating_trunk', 'Originating Trunk'),
     ('terminating_trunk', 'Terminating Trunk'),
@@ -284,7 +306,7 @@ def cdr_export(request):
 def cdr_detail(request, pk):
     """CDR record detail view."""
     record = get_object_or_404(MSCRecord, pk=pk)
-    return render(request, 'dashboard/cdr_detail.html', {'record': record})
+    return render(request, 'dashboard/msc_detail.html', {'record': record})
 
 
 # =============================================================================

@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}{% if schema %}Edit{% else %}New{% endif %} Schema{% endblock %}
+{% block page_title %}{% if schema %}Edit{% else %}New{% endif %} Output Schema{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header"><i class="bi bi-pencil"></i> {% if schema %}{{ schema.name }}{% else %}New Schema{% endif %}</div>
+    <div class="card-body">
+        {% if form.errors %}
+        <div class="alert alert-danger">
+            <strong>Please correct:</strong>
+            <ul class="mb-0">{% for field in form %}{% for e in field.errors %}<li>{{ field.label }}: {{ e }}</li>{% endfor %}{% endfor %}</ul>
+        </div>
+        {% endif %}
+        <form method="post" id="schemaForm" onsubmit="return syncMappingToJSON();">
+            {% csrf_token %}
+            <div class="row mb-3">
+                <div class="col-md-6 form-group">
+                    <label for="{{ form.name.id_for_label }}">Schema Name</label>
+                    {{ form.name }}
+                </div>
+                <div class="col-md-6 form-group">
+                    <label for="{{ form.stream_type.id_for_label }}">Stream Type</label>
+                    {{ form.stream_type }}
+                </div>
+            </div>
+
+            <ul class="nav nav-tabs mb-2" role="tablist">
+                <li class="nav-item"><button type="button" class="nav-link active" data-bs-toggle="tab" data-bs-target="#visualTab"><i class="bi bi-table"></i> Visual Editor</button></li>
+                <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#jsonTab" onclick="syncMappingToJSON()"><i class="bi bi-braces"></i> Raw JSON</button></li>
+            </ul>
+            <div class="tab-content border border-top-0 rounded-bottom p-3 mb-3">
+                <div class="tab-pane fade show active" id="visualTab">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="text-muted">Each row is one output column. Empty list = dump all model fields with default headers.</small>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="autofillAllFields()"><i class="bi bi-magic"></i> Auto-fill all fields</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addRow()"><i class="bi bi-plus"></i> Add Row</button>
+                        </div>
+                    </div>
+                    <table class="table table-sm table-bordered align-middle mb-0" id="mappingTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:10%">Pos</th>
+                                <th style="width:35%">Output Column (header in CSV)</th>
+                                <th style="width:45%">Source Field (from record)</th>
+                                <th style="width:10%"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="mappingRows"></tbody>
+                    </table>
+                </div>
+                <div class="tab-pane fade" id="jsonTab">
+                    <label for="{{ form.mapping_json.id_for_label }}" class="form-label">Mapping JSON</label>
+                    {{ form.mapping_json }}
+                    <small class="form-text text-muted">Edit JSON directly. Switching back to Visual rebuilds rows from this JSON.</small>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-2 form-group">
+                    <label for="{{ form.delimiter.id_for_label }}">Delimiter</label>
+                    {{ form.delimiter }}
+                </div>
+                <div class="col-md-3 form-group">
+                    <label for="{{ form.line_terminator.id_for_label }}">Line Ending</label>
+                    {{ form.line_terminator }}
+                    <small class="text-muted">\n or \r\n</small>
+                </div>
+                <div class="col-md-3 form-group d-flex align-items-end">
+                    <div class="form-check">{{ form.include_header }} <label class="form-check-label" for="{{ form.include_header.id_for_label }}">Include header</label></div>
+                </div>
+                <div class="col-md-3 form-group d-flex align-items-end">
+                    <div class="form-check">{{ form.quote_all }} <label class="form-check-label" for="{{ form.quote_all.id_for_label }}">Quote all fields</label></div>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success"><i class="bi bi-save"></i> Save Changes</button>
+                <a href="{% url 'portals:output_portal_ide' %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+const STREAM_FIELDS_URL = "{% url 'portals:stream_fields_api' %}";
+let availableFields = [];
+const streamSelect = document.getElementById('{{ form.stream_type.id_for_label }}');
+const jsonTextarea = document.getElementById('{{ form.mapping_json.id_for_label }}');
+const tbody = document.getElementById('mappingRows');
+
+function buildSourceSelect(selected) {
+    const sel = document.createElement('select');
+    sel.className = 'form-select form-select-sm bg-light source-field';
+    const blank = document.createElement('option');
+    blank.value = ''; blank.textContent = '— select field —';
+    sel.appendChild(blank);
+    availableFields.forEach(f => {
+        const o = document.createElement('option');
+        o.value = f; o.textContent = f;
+        if (f === selected) o.selected = true;
+        sel.appendChild(o);
+    });
+    if (selected && !availableFields.includes(selected)) {
+        const o = document.createElement('option');
+        o.value = selected; o.textContent = selected + ' (custom / raw_data)';
+        o.selected = true;
+        sel.appendChild(o);
+    }
+    return sel;
+}
+
+function makeRow(header = '', source = '') {
+    const tr = document.createElement('tr');
+    
+    // Position / Move Buttons
+    const tdPos = document.createElement('td');
+    tdPos.className = 'text-center';
+    const btnUp = document.createElement('button');
+    btnUp.type = 'button'; btnUp.className = 'btn btn-sm btn-light py-0 px-1 me-1';
+    btnUp.innerHTML = '<i class="bi bi-chevron-up"></i>';
+    btnUp.onclick = () => moveRowUp(tr);
+    const btnDown = document.createElement('button');
+    btnDown.type = 'button'; btnDown.className = 'btn btn-sm btn-light py-0 px-1';
+    btnDown.innerHTML = '<i class="bi bi-chevron-down"></i>';
+    btnDown.onclick = () => moveRowDown(tr);
+    tdPos.appendChild(btnUp); tdPos.appendChild(btnDown);
+    
+    const tdHeader = document.createElement('td');
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.value = header;
+    inp.className = 'form-control form-control-sm bg-light output-header';
+    inp.placeholder = 'e.g. SUBSCRIBER_ID';
+    tdHeader.appendChild(inp);
+    
+    const tdSource = document.createElement('td');
+    tdSource.appendChild(buildSourceSelect(source));
+    
+    const tdAct = document.createElement('td');
+    tdAct.className = 'text-end';
+    const btnDel = document.createElement('button');
+    btnDel.type = 'button'; btnDel.className = 'btn btn-sm btn-outline-danger py-0 px-2';
+    btnDel.innerHTML = '<i class="bi bi-trash"></i>';
+    btnDel.onclick = () => tr.remove();
+    tdAct.appendChild(btnDel);
+    
+    tr.appendChild(tdPos);
+    tr.appendChild(tdHeader); 
+    tr.appendChild(tdSource); 
+    tr.appendChild(tdAct);
+    return tr;
+}
+
+function moveRowUp(tr) {
+    if (tr.previousElementSibling) {
+        tr.parentNode.insertBefore(tr, tr.previousElementSibling);
+    }
+}
+
+function moveRowDown(tr) {
+    if (tr.nextElementSibling) {
+        tr.parentNode.insertBefore(tr.nextElementSibling, tr);
+    }
+}
+
+function addRow(header='', source='') { tbody.appendChild(makeRow(header, source)); }
+
+function rebuildRowsFromJSON() {
+    tbody.innerHTML = '';
+    let mapping = {};
+    try {
+        const txt = jsonTextarea.value.trim();
+        if (txt) mapping = JSON.parse(txt);
+    } catch (e) { mapping = {}; }
+    const entries = Object.entries(mapping);
+    if (!entries.length) {
+        return; // empty list - dispatcher will dump all fields
+    }
+    entries.forEach(([h, s]) => addRow(h, s));
+}
+
+function rebuildSelectsKeepingValues() {
+    Array.from(tbody.querySelectorAll('tr')).forEach(tr => {
+        const header = tr.querySelector('.output-header').value;
+        const oldSel = tr.querySelector('.source-field');
+        const oldVal = oldSel.value;
+        const newSel = buildSourceSelect(oldVal);
+        oldSel.replaceWith(newSel);
+    });
+}
+
+function syncMappingToJSON() {
+    const out = {};
+    Array.from(tbody.querySelectorAll('tr')).forEach(tr => {
+        const h = tr.querySelector('.output-header').value.trim();
+        const s = tr.querySelector('.source-field').value.trim();
+        if (h && s) out[h] = s;
+    });
+    jsonTextarea.value = JSON.stringify(out, Object.keys(out).length ? null : null, 2);
+    return true;
+}
+
+function autofillAllFields() {
+    if (!availableFields.length) { alert('Pick a stream type first.'); return; }
+    tbody.innerHTML = '';
+    availableFields.forEach(f => addRow(f, f));
+}
+
+function loadFieldsForStream(stream) {
+    if (!stream) { availableFields = []; rebuildSelectsKeepingValues(); return; }
+    fetch(STREAM_FIELDS_URL + '?stream=' + encodeURIComponent(stream))
+        .then(r => r.json())
+        .then(d => {
+            availableFields = d.fields || [];
+            rebuildSelectsKeepingValues();
+        });
+}
+
+streamSelect.addEventListener('change', () => loadFieldsForStream(streamSelect.value));
+
+// Init
+loadFieldsForStream(streamSelect.value);
+// Wait briefly for fetch to populate then build rows from existing JSON
+setTimeout(rebuildRowsFromJSON, 250);
+
+// When user switches back to Visual tab from JSON, refresh rows
+document.querySelector('[data-bs-target="#visualTab"]').addEventListener('shown.bs.tab', rebuildRowsFromJSON);
+</script>
+{% endblock %}

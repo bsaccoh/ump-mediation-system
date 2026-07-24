@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — Interconnect{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-{{ icon|default:'diagram-2' }}"></i> {{ title }}</span>
+        {% if total is not None %}<span class="badge bg-secondary">{{ total }} record{{ total|pluralize }}</span>{% endif %}
+    </div>
+    <div class="card-body">
+        <p class="text-muted mb-2">{{ description|default:"This page is being built." }}</p>
+        <p class="small text-muted mb-0">
+            <i class="bi bi-info-circle"></i>
+            Full UI lands on <strong>{{ day|default:"Day 2" }}</strong> of the Interconnect rollout.
+            The underlying model + API endpoints are already wired —
+            you can drive this resource via <code>/admin/</code> in the meantime.
+        </p>
+    </div>
+</div>
+{% endblock %}

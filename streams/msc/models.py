@@ -18,12 +18,19 @@ class MSCRecord(models.Model):
 
     # Foreign keys
     file = models.ForeignKey(
-        'collection.CDRFile', on_delete=models.CASCADE,
+        'collection.CDRFile', on_delete=models.CASCADE, db_constraint=False,
         related_name='msc_records', db_index=True
     )
     source = models.ForeignKey(
-        'collection.DataSource', on_delete=models.SET_NULL,
+        'collection.DataSource', on_delete=models.SET_NULL, db_constraint=False,
         null=True, blank=True, db_index=True
+    )
+    # CDR-pair correlation — the matching MOC ↔ MTC record (shared call_reference)
+    paired_record = models.ForeignKey(
+        'self', on_delete=models.SET_NULL,
+        null=True, blank=True, db_index=True,
+        related_name='paired_records_reverse',
+        help_text='Linked CDR pair (MOC ↔ MTC record with the same call_reference).',
     )
 
     # Record identity
@@ -39,6 +46,7 @@ class MSCRecord(models.Model):
     dialed_number = models.CharField(max_length=50, blank=True)
     charged_msisdn = models.CharField(max_length=50, blank=True)
     imsi = models.CharField(max_length=20, blank=True, db_index=True)
+    prepaid_flag = models.CharField(max_length=10, blank=True, db_index=True)
     imei = models.CharField(max_length=20, blank=True)
     imsi_b = models.CharField(max_length=20, blank=True)
     imei_b = models.CharField(max_length=20, blank=True)
@@ -51,7 +59,13 @@ class MSCRecord(models.Model):
     # Location
     cell_id = models.CharField(max_length=50, blank=True)
     lac = models.CharField(max_length=20, blank=True)
+    tac = models.CharField(max_length=10, blank=True)
     msc_id = models.CharField(max_length=50, blank=True)
+    smsc_address = models.CharField(
+        max_length=30, blank=True, db_index=True,
+        help_text='SMSC Global Title (E.164) — populated from SERVICE_CENTRE_ADDRESS '
+                  'for SMSMO/SMSMT records.'
+    )
     rat_type = models.CharField(max_length=20, blank=True)
 
     # Trunk info
@@ -64,7 +78,10 @@ class MSCRecord(models.Model):
 
     # Result
     result_code = models.CharField(max_length=50, blank=True)
-    roaming_indicator = models.CharField(max_length=10, blank=True)
+    roaming_indicator = models.CharField(max_length=30, blank=True)
+    forwarded_number = models.CharField(max_length=50, blank=True)
+    redirecting_number = models.CharField(max_length=50, blank=True)
+    call_category = models.CharField(max_length=50, blank=True, db_index=True)
 
     # Raw data preservation (full decoded record as JSON)
     raw_data = models.JSONField(default=dict, blank=True)

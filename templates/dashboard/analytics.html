@@ -1,0 +1,639 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Analytics — UMP Mediation{% endblock %}
+{% block page_title %}Analytics{% endblock %}
+
+{% block extra_css %}
+<style>
+/* =================================================================
+   Grafana-style analytics — LIGHT theme (matches rest of the app)
+   ================================================================= */
+.gf-page {
+    /* No background override — inherit the app's white surface */
+    color: #20212b;
+}
+.gf-page * { -webkit-font-smoothing: antialiased; }
+.gf-page .panel {
+    background: #ffffff;
+    border: 1px solid #e6e8ed;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 2px rgba(20, 28, 50, 0.04);
+}
+.gf-page .panel-header {
+    color: #6c757d;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+    padding: 10px 14px 6px;
+    border-bottom: 1px solid #f0f1f4;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.gf-page .panel-body { padding: 10px 12px 12px; }
+
+/* Toolbar */
+.gf-toolbar {
+    background: #ffffff;
+    border: 1px solid #e6e8ed;
+    border-radius: 6px;
+    padding: 8px 14px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    box-shadow: 0 1px 2px rgba(20, 28, 50, 0.04);
+}
+.gf-toolbar h2 { color: #20212b; font-size: 1.05rem; font-weight: 600; margin: 0; }
+.gf-range-btn {
+    background: #f5f6f9;
+    color: #4a5060;
+    border: 1px solid #dfe1e6;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    border-radius: 3px;
+}
+.gf-range-btn:hover { background: #e9ecef; color: #20212b; }
+.gf-range-btn.active { background: #ff7f00; color: #fff; border-color: #ff7f00; }
+
+/* Stat / KPI panels — bright accent values on light background */
+.gf-stat { text-align: center; padding: 14px 8px; }
+.gf-stat .stat-value {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 2.2rem; font-weight: 600; line-height: 1;
+}
+.gf-stat .stat-label {
+    color: #6c757d; font-size: 0.72rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;
+}
+.gf-stat .stat-sub { color: #8a8e9b; font-size: 0.74rem; margin-top: 4px; }
+.gf-stat.green  .stat-value { color: #2eb265; }
+.gf-stat.blue   .stat-value { color: #3b7dd8; }
+.gf-stat.orange .stat-value { color: #ff7f00; }
+.gf-stat.red    .stat-value { color: #d63f4f; }
+.gf-stat.yellow .stat-value { color: #c89c00; }
+.gf-stat.purple .stat-value { color: #7c2fb0; }
+
+/* Tables */
+.gf-page table { color: #20212b; font-size: 0.82rem; margin: 0; }
+.gf-page table thead th {
+    color: #6c757d; font-weight: 600; background: #f8f9fa;
+    border-bottom: 1px solid #e6e8ed; padding: 6px 10px;
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em;
+}
+.gf-page table tbody td {
+    padding: 6px 10px;
+    border-color: #f0f1f4;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 0.82rem;
+}
+.gf-page table tbody tr:hover { background: #f8f9fa; }
+.gf-page table code { color: #3b7dd8; background: transparent; padding: 0; font-size: 0.82rem; }
+.gf-page .small { font-size: 0.72rem; color: #8a8e9b; }
+.gf-page .badge { font-weight: 500; font-size: 0.7rem; }
+.gf-page .chart-wrap { position: relative; height: 220px; }
+.gf-page .chart-wrap.tall { height: 280px; }
+
+/* Auto-refresh pulse — kept green */
+.gf-pulse {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #2eb265; display: inline-block; margin-right: 6px;
+    animation: gf-pulse 2s infinite;
+}
+@keyframes gf-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(46,178,101,0.6); }
+    70% { box-shadow: 0 0 0 6px rgba(46,178,101,0); }
+    100% { box-shadow: 0 0 0 0 rgba(46,178,101,0); }
+}
+
+/* Loading state */
+.gf-loading { text-align: center; padding: 80px 0; color: #8a8e9b; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="gf-page">
+
+    <!-- Toolbar -->
+    <div class="gf-toolbar">
+        <h2><i class="bi bi-graph-up"></i> CDR Mediation Analytics</h2>
+        <div class="d-flex align-items-center gap-2">
+            <span class="small"><span class="gf-pulse"></span> Live <span id="gfLastUpdate"></span></span>
+            <div class="btn-group" role="group">
+                <button class="gf-range-btn" data-range="1h">1h</button>
+                <button class="gf-range-btn" data-range="6h">6h</button>
+                <button class="gf-range-btn active" data-range="24h">24h</button>
+                <button class="gf-range-btn" data-range="7d">7d</button>
+                <button class="gf-range-btn" data-range="30d">30d</button>
+            </div>
+            <button class="gf-range-btn" id="gfRefresh" title="Refresh"><i class="bi bi-arrow-clockwise"></i></button>
+            <select class="gf-range-btn" id="gfAutoRefresh" title="Auto-refresh interval" style="padding-right:24px;">
+                <option value="0">Off</option>
+                <option value="10" selected>10s</option>
+                <option value="30">30s</option>
+                <option value="60">1m</option>
+                <option value="300">5m</option>
+            </select>
+        </div>
+    </div>
+
+    <div id="gfLoading" class="gf-loading">
+        <div class="spinner-border text-light"></div>
+        <div class="mt-2">Loading analytics…</div>
+    </div>
+
+    <div id="gfContent" style="display:none;">
+
+    <!-- Row 1: 6 KPI stat panels -->
+    <div class="row g-2 mb-2">
+        <div class="col-md-2"><div class="panel"><div class="gf-stat green">
+            <div class="stat-label">IMS Pair Rate</div>
+            <div class="stat-value" id="kpiImsPair">-</div>
+            <div class="stat-sub" id="kpiImsPairDetail"></div>
+        </div></div></div>
+        <div class="col-md-2"><div class="panel"><div class="gf-stat blue">
+            <div class="stat-label">MSC Pair Rate</div>
+            <div class="stat-value" id="kpiMscPair">-</div>
+            <div class="stat-sub" id="kpiMscPairDetail"></div>
+        </div></div></div>
+        <div class="col-md-2"><div class="panel"><div class="gf-stat purple">
+            <div class="stat-label">Files Done</div>
+            <div class="stat-value" id="kpiFiles">-</div>
+            <div class="stat-sub" id="kpiFilesDetail"></div>
+        </div></div></div>
+        <div class="col-md-2"><div class="panel"><div class="gf-stat red">
+            <div class="stat-label">Failed</div>
+            <div class="stat-value" id="kpiFailed">-</div>
+            <div class="stat-sub" id="kpiFailedDetail"></div>
+        </div></div></div>
+        <div class="col-md-2"><div class="panel"><div class="gf-stat yellow">
+            <div class="stat-label">Record Errors</div>
+            <div class="stat-value" id="kpiProcErrors">-</div>
+            <div class="stat-sub">decode failures</div>
+        </div></div></div>
+        <div class="col-md-2"><div class="panel"><div class="gf-stat orange">
+            <div class="stat-label">Top Codec</div>
+            <div class="stat-value" style="font-size:1.4rem;" id="kpiTopCodec">-</div>
+            <div class="stat-sub" id="kpiTopCodecCount"></div>
+        </div></div></div>
+    </div>
+
+    <!-- Row 2: Records ingested (per stream) -->
+    <div class="row g-2 mb-2">
+        <div class="col-md-12"><div class="panel">
+            <div class="panel-header">
+                <span>Records ingested — per stream</span>
+                <span class="small" id="seriesRangeLabel"></span>
+            </div>
+            <div class="panel-body"><div class="chart-wrap tall"><canvas id="chartSeries"></canvas></div></div>
+        </div></div>
+    </div>
+
+    <!-- Row 3: Files lifecycle per stream — three separate charts -->
+    <div class="row g-2 mb-2">
+        <div class="col-md-4"><div class="panel">
+            <div class="panel-header">
+                <span>Files Received — per stream</span>
+                <span class="small" id="filesRecvTotal"></span>
+            </div>
+            <div class="panel-body"><div class="chart-wrap"><canvas id="chartFilesReceived"></canvas></div></div>
+        </div></div>
+        <div class="col-md-4"><div class="panel">
+            <div class="panel-header">
+                <span>Files Processed — per stream</span>
+                <span class="small" id="filesProcTotal"></span>
+            </div>
+            <div class="panel-body"><div class="chart-wrap"><canvas id="chartFilesProcessed"></canvas></div></div>
+        </div></div>
+        <div class="col-md-4"><div class="panel">
+            <div class="panel-header">
+                <span>Files Distributed (downstream) — per stream</span>
+                <span class="small" id="filesDistTotal"></span>
+            </div>
+            <div class="panel-body"><div class="chart-wrap"><canvas id="chartFilesDistributed"></canvas></div></div>
+        </div></div>
+    </div>
+
+    <!-- Row 3b: Errors time series -->
+    <div class="row g-2 mb-2">
+        <div class="col-md-12"><div class="panel">
+            <div class="panel-header"><span>Processing errors over time</span></div>
+            <div class="panel-body"><div class="chart-wrap"><canvas id="chartErrors"></canvas></div></div>
+        </div></div>
+    </div>
+
+    <!-- Row 4: Donut charts for breakdowns -->
+    <div class="row g-2 mb-2">
+        <div class="col-md-3"><div class="panel">
+            <div class="panel-header"><span>Access Technology</span></div>
+            <div class="panel-body"><div class="chart-wrap"><canvas id="chartTech"></canvas></div></div>
+        </div></div>
+        <div class="col-md-3"><div class="panel">
+            <div class="panel-header"><span>Codec Distribution</span></div>
+            <div class="panel-body"><div class="chart-wrap"><canvas id="chartCodec"></canvas></div></div>
+        </div></div>
+        <div class="col-md-3"><div class="panel">
+            <div class="panel-header"><span>SIP Method</span></div>
+            <div class="panel-body"><div class="chart-wrap"><canvas id="chartSipMethod"></canvas></div></div>
+        </div></div>
+        <div class="col-md-3"><div class="panel">
+            <div class="panel-header"><span>Call Type</span></div>
+            <div class="panel-body"><div class="chart-wrap"><canvas id="chartCallType"></canvas></div></div>
+        </div></div>
+    </div>
+
+    <!-- Row 5: Top-N tables -->
+    <div class="row g-2 mb-2">
+        <div class="col-md-4"><div class="panel">
+            <div class="panel-header"><span>Top eNodeBs (LTE)</span></div>
+            <div class="panel-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>eNodeB ID</th><th class="text-end">Records</th></tr></thead>
+                    <tbody id="tblEnodebs"></tbody>
+                </table>
+            </div>
+        </div></div>
+        <div class="col-md-4"><div class="panel">
+            <div class="panel-header"><span>Top Cells</span></div>
+            <div class="panel-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Cell ID</th><th>Tech</th><th class="text-end">Records</th></tr></thead>
+                    <tbody id="tblCells"></tbody>
+                </table>
+            </div>
+        </div></div>
+        <div class="col-md-4"><div class="panel">
+            <div class="panel-header"><span>Serving PLMN</span></div>
+            <div class="panel-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>PLMN</th><th class="text-end">Records</th></tr></thead>
+                    <tbody id="tblPlmn"></tbody>
+                </table>
+            </div>
+        </div></div>
+    </div>
+
+    <!-- Row 6: Errors table -->
+    <div class="row g-2 mb-2">
+        <div class="col-md-12"><div class="panel">
+            <div class="panel-header"><span style="color:#f2495c;"><i class="bi bi-exclamation-triangle"></i> Top Processing Errors (last 7 days)</span></div>
+            <div class="panel-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Error Class</th><th>Stage</th><th class="text-end">Count</th></tr></thead>
+                    <tbody id="tblErrors"></tbody>
+                </table>
+            </div>
+        </div></div>
+    </div>
+
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script>
+// ============================================================================
+// Grafana palette — tuned for white background readability
+// ============================================================================
+const GF_COLOR = {
+    blue:   '#3b7dd8',
+    green:  '#2eb265',
+    red:    '#d63f4f',
+    yellow: '#c89c00',
+    orange: '#ff7f00',
+    purple: '#7c2fb0',
+    pink:   '#e83e8c',
+    cyan:   '#17a2b8',
+    grid:   'rgba(20, 28, 50, 0.06)',     // very subtle gridline on white
+    text:   '#20212b',
+    muted:  '#6c757d',
+    tooltipBg: 'rgba(255,255,255,0.97)',
+    tooltipBorder: '#dfe1e6',
+};
+const STREAM_COLORS = {
+    msc:  GF_COLOR.blue,
+    ims:  GF_COLOR.green,
+    pgw:  GF_COLOR.orange,
+    sgsn: GF_COLOR.purple,
+    sgw:  GF_COLOR.cyan,
+};
+
+// Chart.js global defaults — light theme
+Chart.defaults.color = GF_COLOR.muted;
+Chart.defaults.borderColor = GF_COLOR.grid;
+Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+Chart.defaults.font.size = 11;
+
+// Common option blocks
+const timeAxisOpts = (bucket) => ({
+    type: 'time',
+    time: {
+        unit: bucket === 'hour' ? 'hour' : 'day',
+        displayFormats: { hour: 'HH:mm', day: 'MMM d' },
+        tooltipFormat: bucket === 'hour' ? 'MMM d HH:mm' : 'MMM d, yyyy',
+    },
+    grid: { color: GF_COLOR.grid, drawBorder: false },
+    ticks: { maxRotation: 0, autoSkipPadding: 12 },
+});
+const valueAxisOpts = {
+    beginAtZero: true,
+    grid: { color: GF_COLOR.grid, drawBorder: false },
+    ticks: { precision: 0 },
+};
+
+// Hold chart instances so we can destroy on re-render
+let charts = {};
+function destroyChart(name) { if (charts[name]) { charts[name].destroy(); delete charts[name]; } }
+
+// ============================================================================
+// Renderers
+// ============================================================================
+
+function renderTimeSeries(data) {
+    destroyChart('series');
+    const datasets = ['msc','ims','pgw','sgsn','sgw'].map(stream => {
+        const pts = (data.series[stream] || []).map(p => ({ x: p.t, y: p.v }));
+        const total = pts.reduce((a, p) => a + p.y, 0);
+        return {
+            label: stream.toUpperCase() + ' (' + total.toLocaleString() + ')',
+            data: pts,
+            borderColor: STREAM_COLORS[stream],
+            backgroundColor: STREAM_COLORS[stream] + '33',  // 20% alpha
+            borderWidth: 2,
+            fill: true,
+            tension: 0.3,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            hidden: total === 0,
+        };
+    });
+    charts.series = new Chart(document.getElementById('chartSeries'), {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { position: 'top', align: 'end',
+                    labels: { boxWidth: 12, boxHeight: 12, padding: 12 } },
+                tooltip: { backgroundColor: GF_COLOR.tooltipBg, titleColor: GF_COLOR.text,
+                    bodyColor: GF_COLOR.text, borderColor: GF_COLOR.tooltipBorder, borderWidth: 1,
+                    titleFont: { weight: '600' }, padding: 10 },
+            },
+            scales: { x: timeAxisOpts(data.bucket), y: valueAxisOpts },
+        }
+    });
+}
+
+// Per-stream multi-bar chart for file lifecycle stages (side-by-side clustered bar chart)
+function renderFileLifecycle(canvasId, dataKey, summaryId, data) {
+    destroyChart(canvasId);
+    const seriesData = data[dataKey] || {};
+    const streams = ['MSC','IMS','PGW','SGSN','SGW'];
+    let grandTotal = 0;
+    const datasets = streams.map(s => {
+        const pts = (seriesData[s] || []).map(p => ({ x: p.t, y: p.v }));
+        const total = pts.reduce((a, p) => a + p.y, 0);
+        grandTotal += total;
+        return {
+            label: s + ' (' + total.toLocaleString() + ')',
+            data: pts,
+            borderColor: STREAM_COLORS[s.toLowerCase()],
+            backgroundColor: STREAM_COLORS[s.toLowerCase()] + 'cc',
+            borderWidth: 1,
+            borderRadius: 2,
+            maxBarThickness: 10, // Slender side-by-side bars
+            hidden: total === 0,
+        };
+    });
+    if (summaryId) {
+        const el = document.getElementById(summaryId);
+        if (el) el.textContent = grandTotal.toLocaleString() + ' total';
+    }
+
+    const xOpts = timeAxisOpts(data.bucket);
+    xOpts.stacked = false;
+    xOpts.offset = true;
+
+    const yOpts = { ...valueAxisOpts, stacked: false };
+
+    charts[canvasId] = new Chart(document.getElementById(canvasId), {
+        type: 'bar',
+        data: { datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { position: 'bottom', align: 'start',
+                          labels: { boxWidth: 10, boxHeight: 10, padding: 8, font: { size: 10 } } },
+                tooltip: { backgroundColor: GF_COLOR.tooltipBg, titleColor: GF_COLOR.text,
+                           bodyColor: GF_COLOR.text, borderColor: GF_COLOR.tooltipBorder, borderWidth: 1, padding: 10 },
+            },
+            scales: { x: xOpts, y: yOpts }
+        }
+    });
+}
+
+function renderErrors(data) {
+    destroyChart('errors');
+    const pts = (data.errors_ts || []).map(p => ({ x: p.t, y: p.v }));
+    charts.errors = new Chart(document.getElementById('chartErrors'), {
+        type: 'line',
+        data: { datasets: [{ label: 'Errors', data: pts,
+                borderColor: GF_COLOR.red,
+                backgroundColor: GF_COLOR.red + '33', borderWidth: 2,
+                fill: true, tension: 0.3, pointRadius: 0 }] },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false },
+                tooltip: { backgroundColor: GF_COLOR.tooltipBg, titleColor: GF_COLOR.text, bodyColor: GF_COLOR.text, borderColor: GF_COLOR.tooltipBorder, borderWidth: 1, padding: 10 } },
+            scales: { x: timeAxisOpts(data.bucket), y: valueAxisOpts }
+        }
+    });
+}
+
+function renderDonut(canvasId, labels, values, colors) {
+    destroyChart(canvasId);
+    if (!labels.length) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.fillStyle = GF_COLOR.muted; ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('No data', ctx.canvas.width / 2, ctx.canvas.height / 2);
+        return;
+    }
+    charts[canvasId] = new Chart(document.getElementById(canvasId), {
+        type: 'doughnut',
+        data: { labels, datasets: [{ data: values, backgroundColor: colors,
+                                       borderColor: '#ffffff', borderWidth: 2 }] },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            cutout: '60%',
+            plugins: {
+                legend: { position: 'right',
+                          labels: { font: { size: 10 }, boxWidth: 10, boxHeight: 10, padding: 6 } },
+                tooltip: { backgroundColor: GF_COLOR.tooltipBg, titleColor: GF_COLOR.text, bodyColor: GF_COLOR.text, borderColor: GF_COLOR.tooltipBorder, borderWidth: 1, padding: 10 },
+            }
+        }
+    });
+}
+
+// Threshold colour for pair-rate / success metrics
+function pctColor(pct) {
+    if (pct >= 95) return 'green';
+    if (pct >= 75) return 'blue';
+    if (pct >= 25) return 'yellow';
+    return 'red';
+}
+
+function applyStatColor(el, color) {
+    el.classList.remove('green','blue','red','yellow','orange','purple');
+    el.classList.add(color);
+}
+
+// ============================================================================
+// KPI panels
+// ============================================================================
+function renderKpis(d) {
+    const ims = d.pair_kpi.IMS, msc = d.pair_kpi.MSC;
+
+    const imsBox = document.getElementById('kpiImsPair').closest('.gf-stat');
+    applyStatColor(imsBox, pctColor(ims.pct));
+    document.getElementById('kpiImsPair').textContent = ims.pct + '%';
+    document.getElementById('kpiImsPairDetail').textContent =
+        ims.paired.toLocaleString() + ' of ' + ims.total_pairable.toLocaleString();
+
+    const mscBox = document.getElementById('kpiMscPair').closest('.gf-stat');
+    applyStatColor(mscBox, pctColor(msc.pct));
+    document.getElementById('kpiMscPair').textContent = msc.pct + '%';
+    document.getElementById('kpiMscPairDetail').textContent =
+        msc.paired.toLocaleString() + ' of ' + msc.total_pairable.toLocaleString();
+
+    document.getElementById('kpiFiles').textContent = d.health.completed_files.toLocaleString();
+    document.getElementById('kpiFilesDetail').textContent =
+        'of ' + d.health.total_files.toLocaleString() + ' total';
+
+    document.getElementById('kpiFailed').textContent = d.health.failed_files.toLocaleString();
+    document.getElementById('kpiFailedDetail').textContent = d.health.failure_rate + '% failure rate';
+
+    document.getElementById('kpiProcErrors').textContent = d.health.processing_errors.toLocaleString();
+
+    if (d.codec_breakdown.length) {
+        document.getElementById('kpiTopCodec').textContent = d.codec_breakdown[0].codec;
+        document.getElementById('kpiTopCodecCount').textContent = d.codec_breakdown[0].count.toLocaleString() + ' calls';
+    } else {
+        document.getElementById('kpiTopCodec').textContent = '—';
+        document.getElementById('kpiTopCodecCount').textContent = '';
+    }
+}
+
+// ============================================================================
+// Tables
+// ============================================================================
+function renderTables(d) {
+    document.getElementById('tblEnodebs').innerHTML = d.top_enodebs.length ?
+        d.top_enodebs.map(r =>
+            `<tr><td><code>${r.enodeb_id}</code></td><td class="text-end">${r.count.toLocaleString()}</td></tr>`
+        ).join('')
+        : '<tr><td colspan="2" class="text-center py-3 small">No LTE data</td></tr>';
+
+    document.getElementById('tblCells').innerHTML = d.top_cells.length ?
+        d.top_cells.map(r =>
+            `<tr><td><code>${r.cell_id}</code></td><td><span class="small">${r.technology||'-'}</span></td><td class="text-end">${r.count.toLocaleString()}</td></tr>`
+        ).join('')
+        : '<tr><td colspan="3" class="text-center py-3 small">No cell data</td></tr>';
+
+    document.getElementById('tblPlmn').innerHTML = d.plmn_breakdown.length ?
+        d.plmn_breakdown.map(r => {
+            const country = (r.serving_plmn||'').startsWith('619') ? ' SL' : '';
+            return `<tr><td><code>${r.serving_plmn}</code><span class="small">${country}</span></td><td class="text-end">${r.count.toLocaleString()}</td></tr>`;
+        }).join('')
+        : '<tr><td colspan="2" class="text-center py-3 small">No PLMN data</td></tr>';
+
+    document.getElementById('tblErrors').innerHTML = d.top_errors.length ?
+        d.top_errors.map(r =>
+            `<tr><td><code>${r.error_class}</code></td><td><span class="badge bg-secondary">${r.stage}</span></td><td class="text-end">${r.count.toLocaleString()}</td></tr>`
+        ).join('')
+        : '<tr><td colspan="3" class="text-center py-3 small" style="color:#5ae57b;"><i class="bi bi-check-circle"></i> No errors recorded</td></tr>';
+}
+
+// ============================================================================
+// Master fetch / render
+// ============================================================================
+let currentRange = '24h';
+
+function fetchData() {
+    return fetch("{% url 'dashboard:analytics_api' %}" + '?range=' + currentRange)
+        .then(r => r.json())
+        .then(d => {
+            document.getElementById('gfLoading').style.display = 'none';
+            document.getElementById('gfContent').style.display = 'block';
+            document.getElementById('gfLastUpdate').textContent =
+                '· last update ' + new Date().toLocaleTimeString();
+            document.getElementById('seriesRangeLabel').textContent = 'range: ' + d.range;
+
+            renderKpis(d);
+            renderTimeSeries(d);
+            renderFileLifecycle('chartFilesReceived',    'files_received_by_stream',    'filesRecvTotal', d);
+            renderFileLifecycle('chartFilesProcessed',   'files_processed_by_stream',   'filesProcTotal', d);
+            renderFileLifecycle('chartFilesDistributed', 'files_distributed_by_stream', 'filesDistTotal', d);
+            renderErrors(d);
+
+            renderDonut('chartTech',
+                d.tech_breakdown.map(r => r.technology),
+                d.tech_breakdown.map(r => r.count),
+                [GF_COLOR.blue, GF_COLOR.cyan, GF_COLOR.orange, GF_COLOR.red, GF_COLOR.green]);
+            renderDonut('chartCodec',
+                d.codec_breakdown.map(r => r.codec),
+                d.codec_breakdown.map(r => r.count),
+                [GF_COLOR.green, GF_COLOR.purple, GF_COLOR.pink, GF_COLOR.yellow, GF_COLOR.cyan]);
+            renderDonut('chartSipMethod',
+                d.sip_method_breakdown.map(r => r.sip_method),
+                d.sip_method_breakdown.map(r => r.count),
+                [GF_COLOR.blue, GF_COLOR.green, GF_COLOR.orange, GF_COLOR.purple, GF_COLOR.pink]);
+            renderDonut('chartCallType',
+                d.call_type_breakdown.map(r => r.call_type),
+                d.call_type_breakdown.map(r => r.count),
+                [GF_COLOR.blue, GF_COLOR.green, GF_COLOR.orange, GF_COLOR.purple]);
+
+            renderTables(d);
+        })
+        .catch(err => {
+            document.getElementById('gfLoading').innerHTML =
+                `<div style="color:#f2495c;">Failed to load: ${err.message}</div>`;
+        });
+}
+
+// Range buttons
+document.querySelectorAll('.gf-range-btn[data-range]').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.gf-range-btn[data-range]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentRange = btn.dataset.range;
+        fetchData();
+    });
+});
+
+// Manual refresh
+document.getElementById('gfRefresh').addEventListener('click', fetchData);
+
+// Auto-refresh
+let autoTimer = null;
+function setAuto(sec) {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+    if (sec > 0) autoTimer = setInterval(fetchData, sec * 1000);
+}
+document.getElementById('gfAutoRefresh').addEventListener('change', e => setAuto(parseInt(e.target.value, 10)));
+
+// Init
+fetchData();
+setAuto(10);
+</script>
+{% endblock %}

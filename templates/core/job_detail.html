@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Job #{{ job.pk }}{% endblock %}
+{% block page_title %}Job #{{ job.pk }} — {{ job.label }}{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-gear"></i> {{ job.job_type }}</span>
+        <span id="statusBadge" class="badge bg-{% if job.status == 'SUCCESS' %}success{% elif job.status == 'FAILURE' %}danger{% elif job.status == 'RUNNING' %}primary{% else %}secondary{% endif %}">
+            {{ job.get_status_display }}
+        </span>
+    </div>
+    <div class="card-body">
+        <dl class="row mb-0 small">
+            <dt class="col-3">Type</dt>      <dd class="col-9"><code>{{ job.job_type }}</code></dd>
+            <dt class="col-3">Label</dt>     <dd class="col-9">{{ job.label }}</dd>
+            <dt class="col-3">Submitted</dt> <dd class="col-9">{{ job.submitted_at|date:"Y-m-d H:i:s" }} by {{ job.submitted_by|default:"—" }}</dd>
+            <dt class="col-3">Started</dt>   <dd class="col-9" id="startedAt">{{ job.started_at|date:"Y-m-d H:i:s"|default:"—" }}</dd>
+            <dt class="col-3">Finished</dt>  <dd class="col-9" id="finishedAt">{{ job.finished_at|date:"Y-m-d H:i:s"|default:"—" }}</dd>
+            <dt class="col-3">Duration</dt>  <dd class="col-9" id="durationCell">{% if job.duration_seconds %}{{ job.duration_seconds|floatformat:2 }}s{% else %}—{% endif %}</dd>
+            <dt class="col-3">Celery task</dt><dd class="col-9 small text-muted"><code>{{ job.celery_task_id|default:"—" }}</code></dd>
+            {% if job.result_url %}
+            <dt class="col-3">Result</dt>    <dd class="col-9"><a class="btn btn-sm btn-success" href="{{ job.result_url }}"><i class="bi bi-box-arrow-up-right"></i> Open {{ job.result_entity_type }} {{ job.result_entity_id }}</a></dd>
+            {% endif %}
+        </dl>
+    </div>
+</div>
+
+<div class="card mb-3" id="progressCard" {% if job.is_terminal %}style="display:none"{% endif %}>
+    <div class="card-header"><i class="bi bi-hourglass-split"></i> Progress</div>
+    <div class="card-body">
+        <div class="progress mb-2"><div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: {{ job.progress_pct }}%">{{ job.progress_pct }}%</div></div>
+        <small class="text-muted" id="progressMessage">{{ job.progress_message|default:"Working…" }}</small>
+    </div>
+</div>
+
+{% if job.params %}
+<div class="card mb-3">
+    <div class="card-header"><i class="bi bi-input-cursor-text"></i> Input parameters</div>
+    <div class="card-body p-0">
+        <pre class="m-0 p-3 small bg-light" id="paramsBlock">{{ job.params|safe }}</pre>
+    </div>
+</div>
+{% endif %}
+
+<div class="card mb-3" id="resultCard" {% if not job.result %}style="display:none"{% endif %}>
+    <div class="card-header"><i class="bi bi-check2-square"></i> Result</div>
+    <div class="card-body p-0">
+        <pre class="m-0 p-3 small bg-light" id="resultBlock">{{ job.result|safe }}</pre>
+    </div>
+</div>
+
+<div class="card" id="errorCard" {% if not job.error_message %}style="display:none"{% endif %}>
+    <div class="card-header bg-danger text-white"><i class="bi bi-exclamation-octagon"></i> Error</div>
+    <div class="card-body p-0">
+        <pre class="m-0 p-3 small text-danger" id="errorBlock">{{ job.error_message }}</pre>
+    </div>
+</div>
+
+<script>
+const JOB_ID = {{ job.pk }};
+const STATUS_COLORS = {PENDING:'secondary',RUNNING:'primary',SUCCESS:'success',FAILURE:'danger',REVOKED:'dark'};
+let pollTimer = null;
+
+function poll() {
+    fetch(`/jobs/${JOB_ID}/status/`).then(r=>r.json()).then(j => {
+        // Status badge
+        const badge = document.getElementById('statusBadge');
+        badge.textContent = j.status_display;
+        badge.className = 'badge bg-' + (STATUS_COLORS[j.status] || 'secondary');
+
+        // Times
+        if (j.started_at) document.getElementById('startedAt').textContent = j.started_at.slice(0,19).replace('T',' ');
+        if (j.finished_at) document.getElementById('finishedAt').textContent = j.finished_at.slice(0,19).replace('T',' ');
+        if (j.duration_seconds != null) document.getElementById('durationCell').textContent = j.duration_seconds.toFixed(2)+'s';
+
+        // Progress
+        const bar = document.getElementById('progressBar');
+        bar.style.width = j.progress_pct + '%';
+        bar.textContent = j.progress_pct + '%';
+        if (j.progress_message) document.getElementById('progressMessage').textContent = j.progress_message;
+
+        // Result / error
+        if (Object.keys(j.result||{}).length) {
+            document.getElementById('resultCard').style.display = '';
+            document.getElementById('resultBlock').textContent = JSON.stringify(j.result, null, 2);
+        }
+        if (j.error_message) {
+            document.getElementById('errorCard').style.display = '';
+            document.getElementById('errorBlock').textContent = j.error_message;
+        }
+
+        // Terminal — stop polling + reload page to show full result UI
+        if (j.is_terminal) {
+            document.getElementById('progressCard').style.display = 'none';
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+            // Reload once on transition into terminal to surface result_url button
+            if (!window._jobReloaded) { window._jobReloaded = true; setTimeout(() => location.reload(), 800); }
+        }
+    });
+}
+
+{% if not job.is_terminal %}
+document.addEventListener('DOMContentLoaded', () => {
+    pollTimer = setInterval(poll, 1500);
+    poll();
+});
+{% endif %}
+</script>
+{% endblock %}

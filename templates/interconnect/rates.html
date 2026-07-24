@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+{% block title %}Rates & Charging — Interconnect{% endblock %}
+{% block page_title %}Rates & Charging{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-cash-coin"></i> Rate Cards</span>
+        <span class="badge bg-secondary" id="totalBadge">{{ total }} rates</span>
+    </div>
+    <div class="card-body pb-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <input type="text" id="searchInput" class="form-control form-control-sm"
+                    placeholder="Search partner / notes…" oninput="loadData()">
+            </div>
+            <div class="col-md-2">
+                <select id="filterPartner" class="form-select form-select-sm" onchange="loadData()">
+                    <option value="">All Partners</option>
+                    {% for p in partners %}<option value="{{ p.pk }}">{{ p.code }} — {{ p.name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select id="filterDirection" class="form-select form-select-sm" onchange="loadData()">
+                    <option value="">All Directions</option>
+                    {% for v,l in direction_choices %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select id="filterService" class="form-select form-select-sm" onchange="loadData()">
+                    <option value="">All Services</option>
+                    {% for v,l in service_choices %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary btn-sm" onclick="openModal()"><i class="bi bi-plus-lg"></i> Add
+                    Rate</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="alertBox" class="alert" style="display:none;"></div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Partner</th>
+                        <th>Direction</th>
+                        <th>Service</th>
+                        <th>Call Type</th>
+                        <th>Destination</th>
+                        <th>ToD</th>
+                        <th class="text-end">Rate</th>
+                        <th>Unit</th>
+                        <th>Currency</th>
+                        <th>Effective</th>
+                        <th>Status</th>
+                        <th width="80"></th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr>
+                        <td colspan="12" class="text-center py-4 text-muted">
+                            <div class="spinner-border spinner-border-sm"></div> Loading…
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center" id="pagBar"
+        style="display:none !important;">
+        <small class="text-muted">Showing <span id="pagShowing"></span> of <span id="pagTotal"></span></small>
+        <nav>
+            <ul class="pagination pagination-sm mb-0" id="pagNums"></ul>
+        </nav>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="entryModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Add Rate</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="entryId">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Partner <span class="text-danger">*</span></label>
+                        <select id="fPartner" class="form-select form-select-sm">
+                            {% for p in partners %}<option value="{{ p.pk }}" data-currency="{{ p.default_currency }}">
+                                {{ p.code }} — {{ p.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Direction</label>
+                        <select id="fDirection" class="form-select form-select-sm">
+                            {% for v,l in direction_choices %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Service</label>
+                        <select id="fService" class="form-select form-select-sm">
+                            {% for v,l in service_choices %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Destination Tier</label>
+                        <select id="fDest" class="form-select form-select-sm">
+                            {% for v,l in destination_choices %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Time of Day</label>
+                        <select id="fTod" class="form-select form-select-sm">
+                            {% for v,l in tod_choices %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Call Type Override</label>
+                        <select id="fCallType" class="form-select form-select-sm">
+                            <option value="">None (Apply to All)</option>
+                            <option value="MOC">MOC</option>
+                            <option value="MTC">MTC</option>
+                            <option value="GWOUT">GWOUT</option>
+                            <option value="GWIN">GWIN</option>
+                            <option value="SMSMO">SMSMO</option>
+                            <option value="SMSMT">SMSMT</option>
+                            <option value="ORIG">VoLTE ORIG</option>
+                            <option value="TERM">VoLTE TERM</option>
+                            <option value="DATA">DATA Sessions</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">RAT Filter</label>
+                        <input type="text" id="fRat" class="form-control form-control-sm"
+                            placeholder="EUTRAN / UTRAN / GERAN (optional)">
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Rate <span class="text-danger">*</span></label>
+                        <input type="number" step="0.000001" id="fRate" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Unit</label>
+                        <select id="fUnit" class="form-select form-select-sm">
+                            {% for v,l in unit_choices %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Min Charge</label>
+                        <input type="number" step="0.000001" id="fMinCharge" class="form-control form-control-sm"
+                            value="0">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Setup Fee</label>
+                        <input type="number" step="0.000001" id="fSetup" class="form-control form-control-sm" value="0">
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Currency</label>
+                        <input type="text" id="fCurrency" class="form-control form-control-sm" value="SLE"
+                            maxlength="3">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Effective From <span
+                                class="text-danger">*</span></label>
+                        <input type="date" id="fFrom" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Effective To</label>
+                        <input type="date" id="fTo" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Status</label>
+                        <select id="fActive" class="form-select form-select-sm">
+                            <option value="true">Active</option>
+                            <option value="false">Inactive</option>
+                        </select>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label small fw-bold">Notes</label>
+                        <textarea id="fNotes" class="form-control form-control-sm" rows="2"></textarea>
+                    </div>
+                </div>
+                <div id="modalError" class="alert alert-danger mt-2" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="saveEntry()"><i class="bi bi-save"></i>
+                    Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentPage = 1;
+    function getCSRF() { return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''; }
+    function showAlert(msg, type = 'success') {
+        const b = document.getElementById('alertBox'); b.className = `alert alert-${type}`; b.textContent = msg; b.style.display = 'block';
+        setTimeout(() => b.style.display = 'none', 4000);
+    }
+    function today() { const d = new Date(); return d.toISOString().slice(0, 10); }
+
+    function loadData() {
+        const q = document.getElementById('searchInput').value;
+        const partner = document.getElementById('filterPartner').value;
+        const direction = document.getElementById('filterDirection').value;
+        const service = document.getElementById('filterService').value;
+        fetch(`{% url 'interconnect:rate_api' %}?q=${encodeURIComponent(q)}&partner=${partner}&direction=${direction}&service=${service}&page=${currentPage}`)
+            .then(r => r.json()).then(data => {
+                document.getElementById('totalBadge').textContent = data.total + ' rates';
+                const tbody = document.getElementById('tableBody');
+                if (!data.records.length) {
+                    tbody.innerHTML = '<tr><td colspan="12" class="text-center py-4 text-muted">No rates found</td></tr>';
+                    document.getElementById('pagBar').style.cssText = 'display:none !important'; return;
+                }
+                tbody.innerHTML = data.records.map(r => {
+                    const dirBadge = r.direction === 'INBOUND' ? 'success' : 'warning';
+                    return `<tr>
+                    <td class="text-black"><strong>${r.partner}</strong></td>
+                    <td><span class="badge bg-${dirBadge}">${r.direction}</span></td>
+                    <td class="text-black">${r.service_type}</td>
+                    <td class="text-black"><span class="badge bg-light text-dark fw-bold">${r.call_type || '—'}</span></td>
+                    <td class="text-black">${r.destination_type}</td>
+                    <td class="text-black">${r.time_of_day}</td>
+                    <td class="text-end text-black"><strong>${parseFloat(r.rate).toFixed(6)}</strong></td>
+                    <td class="text-black small">${r.unit}</td>
+                    <td class="text-black">${r.currency}</td>
+                    <td class="text-black small">${r.effective_from}${r.effective_to ? ' → ' + r.effective_to : ''}</td>
+                    <td><span class="badge bg-${r.is_active ? 'success' : 'secondary'}">${r.is_active ? 'Active' : 'Inactive'}</span></td>
+                    <td class="text-end">
+                        <button class="btn btn-xs btn-outline-primary py-0 px-1 me-1" onclick='editEntry(${JSON.stringify(r).replace(/'/g, "\\'")})'><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-xs btn-outline-danger py-0 px-1" onclick="deleteEntry(${r.id})"><i class="bi bi-trash"></i></button>
+                    </td>
+                </tr>`;
+                }).join('');
+                buildPagination(data.page, data.pages, data.total);
+            });
+    }
+
+    function buildPagination(page, pages, total) {
+        const bar = document.getElementById('pagBar');
+        if (pages <= 1) { bar.style.cssText = 'display:none !important'; return; }
+        bar.style.cssText = 'display:flex !important';
+        document.getElementById('pagShowing').textContent = `${(page - 1) * 25 + 1}–${Math.min(page * 25, total)}`;
+        document.getElementById('pagTotal').textContent = total;
+        let html = `<li class="page-item ${page <= 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${page - 1})">‹</a></li>`;
+        for (let i = Math.max(1, page - 2); i <= Math.min(pages, page + 2); i++)
+            html += `<li class="page-item ${i === page ? 'active' : ''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${i})">${i}</a></li>`;
+        html += `<li class="page-item ${page >= pages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${page + 1})">›</a></li>`;
+        document.getElementById('pagNums').innerHTML = html;
+    }
+    function goPage(p) { currentPage = p; loadData(); }
+
+    function openModal(r = null) {
+        document.getElementById('entryId').value = r?.id || '';
+        if (r?.partner_id) document.getElementById('fPartner').value = r.partner_id;
+        document.getElementById('fDirection').value = r?.direction || 'INBOUND';
+        document.getElementById('fService').value = r?.service_type || 'VOICE';
+        document.getElementById('fDest').value = r?.destination_type || 'NATIONAL';
+        document.getElementById('fTod').value = r?.time_of_day || 'ANY';
+        document.getElementById('fCallType').value = r?.call_type || '';
+        document.getElementById('fRat').value = r?.rat_filter || '';
+        document.getElementById('fRate').value = r?.rate || '';
+        document.getElementById('fUnit').value = r?.unit || 'PER_MINUTE';
+        document.getElementById('fMinCharge').value = r?.min_charge || '0';
+        document.getElementById('fSetup').value = r?.setup_fee || '0';
+        document.getElementById('fCurrency').value = r?.currency || 'SLE';
+        document.getElementById('fFrom').value = r?.effective_from || today();
+        document.getElementById('fTo').value = r?.effective_to || '';
+        document.getElementById('fActive').value = r ? (r.is_active ? 'true' : 'false') : 'true';
+        document.getElementById('fNotes').value = r?.notes || '';
+        document.getElementById('modalTitle').textContent = r ? 'Edit Rate' : 'Add Rate';
+        document.getElementById('modalError').style.display = 'none';
+        new bootstrap.Modal(document.getElementById('entryModal')).show();
+    }
+    function editEntry(r) { openModal(r); }
+
+    function saveEntry() {
+        const params = new URLSearchParams({
+            csrfmiddlewaretoken: getCSRF(), id: document.getElementById('entryId').value,
+            partner_id: document.getElementById('fPartner').value,
+            direction: document.getElementById('fDirection').value,
+            service_type: document.getElementById('fService').value,
+            destination_type: document.getElementById('fDest').value,
+            time_of_day: document.getElementById('fTod').value,
+            call_type: document.getElementById('fCallType').value,
+            rat_filter: document.getElementById('fRat').value.trim(),
+            rate: document.getElementById('fRate').value,
+            unit: document.getElementById('fUnit').value,
+            min_charge: document.getElementById('fMinCharge').value || '0',
+            setup_fee: document.getElementById('fSetup').value || '0',
+            currency: document.getElementById('fCurrency').value.trim(),
+            effective_from: document.getElementById('fFrom').value,
+            effective_to: document.getElementById('fTo').value,
+            is_active: document.getElementById('fActive').value,
+            notes: document.getElementById('fNotes').value.trim(),
+        });
+        fetch("{% url 'interconnect:rate_save' %}", { method: 'POST', body: params, headers: { 'X-CSRFToken': getCSRF() } })
+            .then(r => r.json()).then(data => {
+                if (data.success) { bootstrap.Modal.getInstance(document.getElementById('entryModal')).hide(); showAlert('Saved.'); loadData(); }
+                else { document.getElementById('modalError').textContent = data.error; document.getElementById('modalError').style.display = 'block'; }
+            });
+    }
+
+    function deleteEntry(id) {
+        if (!confirm('Delete this rate?')) return;
+        fetch(`{% url 'interconnect:rate_delete' 0 %}`.replace('/0/', `/${id}/`), { method: 'POST', headers: { 'X-CSRFToken': getCSRF() } })
+            .then(r => r.json()).then(d => { if (d.success) { showAlert('Deleted.'); loadData(); } else { showAlert(d.error || 'Delete failed', 'danger'); } });
+    }
+
+    document.addEventListener('DOMContentLoaded', loadData);
+</script>
+{% endblock %}

@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from typing import Tuple, List
 
 from core.base_processor import BaseProcessor
+from core.utils.prepaid import normalize_prepaid_flag, derive_pgw_prepaid_flag
 from streams.pgw.decoder import PGWDecoder
 from streams.pgw.cdr_fields import VALIDATION_RULES, ENRICHMENT_RULES
 
@@ -100,6 +101,10 @@ class PGWProcessor(BaseProcessor):
             calling_number=str(raw.get('msisdn', ''))[:50],
             called_number=str(raw.get('apn', ''))[:100],
             imsi=str(raw.get('imsi', ''))[:20],
+            # Derive from chargingCharacteristics — bit 0x0400 set = PREPAID
+            # (3GPP TS 32.298 standard).  Replaces a non-existent upstream
+            # 'PREPAID_FLAG' field that always returned blank.
+            prepaid_flag=derive_pgw_prepaid_flag(raw.get('charging_characteristics')),
             imei=str(raw.get('imei', '') or raw.get('imeisv', ''))[:20],
             start_time=start_time,
             end_time=end_time,
@@ -107,16 +112,45 @@ class PGWProcessor(BaseProcessor):
             data_volume_up=str(raw.get('total_data_volume_uplink', 0) or 0),
             data_volume_down=str(raw.get('total_data_volume_downlink', 0) or 0),
             apn=str(raw.get('apn', ''))[:100],
+            apn_oi=str(raw.get('apn_oi', ''))[:100],
             pdn_type=str(raw.get('pdn_type', ''))[:20],
+            pdn_type_raw=raw.get('pdn_type_raw'),
+            pdn_address=str(raw.get('pdn_address', ''))[:50],
             rat_type=str(raw.get('rat_type', '') if raw.get('rat_type') is not None else '')[:20],
             pgw_address=str(raw.get('pgw_address', ''))[:50],
             sgw_address=str(raw.get('serving_node_address', ''))[:50],
-            node_id=str(raw.get('node_id', ''))[:100],
-            cell_id=(str(raw['cell_id']) if 'cell_id' in raw else
-                     str(raw['eci']) if 'eci' in raw else '')[:50],
-            lac=(str(raw['tac']) if 'tac' in raw else '')[:20],
+            node_id=(
+                f"{raw.get('node_id_82')} ({raw.get('node_id_int')})" if raw.get('node_id_82') and raw.get('node_id_int') else
+                raw.get('node_id_82') or raw.get('node_id_int') or raw.get('node_id') or ''
+            )[:100],
+            local_sequence_number=raw.get('local_sequence_number'),
+            record_sequence_number=raw.get('record_sequence_number'),
+            charging_characteristics=str(raw.get('charging_characteristics', ''))[:50],
+            rating_group=(
+                str(raw['rating_group'])[:200] if 'rating_group' in raw else
+                ', '.join(str(rg) for rg in raw['rating_groups'])[:200] if raw.get('rating_groups') else None
+            ),
+            cell_id=str(raw.get('cell_id') or '')[:50],
+            lac=str(raw.get('lac') or '')[:20],
+            tac=str(raw.get('tac') or '')[:20],
+            eci=str(raw.get('eci') or '')[:50],
             serving_plmn=str(raw.get('serving_plmn', ''))[:10],
+            user_location_info=str(raw.get('user_location_info') or '')[:1000],
+            uli_timestamp=self._parse_timestamp(raw.get('uli_timestamp')),
+            ms_timezone=str(raw.get('ms_timezone', ''))[:50],
+            qci=raw.get('qci'),
             cause_for_closing=str(raw.get('cause_for_closing_name', ''))[:50],
+            diagnostics=str(raw.get('diagnostics', ''))[:100],
+            selection_mode=raw.get('apn_selection_mode'),
+            ch_selection_mode=raw.get('ch_selection_mode'),
+            dynamic_address_flag=raw.get('dynamic_address_flag', False),
+            ims_signaling_context=raw.get('ims_signaling_context', False),
+            serving_node_type=raw.get('serving_node_type'),
+            max_requested_bw_ul=raw.get('max_requested_bw_ul'),
+            max_requested_bw_dl=raw.get('max_requested_bw_dl'),
+            rule_name=(
+                ', '.join(sorted(list(set(str(e['rule_name']) for e in raw.get('service_data_list', []) if e.get('rule_name')))))[:200]
+            ),
             is_roaming=raw.get('is_roaming', False),
             raw_data=self._build_raw_data(raw),
             status=PGWRecord.Status.VALID,
@@ -222,19 +256,43 @@ class PGWProcessor(BaseProcessor):
             'is_roaming': safe_str(raw.get('is_roaming', False)),
             'start_time': safe_str(raw.get('start_time') or raw.get('record_opening_time') or ''),
             'stop_time': safe_str(raw.get('stop_time') or ''),
-            'cell_id': safe_str(raw.get('cell_id') or raw.get('eci') or ''),
-            'tac': safe_str(raw.get('tac') or ''),
+            'cell_id': safe_str(raw.get('cell_id', '')),
+            'lac': safe_str(raw.get('lac', '')),
+            'tac': safe_str(raw.get('tac', '')),
+            'eci': safe_str(raw.get('eci', '')),
             'location_plmn': safe_str(raw.get('location_plmn') or ''),
+            'user_location_info': safe_str(raw.get('user_location_info', '')),
+            'uli_timestamp': safe_str(raw.get('uli_timestamp', '')),
+            'ms_timezone': safe_str(raw.get('ms_timezone', '')),
+            'qci': safe_str(raw.get('qci', '')),
+            'local_sequence_number': safe_str(raw.get('local_sequence_number', '')),
+            'record_sequence_number': safe_str(raw.get('record_sequence_number', '')),
+            'charging_characteristics': safe_str(raw.get('charging_characteristics', '')),
+            'pdn_address': safe_str(raw.get('pdn_address', '')),
+            'apn_oi': safe_str(raw.get('apn_oi', '')),
+            'diagnostics': safe_str(raw.get('diagnostics', '')),
+            'rating_group': safe_str(raw.get('rating_group') or (
+                ', '.join(str(rg) for rg in raw['rating_groups']) if raw.get('rating_groups') else ''
+            )),
+            'selection_mode': safe_str(raw.get('apn_selection_mode', '')),
+            'ch_selection_mode': safe_str(raw.get('ch_selection_mode', '')),
+            'dynamic_address_flag': safe_str(raw.get('dynamic_address_flag', False)),
+            'ims_signaling_context': safe_str(raw.get('ims_signaling_context', False)),
+            'serving_node_type': safe_str(raw.get('serving_node_type', '')),
+            'max_requested_bw_ul': safe_str(raw.get('max_requested_bw_ul', '')),
+            'max_requested_bw_dl': safe_str(raw.get('max_requested_bw_dl', '')),
+            'rule_names': safe_str(', '.join(sorted(list(set(str(e['rule_name']) for e in raw.get('service_data_list', []) if e.get('rule_name')))))),
+            'service_data_list': raw.get('service_data_list', []),
         }
 
     # PGW CSV output columns (matches PGW_EXPORT_COLUMNS in dashboard)
     CSV_COLUMNS = [
         'PREPAID_FLAG', 'SUBSCRIBER_CATEGORY', 'RECORD_TYPE', 'SERVICE_TYPE',
         'NETWORK_RECORD_ID', 'MSISDN', 'IMSI', 'IMEI', 'APN', 'PDN_TYPE',
-        'SGW_ADDR', 'PGW_ADDR', 'RAT_TYPE', 'CELL_ID', 'TAC',
+        'PGW_ADDR', 'SGW_ADDR', 'RAT_TYPE', 'LAC', 'CELL_ID', 'TAC',
         'DATA_VOL_UP', 'DATA_VOL_DOWN', 'START_DATETIME', 'END_DATETIME',
         'DURATION', 'CAUSE_FOR_REC_CLOSING', 'CHARGING_ID', 'NODE_ID',
-        'CHARGING_CHAR', 'SERVING_PLMN',
+        'CHARGING_CHAR', 'SERVING_PLMN', 'RATING_GROUP',
     ]
 
     # Map from CSV column name to decoded record dict key
@@ -252,6 +310,7 @@ class PGWProcessor(BaseProcessor):
         'SGW_ADDR': 'sgw_address',
         'PGW_ADDR': 'pgw_address',
         'RAT_TYPE': 'rat_type_name',
+        'LAC': 'lac',
         'CELL_ID': 'cell_id',
         'TAC': 'tac',
         'DATA_VOL_UP': 'total_data_volume_uplink',
@@ -264,6 +323,7 @@ class PGWProcessor(BaseProcessor):
         'NODE_ID': 'node_id',
         'CHARGING_CHAR': 'charging_characteristics',
         'SERVING_PLMN': 'serving_plmn',
+        'RATING_GROUP': 'rating_group',
     }
 
     def _write_decoded_csv(self, records: list, source_path: str, stream: str) -> None:

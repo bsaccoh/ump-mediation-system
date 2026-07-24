@@ -18,6 +18,9 @@ class BusinessRule(models.Model):
         FILTERING      = 'FILTERING',      'Filtering'
         RATING         = 'RATING',         'Rating'
         AGGREGATION    = 'AGGREGATION',    'Aggregation'
+        CORRELATION    = 'CORRELATION',    'Correlation'
+        DETECTION      = 'DETECTION',      'Detection'
+        ERROR_HANDLING = 'ERROR_HANDLING', 'Error Handling'
 
     class Stream(models.TextChoices):
         ALL  = 'ALL',  'All Streams'

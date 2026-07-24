@@ -17,11 +17,11 @@ class SGSNRecord(models.Model):
 
     # Foreign keys
     file = models.ForeignKey(
-        'collection.CDRFile', on_delete=models.CASCADE,
+        'collection.CDRFile', on_delete=models.CASCADE, db_constraint=False,
         related_name='sgsn_records', db_index=True
     )
     source = models.ForeignKey(
-        'collection.DataSource', on_delete=models.SET_NULL,
+        'collection.DataSource', on_delete=models.SET_NULL, db_constraint=False,
         null=True, blank=True, db_index=True
     )
 
@@ -29,11 +29,13 @@ class SGSNRecord(models.Model):
     record_type = models.CharField(max_length=50, db_index=True)   # SGSN-CDR, SGSN-SMOMO, SGSN-SMTC
     service_type = models.CharField(max_length=20, default='DATA')  # DATA or SMS
     charging_id = models.CharField(max_length=50, null=True, blank=True)
+    rating_group = models.CharField(max_length=200, null=True, blank=True, db_index=True)
 
     # Subscriber
     calling_number = models.CharField(max_length=50, blank=True, db_index=True)  # MSISDN
     called_number = models.CharField(max_length=100, blank=True)                 # APN (data) or dest (SMS)
     imsi = models.CharField(max_length=20, blank=True, db_index=True)
+    prepaid_flag = models.CharField(max_length=10, blank=True, db_index=True)
     imei = models.CharField(max_length=20, blank=True)
 
     # Timing
@@ -42,8 +44,8 @@ class SGSNRecord(models.Model):
     duration = models.IntegerField(default=0)  # seconds
 
     # Data volumes (bytes) — 0 for SMS records
-    data_volume_up = models.CharField(max_length=50, default='0')
-    data_volume_down = models.CharField(max_length=50, default='0')
+    data_volume_up = models.BigIntegerField(default=0)
+    data_volume_down = models.BigIntegerField(default=0)
 
     # APN / Session
     apn = models.CharField(max_length=100, blank=True, db_index=True)

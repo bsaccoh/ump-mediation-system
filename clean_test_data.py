@@ -13,29 +13,30 @@ from streams.sgsn.models import SGSNRecord
 from streams.sgw.models import SGWRecord
 from businesslogic.models import RuleExecutionLog
 
+def delete_in_chunks(queryset, name):
+    total = 0
+    while True:
+        pks = list(queryset.values_list('pk', flat=True)[:500])
+        if not pks:
+            break
+        deleted, _ = queryset.filter(pk__in=pks).delete()
+        total += deleted
+    print(f"- Deleted {name}: {total}")
+
 def clean_database():
     print("Cleaning database records...")
     
-    # Delete CDR files (this will cascade to processing logs if any exist)
-    deleted_files, _ = CDRFile.objects.all().delete()
-    print(f"- Deleted CDRFiles: {deleted_files}")
-    
-    # Delete stream records
-    deleted_msc, _ = MSCRecord.objects.all().delete()
-    print(f"- Deleted MSCRecords: {deleted_msc}")
-    
-    deleted_pgw, _ = PGWRecord.objects.all().delete()
-    print(f"- Deleted PGWRecords: {deleted_pgw}")
-    
-    deleted_sgsn, _ = SGSNRecord.objects.all().delete()
-    print(f"- Deleted SGSNRecords: {deleted_sgsn}")
-    
-    deleted_sgw, _ = SGWRecord.objects.all().delete()
-    print(f"- Deleted SGWRecords: {deleted_sgw}")
-    
     # Delete business logic execution logs
-    deleted_rules, _ = RuleExecutionLog.objects.all().delete()
-    print(f"- Deleted RuleExecutionLogs: {deleted_rules}")
+    delete_in_chunks(RuleExecutionLog.objects.all(), "RuleExecutionLogs")
+
+    # Delete stream records first to avoid massive cascade on CDRFile deletion
+    delete_in_chunks(MSCRecord.objects.all(), "MSCRecords")
+    delete_in_chunks(PGWRecord.objects.all(), "PGWRecords")
+    delete_in_chunks(SGSNRecord.objects.all(), "SGSNRecords")
+    delete_in_chunks(SGWRecord.objects.all(), "SGWRecords")
+    
+    # Now delete CDR files
+    delete_in_chunks(CDRFile.objects.all(), "CDRFiles")
 
 def clean_data_directories():
     print("\nCleaning data directories...")
@@ -45,7 +46,7 @@ def clean_data_directories():
         print("Data directory does not exist yet. Skipping.")
         return
         
-    for subdir in ['incoming', 'decoded', 'processed', 'failed', 'archive']:
+    for subdir in ['incoming', 'decoded', 'processed', 'failed', 'archive', 'output']:
         dir_path = os.path.join(data_dir, subdir)
         if os.path.exists(dir_path):
             # Iterate and remove all files and directories inside the subdir
