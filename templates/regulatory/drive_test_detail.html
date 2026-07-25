@@ -300,11 +300,12 @@ function showAlert(msg, type='success') {
     setTimeout(() => b.style.display = 'none', 4000);
 }
 
-// Initialize Leaflet Map (Freetown SL default view)
+// Initialize Leaflet Map (CARTO Positron Light basemap matching user screenshot)
 const map = L.map('driveMap').setView([8.484, -13.230], 12);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors'
+    subdomains: 'abcd',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
 }).addTo(map);
 
 let allSamples = [];
@@ -454,31 +455,30 @@ function renderMapToCurrentIndex() {
 
     mapMarkersGroup.clearLayers();
 
-    // 1. Draw Full Route Polyline Track across all sample points
+    // 1. Draw Full Background Route Track (Thick Dark Grey Line matching user screenshot)
     const fullTrackLatLngs = allSamples.map(s => [s.lat, s.lng]);
     L.polyline(fullTrackLatLngs, {
         color: '#6c757d',
-        weight: 5,
-        opacity: 0.4,
+        weight: 9,
+        opacity: 0.85,
         lineCap: 'round',
         lineJoin: 'round'
     }).addTo(mapMarkersGroup);
 
-    // 2. Draw ALL sample measurement points across the full drive test route
-    allSamples.forEach((s, idx) => {
+    // 2. Draw Traversed Route Measurement Dots up to currentIndex as vehicle moves
+    for (let idx = 0; idx <= currentIndex; idx++) {
+        const s = allSamples[idx];
         let val = s.rsrp;
         if (activeMetric === 'RSRQ') val = s.rsrq;
         else if (activeMetric === 'SINR') val = s.sinr;
         else if (activeMetric === 'DL') val = s.dl_tp;
 
-        const isTraversed = idx <= currentIndex;
-
         L.circleMarker([s.lat, s.lng], {
-            radius: isTraversed ? 6 : 4,
+            radius: 6,
             fillColor: getMetricColor(val, activeMetric),
-            color: isTraversed ? '#ffffff' : '#495057',
-            weight: isTraversed ? 1.5 : 0.5,
-            fillOpacity: isTraversed ? 0.95 : 0.45
+            color: '#ffffff',
+            weight: 1.5,
+            fillOpacity: 1.0
         }).bindPopup(`
             <strong>Point #${idx + 1}</strong><br>
             <strong>Cell ID:</strong> ${s.cell_id || 'N/A'}<br>
@@ -486,27 +486,17 @@ function renderMapToCurrentIndex() {
             <strong>SINR:</strong> ${s.sinr !== null ? s.sinr + ' dB' : 'N/A'}<br>
             <strong>DL Throughput:</strong> ${s.dl_tp !== null ? s.dl_tp + ' Mbps' : 'N/A'}
         `).addTo(mapMarkersGroup);
-    });
-
-    // 3. Highlight Traversed Sub-Polyline up to currentIndex
-    if (currentIndex > 0) {
-        const traversedLatLngs = fullTrackLatLngs.slice(0, currentIndex + 1);
-        L.polyline(traversedLatLngs, {
-            color: '#0d6efd',
-            weight: 6,
-            opacity: 0.85
-        }).addTo(mapMarkersGroup);
     }
 
-    // 4. Vehicle Position Marker (Pulsing glowing position indicator)
+    // 3. Vehicle Position Marker (Red Dot matching user screenshot)
     const curSample = allSamples[currentIndex];
     if (curSample) {
         if (!vehicleMarker) {
             vehicleMarker = L.circleMarker([curSample.lat, curSample.lng], {
-                radius: 10,
+                radius: 12,
                 fillColor: '#dc3545',
                 color: '#ffffff',
-                weight: 3,
+                weight: 3.5,
                 fillOpacity: 1
             }).addTo(map);
         } else {
