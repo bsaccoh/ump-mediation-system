@@ -122,8 +122,15 @@
 <!-- Top Route Playback & Metric Control Bar (Matching User Screenshot) -->
 <div class="card border-0 shadow-sm rounded-3 mb-3 bg-white p-2">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <!-- Left: Metric Selectors -->
+        <!-- Left: Route & Metric Selectors -->
         <div class="d-flex align-items-center gap-2">
+            <div class="fieldset-box me-1" style="position: relative; border: 1px solid #dee2e6; border-radius: 8px; padding: 2px 8px 4px 8px; background: #fff; display: inline-block;">
+                <span class="fieldset-label" style="position: absolute; top: -8px; left: 10px; background: #fff; padding: 0 4px; font-size: 0.68rem; color: #6c757d; font-weight: 600;">Route Selection</span>
+                <select id="routeSelect" class="form-select form-select-sm border-0 shadow-none fw-semibold" style="font-size: 0.82rem; padding: 2px 20px 2px 4px; max-width: 210px;" onchange="onRouteSelectChanged(this.value)">
+                    <option value="ALL" selected>All First 10 Routes (Combined Map)</option>
+                </select>
+            </div>
+
             <span class="small text-muted fw-bold">Map Color:</span>
             <div class="btn-group btn-group-sm" role="group">
                 <button type="button" class="btn btn-outline-secondary active fw-semibold" id="btnMetricRSRP" onclick="setMetric('RSRP')">RSRP</button>
@@ -387,11 +394,20 @@ function updateLegendUI(metric) {
     }
 }
 
-function loadMapSamples() {
-    fetch("{% url 'regulatory:drive_test_samples_api' campaign.pk %}")
+function loadMapSamples(routeId = 'ALL') {
+    fetch("{% url 'regulatory:drive_test_samples_api' campaign.pk %}?route_id=" + routeId)
         .then(r => r.json()).then(d => {
             allSamples = d.samples || [];
             const towers = d.towers || [];
+            const routes = d.routes || [];
+
+            // Populate Route Dropdown (First 10 Routes)
+            const routeSelect = document.getElementById('routeSelect');
+            if (routes.length && routeSelect.children.length <= 1) {
+                routeSelect.innerHTML = `<option value="ALL">All First 10 Routes (Combined Map)</option>` +
+                    routes.map(r => `<option value="${r.id}">${r.name.length > 25 ? r.name.substring(0, 23) + '...' : r.name} (${r.sample_count} pts)</option>`).join('');
+                routeSelect.value = routeId;
+            }
 
             // Render Cell Towers
             towersGroup.clearLayers();
@@ -436,6 +452,11 @@ function loadMapSamples() {
         });
 }
 
+function onRouteSelectChanged(val) {
+    if (isPlaying) togglePlayPause();
+    loadMapSamples(val);
+}
+
 function setMetric(metric) {
     activeMetric = metric;
     ['RSRP', 'RSRQ', 'SINR', 'DL'].forEach(m => {
@@ -455,15 +476,27 @@ function renderMapToCurrentIndex() {
 
     mapMarkersGroup.clearLayers();
 
-    // 1. Draw Full Background Route Track (Thick Dark Grey Line matching user screenshot)
-    const fullTrackLatLngs = allSamples.map(s => [s.lat, s.lng]);
-    L.polyline(fullTrackLatLngs, {
-        color: '#6c757d',
-        weight: 9,
-        opacity: 0.85,
-        lineCap: 'round',
-        lineJoin: 'round'
-    }).addTo(mapMarkersGroup);
+    // Group samples by route_id so all 10 route lines are drawn on the map
+    const routesMap = {};
+    allSamples.forEach(s => {
+        const rid = s.route_id || 'default';
+        if (!routesMap[rid]) routesMap[rid] = [];
+        routesMap[rid].push(s);
+    });
+
+    // 1. Draw Full Background Route Track for each of the 10 routes (Thick Dark Grey Lines matching user screenshot)
+    Object.values(routesMap).forEach(pts => {
+        const latLngs = pts.map(s => [s.lat, s.lng]);
+        if (latLngs.length >= 2) {
+            L.polyline(latLngs, {
+                color: '#6c757d',
+                weight: 9,
+                opacity: 0.85,
+                lineCap: 'round',
+                lineJoin: 'round'
+            }).addTo(mapMarkersGroup);
+        }
+    });
 
     // 2. Draw Traversed Route Measurement Dots up to currentIndex as vehicle moves
     for (let idx = 0; idx <= currentIndex; idx++) {

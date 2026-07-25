@@ -991,9 +991,37 @@ def drive_test_detail(request, pk):
 @login_required
 def drive_test_samples_api(request, pk):
     campaign = get_object_or_404(DriveTestCampaign, pk=pk)
-    samples = DriveTestSample.objects.filter(campaign=campaign)[:5000]
+    route_id = request.GET.get('route_id', '').strip()
+
+    # Fetch top 10 campaigns of this operator
+    top_10_qs = DriveTestCampaign.objects.filter(
+        operator_code=campaign.operator_code
+    ).order_by('-pk')[:10]
+    
+    top_10_list = list(top_10_qs)
+    if not any(c.pk == campaign.pk for c in top_10_list):
+        top_10_list = [campaign] + top_10_list[:9]
+
+    route_options = [{
+        'id': c.pk,
+        'name': c.name,
+        'tech': c.technology,
+        'sample_count': c.samples.count(),
+    } for c in top_10_list]
+
+    if route_id and route_id != 'ALL':
+        try:
+            target_ids = [int(route_id)]
+        except ValueError:
+            target_ids = [c.pk for c in top_10_list]
+    else:
+        # Default when no single route is selected: display first 10 routes!
+        target_ids = [c.pk for c in top_10_list]
+
+    samples = DriveTestSample.objects.filter(campaign_id__in=target_ids)[:10000]
     data = [{
         'id': s.pk,
+        'route_id': s.campaign_id,
         'lat': float(s.latitude),
         'lng': float(s.longitude),
         'rsrp': float(s.rsrp) if s.rsrp is not None else None,
@@ -1004,7 +1032,7 @@ def drive_test_samples_api(request, pk):
         'mos': float(s.voice_mos) if s.voice_mos is not None else None,
         'cell_id': s.cell_id,
         'pci': s.serving_pci,
-    } for s in samples]
+    } for s in samples if s.latitude and s.longitude]
 
     sites = NetworkCellSite.objects.filter(is_active=True)[:50]
     towers = [{
@@ -1016,7 +1044,13 @@ def drive_test_samples_api(request, pk):
         'lng': float(st.longitude),
     } for st in sites if st.latitude and st.longitude]
 
-    return JsonResponse({'success': True, 'samples': data, 'towers': towers})
+    return JsonResponse({
+        'success': True,
+        'samples': data,
+        'towers': towers,
+        'routes': route_options,
+        'selected_route_id': route_id or 'ALL'
+    })
 
 
 @login_required
