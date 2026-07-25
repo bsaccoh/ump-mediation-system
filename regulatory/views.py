@@ -1445,6 +1445,14 @@ def kpi_config_delete(request, pk):
 # =============================================================================
 
 @login_required
+def compliance_page_view(request):
+    """Render NatCA Telecom Regulatory SLA Compliance Audit management page."""
+    return render(request, 'regulatory/compliance.html', {
+        'kpi_defs': NetworkKPIDefinition.objects.filter(is_active=True).order_by('code'),
+    })
+
+
+@login_required
 def compliance_audit_api(request):
     """JSON API endpoint returning NatCA Compliance Audit & Penalty data."""
     from .engines.compliance_audit import run_compliance_audit

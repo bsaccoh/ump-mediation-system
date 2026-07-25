@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+{% block title %}NatCA SLA Compliance Audit — Regulatory{% endblock %}
+{% block page_title %}NatCA Telecom Regulatory SLA Compliance Audit &amp; Operator Matrix{% endblock %}
+
+{% block extra_css %}
+<style>
+.badge-op-orange { background-color: #ff6600; color: #fff; font-weight: 600; }
+.badge-op-africell { background-color: #e2001a; color: #fff; font-weight: 600; }
+.badge-op-qcell { background-color: #0056b3; color: #fff; font-weight: 600; }
+.badge-op-sierratel { background-color: #008080; color: #fff; font-weight: 600; }
+.badge-op-onemobile { background-color: #6f42c1; color: #fff; font-weight: 600; }
+.badge-op-national { background-color: #343a40; color: #fff; font-weight: 600; }
+.stat-card { background: #ffffff; border-radius: 8px; border: 1px solid #e9ecef; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Filter & Action Header Bar -->
+<div class="card mb-3 border-0 shadow-sm">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">Operator</label>
+                <select id="filterOperator" class="form-select form-select-sm" onchange="loadComplianceAudit()">
+                    <option value="">All Operators</option>
+                    <option value="orange">Orange Sierra Leone</option>
+                    <option value="africell">Africell Sierra Leone</option>
+                    <option value="qcell">QCell Sierra Leone</option>
+                    <option value="sierratel">Sierra Tel</option>
+                    <option value="onemobile">One-Mobile</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">Region</label>
+                <select id="filterRegion" class="form-select form-select-sm" onchange="onRegionChange()">
+                    <option value="">All Regions</option>
+                    <option value="Western Area">Western Area</option>
+                    <option value="Northern">Northern Province</option>
+                    <option value="Southern">Southern Province</option>
+                    <option value="Eastern">Eastern Province</option>
+                    <option value="North Western">North-Western Province</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">District</label>
+                <select id="filterDistrict" class="form-select form-select-sm" onchange="loadComplianceAudit()">
+                    <option value="">All Districts</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">From Date</label>
+                <input type="date" id="dateFrom" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">To Date</label>
+                <input type="date" id="dateTo" class="form-control form-control-sm">
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary btn-sm" onclick="loadComplianceAudit()"><i class="bi bi-arrow-clockwise"></i> Audit</button>
+            </div>
+            <div class="col-auto ms-auto">
+                <div class="btn-group me-1">
+                    <button type="button" class="btn btn-outline-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="bi bi-shield-check me-1"></i> NatCA Audit Report
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                        <li><a class="dropdown-item small" href="#" onclick="downloadAuditReport('pdf')"><i class="bi bi-file-pdf text-danger me-2"></i> PDF Executive Audit Summary</a></li>
+                        <li><a class="dropdown-item small" href="#" onclick="downloadAuditReport('excel')"><i class="bi bi-file-excel text-success me-2"></i> Excel Detailed Audit Workbook</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="alertBox" class="alert" style="display:none;"></div>
+
+<!-- System Executive Compliance Index Summary Cards -->
+<div class="row g-3 mb-3">
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card p-3 shadow-sm">
+            <div class="text-muted small">Total Audited Measurements</div>
+            <div class="fs-4 fw-bold text-dark mt-1" id="statAuditedEntries">0</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card p-3 shadow-sm">
+            <div class="text-muted small">Total SLA Breaches</div>
+            <div class="fs-4 fw-bold text-danger mt-1" id="statBreachCount">0</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card p-3 shadow-sm">
+            <div class="text-muted small">System Compliance Index</div>
+            <div class="fs-4 fw-bold text-success mt-1" id="statComplianceRate">100.00 %</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card p-3 shadow-sm">
+            <div class="text-muted small">Assessed SLA Penalties</div>
+            <div class="fs-4 fw-bold text-dark mt-1" id="statPenaltiesAssessed">$0.00</div>
+        </div>
+    </div>
+</div>
+
+<!-- Multi-Operator SLA Compliance Matrix Table -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white py-2 fw-semibold d-flex justify-content-between align-items-center border-bottom-0">
+        <span><i class="bi bi-shield-check text-primary me-1"></i> NatCA Multi-Operator Regulatory SLA Compliance Matrix</span>
+        <span class="badge bg-primary px-3">5 Operators SLA Pass / Fail Audit Matrix</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover align-middle text-center mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="text-start text-dark fw-bold">NatCA Regulatory KPI Metric</th>
+                    <th class="text-dark fw-bold">Target Rule</th>
+                    <th><span style="color:#ff6600; font-weight:700;">Orange</span></th>
+                    <th><span style="color:#e2001a; font-weight:700;">Africell</span></th>
+                    <th><span style="color:#0056b3; font-weight:700;">QCell</span></th>
+                    <th><span style="color:#008080; font-weight:700;">Sierra Tel</span></th>
+                    <th><span style="color:#6f42c1; font-weight:700;">One-Mobile</span></th>
+                    <th><span style="color:#343a40; font-weight:700;">National Avg</span></th>
+                </tr>
+            </thead>
+            <tbody id="complianceMatrixBody">
+                <tr><td colspan="8" class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Loading Compliance Matrix...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Sierra Leone District Quality Rankings Table -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white py-2 fw-semibold d-flex justify-content-between align-items-center border-bottom-0">
+        <span><i class="bi bi-geo-alt text-primary me-1"></i> Sierra Leone District Network Quality Audit Rankings</span>
+        <span class="small text-muted">Quality of Service Audit Scores</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>District Name</th>
+                    <th>Province / Region</th>
+                    <th>Audited Count</th>
+                    <th>Compliant Count</th>
+                    <th>Compliance Rate (%)</th>
+                    <th>Quality Grade</th>
+                </tr>
+            </thead>
+            <tbody id="districtRankingsBody">
+                <tr><td colspan="6" class="text-center text-muted py-3">Loading district quality rankings...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Detailed SLA Violations & Penalty Breakdown -->
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-2 fw-semibold d-flex justify-content-between align-items-center border-bottom-0">
+        <span><i class="bi bi-exclamation-triangle text-danger me-1"></i> SLA Breach &amp; Regulatory Penalty Event Log</span>
+        <span class="badge bg-danger" id="violationCountBadge">0 Breaches Logged</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Event ID</th>
+                    <th>Operator</th>
+                    <th>KPI Code</th>
+                    <th>Period Date</th>
+                    <th>Region / District</th>
+                    <th>Measured Value</th>
+                    <th>NatCA Target</th>
+                    <th>Penalty Fee ($)</th>
+                    <th>Severity</th>
+                </tr>
+            </thead>
+            <tbody id="violationLogBody">
+                <tr><td colspan="9" class="text-center text-muted py-3">No SLA breach events recorded.</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const DISTRICTS_BY_REGION = {
+    'Western Area': ['Western Area Urban', 'Western Area Rural'],
+    'Northern': ['Bombali', 'Falaba', 'Koinadugu', 'Tonkolili'],
+    'Southern': ['Bo', 'Bonthe', 'Moyamba', 'Pujehun'],
+    'Eastern': ['Kailahun', 'Kenema', 'Kono'],
+    'North Western': ['Kambia', 'Karene', 'Port Loko']
+};
+
+function getCSRF() { return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''; }
+
+function onRegionChange() {
+    const r = document.getElementById('filterRegion').value;
+    const distSel = document.getElementById('filterDistrict');
+    distSel.innerHTML = '<option value="">All Districts</option>';
+    if (r && DISTRICTS_BY_REGION[r]) {
+        DISTRICTS_BY_REGION[r].forEach(d => { distSel.innerHTML += `<option value="${d}">${d}</option>`; });
+    } else {
+        Object.values(DISTRICTS_BY_REGION).flat().forEach(d => { distSel.innerHTML += `<option value="${d}">${d}</option>`; });
+    }
+    loadComplianceAudit();
+}
+
+(function(){
+    const today = new Date();
+    const ago = new Date(today.getTime() - 90*86400*1000);
+    document.getElementById('dateFrom').value = ago.toISOString().slice(0,10);
+    document.getElementById('dateTo').value = today.toISOString().slice(0,10);
+    onRegionChange();
+})();
+
+function loadComplianceAudit() {
+    const start = document.getElementById('dateFrom').value;
+    const end = document.getElementById('dateTo').value;
+    const operator = document.getElementById('filterOperator').value;
+    const region = document.getElementById('filterRegion').value;
+    const district = document.getElementById('filterDistrict').value;
+
+    fetch(`{% url 'regulatory:compliance_audit_api' %}?start=${start}&end=${end}&operator=${operator}&region=${region}&district=${district}`)
+        .then(r => r.json()).then(d => {
+            renderStats(d.audit_metadata || {});
+            renderDistrictRankings(d.district_rankings || []);
+            renderViolationLog(d.kpi_violations || []);
+        });
+
+    fetch(`{% url 'regulatory:network_performance_comparison_api' %}?start=${start}&end=${end}&region=${region}&district=${district}`)
+        .then(r => r.json()).then(d => {
+            renderComplianceMatrix(d.matrix || []);
+        });
+}
+
+function renderStats(meta) {
+    document.getElementById('statAuditedEntries').textContent = (meta.total_system_entries || 0).toLocaleString();
+    document.getElementById('statBreachCount').textContent = (meta.total_system_breaches || 0).toLocaleString();
+    const penalties = parseFloat(meta.total_penalties_assessed || '0');
+    document.getElementById('statPenaltiesAssessed').textContent = `$${penalties.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+
+    const total = meta.total_system_entries || 0;
+    const breaches = meta.total_system_breaches || 0;
+    const rate = total ? (((total - breaches) / total) * 100).toFixed(2) : '100.00';
+    document.getElementById('statComplianceRate').textContent = `${rate} %`;
+}
+
+function renderComplianceMatrix(matrix) {
+    if (!matrix || !matrix.length) {
+        document.getElementById('complianceMatrixBody').innerHTML = `<tr><td colspan="8" class="text-center text-muted py-3">No compliance data available.</td></tr>`;
+        return;
+    }
+
+    const html = matrix.map(m => {
+        const dirStr = m.direction === 'ABOVE' ? '>=' : '<=';
+        const targetStr = `${dirStr} ${m.natca_threshold} ${m.unit}`;
+
+        const compCell = (opKey) => {
+            const item = m.operators[opKey] || {};
+            if (!item || item.value === 'N/A') {
+                return `<span class="badge bg-light text-muted border">NO DATA</span>`;
+            }
+            if (item.is_compliant) {
+                return `<span class="badge bg-success py-1 px-2"><i class="bi bi-check-circle me-1"></i>PASS (${item.value} ${m.unit})</span>`;
+            } else {
+                return `<span class="badge bg-danger py-1 px-2"><i class="bi bi-x-circle me-1"></i>FAIL (${item.value} ${m.unit})</span>`;
+            }
+        };
+
+        return `
+            <tr>
+                <td class="text-start fw-bold">${m.name} <code>(${m.code})</code></td>
+                <td class="text-muted small fw-semibold">${targetStr}</td>
+                <td>${compCell('orange')}</td>
+                <td>${compCell('africell')}</td>
+                <td>${compCell('qcell')}</td>
+                <td>${compCell('sierratel')}</td>
+                <td>${compCell('onemobile')}</td>
+                <td class="bg-light fw-bold">${compCell('national_avg')}</td>
+            </tr>
+        `;
+    }).join('');
+
+    document.getElementById('complianceMatrixBody').innerHTML = html;
+}
+
+function renderDistrictRankings(rankings) {
+    if (!rankings.length) {
+        document.getElementById('districtRankingsBody').innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">No district quality rankings available.</td></tr>`;
+        return;
+    }
+
+    document.getElementById('districtRankingsBody').innerHTML = rankings.map(r => `
+        <tr>
+            <td class="fw-bold">${r.district}</td>
+            <td><span class="badge bg-light text-dark border">${r.region}</span></td>
+            <td>${r.total_audited.toLocaleString()}</td>
+            <td class="text-success fw-bold">${r.pass_count.toLocaleString()}</td>
+            <td class="fw-bold">${r.compliance_rate} %</td>
+            <td>
+                ${r.quality_grade === 'EXCELLENT' 
+                    ? '<span class="badge bg-success">EXCELLENT</span>' 
+                    : r.quality_grade === 'GOOD' 
+                        ? '<span class="badge bg-primary">GOOD</span>' 
+                        : '<span class="badge bg-warning text-dark">NEEDS IMPROVEMENT</span>'}
+            </td>
+        </tr>
+    `).join('');
+}
+
+function renderViolationLog(violations) {
+    document.getElementById('violationCountBadge').textContent = `${violations.length} Breaches Logged`;
+    if (!violations.length) {
+        document.getElementById('violationLogBody').innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">No SLA breach events recorded. Network is 100% compliant.</td></tr>`;
+        return;
+    }
+
+    const opBadge = (op) => {
+        const cls = { orange: 'badge-op-orange', africell: 'badge-op-africell', qcell: 'badge-op-qcell', sierratel: 'badge-op-sierratel', onemobile: 'badge-op-onemobile' }[op] || 'badge-op-national';
+        return `<span class="badge ${cls}">${op.toUpperCase()}</span>`;
+    };
+
+    document.getElementById('violationLogBody').innerHTML = violations.map(v => `
+        <tr>
+            <td><code>#${v.id}</code></td>
+            <td>${opBadge(v.operator_code)}</td>
+            <td class="fw-bold"><code>${v.kpi_code}</code></td>
+            <td class="text-muted small">${v.period_date}</td>
+            <td>${v.region} / ${v.district}</td>
+            <td class="text-danger fw-bold">${v.measured_value}</td>
+            <td class="text-muted small">${v.target_threshold}</td>
+            <td class="fw-bold text-dark">$${parseFloat(v.penalty_fee).toFixed(2)}</td>
+            <td><span class="badge bg-danger">${v.severity}</span></td>
+        </tr>
+    `).join('');
+}
+
+function downloadAuditReport(fmt) {
+    const start = document.getElementById('dateFrom').value;
+    const end = document.getElementById('dateTo').value;
+    const operator = document.getElementById('filterOperator').value;
+    const region = document.getElementById('filterRegion').value;
+    const district = document.getElementById('filterDistrict').value;
+    const baseUrl = fmt === 'pdf' ? "{% url 'regulatory:download_audit_pdf' %}" : "{% url 'regulatory:download_audit_excel' %}";
+    window.location.href = `${baseUrl}?start=${start}&end=${end}&operator=${operator}&region=${region}&district=${district}`;
+}
+</script>
+{% endblock %}
