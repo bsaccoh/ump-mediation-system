@@ -311,7 +311,7 @@ function renderDistrictRankings(rankings) {
 function renderOperatorChart(summaries) {
     const ctx = document.getElementById('chartOperatorCompliance').getContext('2d');
     const labels = summaries.map(s => s.operator_code.toUpperCase());
-    const scores = summaries.map(s => parseFloat(s.compliance_score));
+    const scores = summaries.map(s => s.compliance_score === 'N/A' ? 0 : parseFloat(s.compliance_score));
 
     const colorMap = {
         'ORANGE': '#ff6600',

@@ -62,6 +62,15 @@ def run_compliance_audit(start_date=None, end_date=None, operator_code='', regio
     for op in operators:
         op_qs = qs.filter(operator_code=op)
         if not op_qs.exists():
+            operator_summaries.append({
+                'operator_code': op,
+                'total_measurements': 0,
+                'compliant_measurements': 0,
+                'breach_count': 0,
+                'compliance_score': 'N/A',
+                'total_penalty_fee': '0.00',
+                'status': 'NO_DATA',
+            })
             continue
 
         op_total = op_qs.count()
