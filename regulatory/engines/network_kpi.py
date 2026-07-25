@@ -199,25 +199,38 @@ def parse_huawei_omc_pm_content(content_bytes_or_str, operator_code='orange') ->
     # Standard KPI codes pool
     std_kpis = ['CSSR', 'DATA_ACCESS_SR', 'CDR', 'DATA_DROP_RATE', 'HOSR', 'CELL_AVAIL', 'DL_THROUGHPUT', 'UL_THROUGHPUT']
 
-    # Pre-fetch or auto-create counters in counter dictionary
+    # Pre-fetch existing counter catalog into memory
+    existing_counters = {
+        c.counter_id.upper(): c.kpi_code or 'CSSR'
+        for c in NetworkCounterDefinition.objects.all()
+    }
+
     counter_kpi_map = {}
+    new_counters_to_create = []
     for idx, c_col in enumerate(header0[4:], start=4):
         cid = c_col.strip().upper()
         if not cid:
             continue
-        c_obj = NetworkCounterDefinition.objects.filter(counter_id=cid).first()
-        if not c_obj:
+        if cid in existing_counters:
+            counter_kpi_map[cid] = existing_counters[cid]
+        else:
             assigned_kpi = std_kpis[idx % len(std_kpis)]
-            c_obj = NetworkCounterDefinition.objects.create(
-                vendor='Huawei',
-                network_element='eNodeB',
-                counter_id=cid,
-                counter_name=f'Huawei OMC Counter {cid}',
-                technology='3G/4G',
-                kpi_code=assigned_kpi,
-                formula_role='NUMERATOR'
+            new_counters_to_create.append(
+                NetworkCounterDefinition(
+                    vendor='Huawei',
+                    network_element='eNodeB',
+                    counter_id=cid,
+                    counter_name=f'Huawei OMC Counter {cid}',
+                    technology='3G/4G',
+                    kpi_code=assigned_kpi,
+                    formula_role='NUMERATOR'
+                )
             )
-        counter_kpi_map[cid] = c_obj.kpi_code or 'CSSR'
+            counter_kpi_map[cid] = assigned_kpi
+            existing_counters[cid] = assigned_kpi
+
+    if new_counters_to_create:
+        NetworkCounterDefinition.objects.bulk_create(new_counters_to_create, ignore_conflicts=True)
 
     parsed_rows = []
     for row in reader:
