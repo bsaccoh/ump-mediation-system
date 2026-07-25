@@ -24,7 +24,7 @@ from .models import (
     LeviedPeriod, LEARequest, LEAExtractionLog, QoSMetric,
     NetworkKPIDefinition, NetworkKPIEntry, NetworkKPIImportLog,
     DriveTestCampaign, DriveTestSample, DriveTestAnalysis,
-    NetworkCellSite,
+    NetworkCellSite, NetworkCounterDefinition,
 )
 
 
@@ -1032,5 +1032,192 @@ def site_import(request):
 def site_delete(request, pk):
     get_object_or_404(NetworkCellSite, pk=pk).delete()
     return JsonResponse({'success': True})
+
+
+@login_required
+def site_download_template(request):
+    """Download sample CSV template for Cell Site Inventory import."""
+    import csv, io
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'operator_code', 'site_id', 'site_name', 'cell_id', 'technology',
+        'region', 'district', 'chiefdom_town', 'latitude', 'longitude',
+        'height_m', 'azimuth', 'status', 'notes'
+    ])
+    writer.writerow([
+        'orange', 'FTW001', 'Lumley Beach Tower', 'FTW001_1', '4G',
+        'WESTERN_AREA', 'Western Area Urban', 'Lumley', '8.4842000', '-13.2301000',
+        '45.0', '120', 'ACTIVE', 'Primary Lumley Sector A'
+    ])
+    writer.writerow([
+        'africell', 'AF_BO01', 'Bo City Central Tower', 'AF_BO01_1', '4G',
+        'SOUTHERN', 'Bo', 'Bo Town', '7.9647000', '-11.7383000',
+        '50.0', '0', 'ACTIVE', 'Bo Main Switch Hub'
+    ])
+
+    resp = HttpResponse(output.getvalue(), content_type='text/csv')
+    resp['Content-Disposition'] = 'attachment; filename="cell_sites_template.csv"'
+    return resp
+
+
+# =============================================================================
+# 9. Counter Dictionary / Inventory Catalog
+# =============================================================================
+
+@login_required
+def counter_list_view(request):
+    return render(request, 'regulatory/counters.html', {
+        'title': 'PM Counter Dictionary',
+        'total': NetworkCounterDefinition.objects.count(),
+        'kpi_defs': NetworkKPIDefinition.objects.filter(is_active=True),
+        'role_choices': NetworkCounterDefinition.FormulaRole.choices,
+    })
+
+
+@login_required
+def counter_api(request):
+    vendor = request.GET.get('vendor', '').strip()
+    ne = request.GET.get('network_element', '').strip()
+    tech = request.GET.get('technology', '').strip()
+    kpi_code = request.GET.get('kpi_code', '').strip().upper()
+    q = request.GET.get('q', '').strip()
+    page = request.GET.get('page', 1)
+
+    qs = NetworkCounterDefinition.objects.all()
+    if vendor:
+        qs = qs.filter(vendor__icontains=vendor)
+    if ne:
+        qs = qs.filter(network_element__icontains=ne)
+    if tech:
+        qs = qs.filter(technology=tech)
+    if kpi_code:
+        qs = qs.filter(kpi_code=kpi_code)
+    if q:
+        qs = qs.filter(
+            Q(counter_id__icontains=q) | Q(counter_name__icontains=q) | Q(description__icontains=q)
+        )
+
+    rows, total, page, pages = _paginate(qs, page)
+    data = [{
+        'id': r.pk,
+        'counter_id': r.counter_id,
+        'counter_name': r.counter_name,
+        'vendor': r.vendor,
+        'network_element': r.network_element,
+        'technology': r.technology,
+        'kpi_code': r.kpi_code,
+        'formula_role': r.formula_role,
+        'description': r.description,
+        'is_active': r.is_active,
+    } for r in rows]
+    return JsonResponse({'records': data, 'total': total, 'page': page, 'pages': pages})
+
+
+@login_required
+@require_POST
+def counter_save(request):
+    pk = request.POST.get('id')
+    try:
+        if pk:
+            obj = NetworkCounterDefinition.objects.get(pk=pk)
+        else:
+            obj = NetworkCounterDefinition()
+
+        obj.counter_id = request.POST.get('counter_id', '').strip()
+        obj.counter_name = request.POST.get('counter_name', '').strip()
+        obj.vendor = request.POST.get('vendor', 'Huawei').strip() or 'Huawei'
+        obj.network_element = request.POST.get('network_element', 'eNodeB').strip() or 'eNodeB'
+        obj.technology = request.POST.get('technology', '4G').strip()
+        obj.kpi_code = request.POST.get('kpi_code', '').strip().upper()
+        obj.formula_role = request.POST.get('formula_role', NetworkCounterDefinition.FormulaRole.NUMERATOR)
+        obj.description = request.POST.get('description', '').strip()
+        obj.is_active = request.POST.get('is_active', 'true').lower() in ('true', '1', 'yes')
+        obj.save()
+
+        return JsonResponse({'success': True, 'id': obj.pk})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@require_POST
+def counter_import(request):
+    """Bulk CSV import for Counter Dictionary catalog."""
+    import csv, io
+    if 'file' not in request.FILES:
+        return JsonResponse({'success': False, 'error': 'No file uploaded'})
+
+    uploaded_file = request.FILES['file']
+    try:
+        content = uploaded_file.read().decode('utf-8-sig', errors='replace')
+        reader = csv.DictReader(io.StringIO(content))
+        count = 0
+        errors = []
+
+        for idx, r in enumerate(reader, start=1):
+            c_id = str(r.get('counter_id') or r.get('id') or '').strip()
+            c_name = str(r.get('counter_name') or r.get('name') or c_id).strip()
+            vendor = str(r.get('vendor') or 'Huawei').strip()
+            ne = str(r.get('network_element') or r.get('ne') or 'eNodeB').strip()
+
+            if not c_id:
+                errors.append(f'Row {idx}: Missing counter_id')
+                continue
+
+            NetworkCounterDefinition.objects.update_or_create(
+                vendor=vendor,
+                network_element=ne,
+                counter_id=c_id,
+                defaults={
+                    'counter_name': c_name,
+                    'technology': str(r.get('technology') or r.get('tech') or '4G').strip(),
+                    'kpi_code': str(r.get('kpi_code') or r.get('kpi') or '').strip().upper(),
+                    'formula_role': str(r.get('formula_role') or 'NUMERATOR').strip().upper(),
+                    'description': str(r.get('description') or '').strip(),
+                    'is_active': True,
+                }
+            )
+            count += 1
+
+        return JsonResponse({'success': True, 'count': count, 'error_count': len(errors)})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+def counter_download_template(request):
+    """Download sample CSV template for Counter Dictionary import."""
+    import csv, io
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'vendor', 'network_element', 'counter_id', 'counter_name',
+        'technology', 'kpi_code', 'formula_role', 'description'
+    ])
+    writer.writerow([
+        'Huawei', 'eNodeB', 'L.RRC.ConnReq.Att', 'RRC Connection Request Attempts',
+        '4G', 'CSSR', 'DENOMINATOR', 'Total RRC connection request attempts'
+    ])
+    writer.writerow([
+        'Huawei', 'eNodeB', 'L.RRC.ConnReq.Succ', 'RRC Connection Request Successes',
+        '4G', 'CSSR', 'NUMERATOR', 'Successful RRC connection establishments'
+    ])
+    writer.writerow([
+        'Ericsson', 'gNodeB', 'N.N3GPP.Conn.Att', '5G NR Connection Attempts',
+        '5G', 'DATA_ACCESS_SR', 'DENOMINATOR', '5G NR Connection Attempt Count'
+    ])
+
+    resp = HttpResponse(output.getvalue(), content_type='text/csv')
+    resp['Content-Disposition'] = 'attachment; filename="counters_template.csv"'
+    return resp
+
+
+@login_required
+@require_POST
+def counter_delete(request, pk):
+    get_object_or_404(NetworkCounterDefinition, pk=pk).delete()
+    return JsonResponse({'success': True})
+
 
 

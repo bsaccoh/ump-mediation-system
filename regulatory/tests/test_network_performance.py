@@ -146,3 +146,26 @@ class CellSiteTests(TestCase):
         self.assertEqual(self.site.site_id, 'FTW001')
         self.assertEqual(self.site.operator_code, 'orange')
 
+
+class CounterDictionaryTests(TestCase):
+    databases = {'default', 'regulatory'}
+
+    def setUp(self):
+        from regulatory.models import NetworkCounterDefinition
+        self.counter = NetworkCounterDefinition.objects.create(
+            vendor='Huawei',
+            network_element='eNodeB',
+            counter_id='L.RRC.ConnReq.Att',
+            counter_name='RRC Connection Request Attempts',
+            technology='4G',
+            kpi_code='CSSR',
+            formula_role='DENOMINATOR',
+        )
+
+    def test_counter_creation(self):
+        from regulatory.models import NetworkCounterDefinition
+        self.assertEqual(NetworkCounterDefinition.objects.count(), 1)
+        self.assertEqual(self.counter.counter_id, 'L.RRC.ConnReq.Att')
+        self.assertEqual(self.counter.kpi_code, 'CSSR')
+
+

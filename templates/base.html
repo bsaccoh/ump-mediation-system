@@ -298,14 +298,14 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link nav-dropdown-toggle {% if '/regulatory/network-performance' not in request.path and '/regulatory/sites' not in request.path %}collapsed{% endif %}"
+                        <a class="nav-link nav-dropdown-toggle {% if '/regulatory/network-performance' not in request.path and '/regulatory/sites' not in request.path and '/regulatory/counters' not in request.path %}collapsed{% endif %}"
                            data-bs-toggle="collapse" href="#netPerfMenu" role="button" title="Network Performance"
                            style="padding-left:2rem; font-size:0.85rem;">
                             <i class="bi bi-diagram-3"></i>
                             <span class="nav-text">Network Performance</span>
                             <i class="bi bi-chevron-down chevron"></i>
                         </a>
-                        <ul class="nav-sub collapse {% if '/regulatory/network-performance' in request.path or '/regulatory/sites' in request.path %}show{% endif %}" id="netPerfMenu">
+                        <ul class="nav-sub collapse {% if '/regulatory/network-performance' in request.path or '/regulatory/sites' in request.path or '/regulatory/counters' in request.path %}show{% endif %}" id="netPerfMenu">
                             <li class="nav-item">
                                 <a class="nav-link {% if '/regulatory/network-performance' in request.path %}active{% endif %}"
                                    href="{% url 'regulatory:network_performance_view' %}" title="PM Performance KPIs"
@@ -318,6 +318,13 @@
                                    href="{% url 'regulatory:site_list_view' %}" title="Cell Site & Geo Inventory"
                                    style="padding-left:3.5rem;">
                                     <i class="bi bi-broadcast-pin"></i><span class="nav-link-text"> Cell Site Inventory</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if '/regulatory/counters' in request.path %}active{% endif %}"
+                                   href="{% url 'regulatory:counter_list_view' %}" title="PM Counter Dictionary"
+                                   style="padding-left:3.5rem;">
+                                    <i class="bi bi-book"></i><span class="nav-link-text"> Counter Dictionary</span>
                                 </a>
                             </li>
                         </ul>

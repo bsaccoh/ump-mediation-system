@@ -696,3 +696,42 @@ class NetworkCellSite(models.Model):
         return f'[{self.operator_code.upper()}] {self.site_id} - {self.site_name} ({self.district})'
 
 
+# ---------------------------------------------------------------------------
+# 15. NetworkCounterDefinition — Counter Dictionary / Inventory Catalog
+# ---------------------------------------------------------------------------
+
+class NetworkCounterDefinition(models.Model):
+    """Network Performance Counter Dictionary / Catalog across Vendors & Network Elements."""
+
+    class FormulaRole(models.TextChoices):
+        NUMERATOR   = 'NUMERATOR',   'Numerator (Events/Successes)'
+        DENOMINATOR = 'DENOMINATOR', 'Denominator (Attempts/Total)'
+        MEASURED    = 'MEASURED',    'Direct Measured Value'
+        VALUE       = 'VALUE',       'Raw Gauge / Count Value'
+
+    counter_id = models.CharField(max_length=100, db_index=True, help_text='Vendor Counter Code e.g. L.RRC.ConnReq.Att')
+    counter_name = models.CharField(max_length=200, help_text='Full Counter Description')
+    vendor = models.CharField(max_length=50, default='Huawei', db_index=True, help_text='Huawei, Ericsson, ZTE, Nokia, etc.')
+    network_element = models.CharField(max_length=50, default='eNodeB', db_index=True, help_text='MSC, IMS, PGW, eNodeB, gNodeB, etc.')
+    technology = models.CharField(max_length=10, default='4G', db_index=True, help_text='2G/3G/4G/5G')
+
+    kpi_code = models.CharField(max_length=40, blank=True, db_index=True, help_text='Mapped PM KPI code e.g. CSSR, CDR')
+    formula_role = models.CharField(max_length=30, choices=FormulaRole.choices, default=FormulaRole.NUMERATOR)
+
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'reg_counter_dictionary'
+        ordering = ['vendor', 'network_element', 'counter_id']
+        unique_together = [('vendor', 'network_element', 'counter_id')]
+        verbose_name = 'Counter Dictionary Entry'
+        verbose_name_plural = 'Counter Dictionary Entries'
+
+    def __str__(self):
+        return f'[{self.vendor}/{self.network_element}] {self.counter_id} - {self.counter_name}'
+
+
+

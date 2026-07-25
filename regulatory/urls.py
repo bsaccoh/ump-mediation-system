@@ -69,7 +69,16 @@ urlpatterns = [
     path('sites/api/', views.site_api, name='site_api'),
     path('sites/save/', views.site_save, name='site_save'),
     path('sites/import/', views.site_import, name='site_import'),
+    path('sites/template/', views.site_download_template, name='site_download_template'),
     path('sites/<int:pk>/delete/', views.site_delete, name='site_delete'),
+
+    # 9. Counter Dictionary / Inventory Catalog
+    path('counters/', views.counter_list_view, name='counter_list_view'),
+    path('counters/api/', views.counter_api, name='counter_api'),
+    path('counters/save/', views.counter_save, name='counter_save'),
+    path('counters/import/', views.counter_import, name='counter_import'),
+    path('counters/template/', views.counter_download_template, name='counter_download_template'),
+    path('counters/<int:pk>/delete/', views.counter_delete, name='counter_delete'),
 
     # Regulatory Profile (admin)
     path('profile/save/', views.profile_save, name='profile_save'),
