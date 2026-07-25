@@ -216,7 +216,7 @@ function renderTable(records) {
             <td><span class="badge badge-clean">${r.unit}</span></td>
             <td>
                 ${r.is_active 
-                    ? '<span class="badge bg-primary">ACTIVE</span>' 
+                    ? '<span class="badge bg-dark">ACTIVE</span>' 
                     : '<span class="badge bg-secondary">INACTIVE</span>'}
             </td>
             <td class="text-muted small">${r.updated_at || '-'}</td>
