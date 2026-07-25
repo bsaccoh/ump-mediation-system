@@ -19,18 +19,16 @@ def check_kpi_compliance(kpi_def: NetworkKPIDefinition, value: Decimal) -> bool:
         return True
 
 
-def run_compliance_audit(start_date=None, end_date=None, operator_code='', region='', district='') -> dict:
+def run_compliance_audit(start_date=None, end_date=None, operator_code='', region='', district='', technology='') -> dict:
     """
     Run comprehensive NatCA Regulatory Compliance Audit & Penalty Assessment across operators.
-    
-    Returns:
-      - operator_summaries: list of per-operator compliance rates, breach counts, and estimated penalties
-      - kpi_violations: list of detailed SLA breach events with duration and penalty calculation
-      - district_rankings: list of Sierra Leone districts ranked by network quality & SLA compliance
-      - audit_metadata: summary stats, audit stamp, date range, total penalties assessed
     """
-    kpi_defs = {k.code: k for k in NetworkKPIDefinition.objects.filter(is_active=True)}
-    qs = NetworkKPIEntry.objects.select_related('kpi').all()
+    kpi_defs_qs = NetworkKPIDefinition.objects.filter(is_active=True)
+    if technology and technology.upper() != 'ALL':
+        kpi_defs_qs = kpi_defs_qs.filter(technology__in=[technology.upper(), 'ALL'])
+    kpi_defs = {k.code: k for k in kpi_defs_qs}
+
+    qs = NetworkKPIEntry.objects.select_related('kpi').filter(kpi__in=kpi_defs_qs)
 
     if start_date:
         qs = qs.filter(period_date__gte=start_date)

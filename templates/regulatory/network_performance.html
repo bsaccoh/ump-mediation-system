@@ -54,6 +54,16 @@
                 </select>
             </div>
             <div class="col-md-2">
+                <label class="form-label small mb-1">Technology</label>
+                <select id="filterTechnology" class="form-select form-select-sm" onchange="loadPerformanceData()">
+                    <option value="">All Techs (2G/3G/4G/5G)</option>
+                    <option value="2G">2G GSM</option>
+                    <option value="3G">3G UMTS</option>
+                    <option value="4G">4G LTE</option>
+                    <option value="5G">5G NR</option>
+                </select>
+            </div>
+            <div class="col-md-2">
                 <label class="form-label small mb-1">From</label>
                 <input type="date" id="dateFrom" class="form-control form-control-sm">
             </div>
@@ -330,13 +340,14 @@ function loadPerformanceData() {
     const operator = document.getElementById('filterOperator').value;
     const region = document.getElementById('filterRegion').value;
     const district = document.getElementById('filterDistrict').value;
+    const tech = document.getElementById('filterTechnology').value;
 
-    fetch(`{% url 'regulatory:network_performance_api' %}?start=${start}&end=${end}&operator=${operator}&region=${region}&district=${district}`)
+    fetch(`{% url 'regulatory:network_performance_api' %}?start=${start}&end=${end}&operator=${operator}&region=${region}&district=${district}&technology=${tech}`)
         .then(r => r.json()).then(d => {
             renderTable(d.records || []);
         });
 
-    fetch(`{% url 'regulatory:network_performance_comparison_api' %}?start=${start}&end=${end}&region=${region}&district=${district}`)
+    fetch(`{% url 'regulatory:network_performance_comparison_api' %}?start=${start}&end=${end}&region=${region}&district=${district}&technology=${tech}`)
         .then(r => r.json()).then(d => {
             const matrix = d.matrix || [];
             renderMatrix(matrix);
@@ -615,8 +626,9 @@ function downloadAuditReport(fmt) {
     const operator = document.getElementById('filterOperator').value;
     const region = document.getElementById('filterRegion').value;
     const district = document.getElementById('filterDistrict').value;
+    const tech = document.getElementById('filterTechnology').value;
     const baseUrl = fmt === 'pdf' ? "{% url 'regulatory:download_audit_pdf' %}" : "{% url 'regulatory:download_audit_excel' %}";
-    window.location.href = `${baseUrl}?start=${start}&end=${end}&operator=${operator}&region=${region}&district=${district}`;
+    window.location.href = `${baseUrl}?start=${start}&end=${end}&operator=${operator}&region=${region}&district=${district}&technology=${tech}`;
 }
 
 document.addEventListener('DOMContentLoaded', loadPerformanceData);

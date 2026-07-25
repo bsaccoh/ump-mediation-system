@@ -614,6 +614,7 @@ def network_performance_api(request):
     operator = request.GET.get('operator', '').strip().lower()
     region = request.GET.get('region', '').strip()
     district = request.GET.get('district', '').strip()
+    tech = request.GET.get('technology', '').strip().upper()
     page = request.GET.get('page', 1)
 
     qs = NetworkKPIEntry.objects.select_related('kpi').all()
@@ -629,6 +630,8 @@ def network_performance_api(request):
         qs = qs.filter(region__icontains=region)
     if district:
         qs = qs.filter(district__icontains=district)
+    if tech and tech != 'ALL':
+        qs = qs.filter(kpi__technology__in=[tech, 'ALL'])
 
     rows, total, page, pages = _paginate(qs, page)
     data = [{
@@ -636,6 +639,7 @@ def network_performance_api(request):
         'kpi_code': r.kpi.code,
         'kpi_name': r.kpi.name,
         'unit': r.kpi.unit,
+        'technology': r.kpi.technology,
         'period_date': r.period_date.isoformat(),
         'granularity': r.granularity,
         'operator_code': r.operator_code,
@@ -658,9 +662,10 @@ def network_performance_comparison_api(request):
     end = _date(request.GET.get('end'))
     region = request.GET.get('region', '').strip()
     district = request.GET.get('district', '').strip()
+    tech = request.GET.get('technology', '').strip().upper()
 
     from .engines.network_kpi import get_operator_comparison_matrix
-    matrix = get_operator_comparison_matrix(start_date=start, end_date=end, region=region, district=district)
+    matrix = get_operator_comparison_matrix(start_date=start, end_date=end, region=region, district=district, technology=tech)
     return JsonResponse({'success': True, 'matrix': matrix})
 
 
@@ -1461,10 +1466,11 @@ def compliance_audit_api(request):
     op = request.GET.get('operator', '').strip().lower()
     region = request.GET.get('region', '').strip()
     district = request.GET.get('district', '').strip()
+    tech = request.GET.get('technology', '').strip().upper()
 
     audit_res = run_compliance_audit(
         start_date=start, end_date=end, operator_code=op,
-        region=region, district=district
+        region=region, district=district, technology=tech
     )
     return JsonResponse(audit_res)
 
@@ -1479,8 +1485,9 @@ def download_audit_pdf(request):
     op = request.GET.get('operator', '').strip().lower()
     region = request.GET.get('region', '').strip()
     district = request.GET.get('district', '').strip()
+    tech = request.GET.get('technology', '').strip().upper()
 
-    audit_res = run_compliance_audit(start_date=start, end_date=end, operator_code=op, region=region, district=district)
+    audit_res = run_compliance_audit(start_date=start, end_date=end, operator_code=op, region=region, district=district, technology=tech)
     pdf_bytes = generate_natca_audit_pdf(audit_res)
 
     resp = HttpResponse(pdf_bytes, content_type='application/pdf')
@@ -1498,8 +1505,9 @@ def download_audit_excel(request):
     op = request.GET.get('operator', '').strip().lower()
     region = request.GET.get('region', '').strip()
     district = request.GET.get('district', '').strip()
+    tech = request.GET.get('technology', '').strip().upper()
 
-    audit_res = run_compliance_audit(start_date=start, end_date=end, operator_code=op, region=region, district=district)
+    audit_res = run_compliance_audit(start_date=start, end_date=end, operator_code=op, region=region, district=district, technology=tech)
     xlsx_bytes = generate_natca_audit_excel(audit_res)
 
     resp = HttpResponse(xlsx_bytes, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

@@ -500,11 +500,15 @@ def _normalize_kpi_value(kpi_code: str, raw_val: Decimal) -> Decimal:
     return v.quantize(Decimal('0.01'))
 
 
-def get_operator_comparison_matrix(start_date=None, end_date=None, region='', district='') -> list[dict]:
+def get_operator_comparison_matrix(start_date=None, end_date=None, region='', district='', technology='') -> list[dict]:
     """Build multi-operator comparative analysis grid across Orange, Africell, QCell, Sierra Tel, One-Mobile + National Average."""
     from ..models import NetworkKPIDefinition, NetworkKPIEntry
 
-    kpi_defs = NetworkKPIDefinition.objects.filter(is_active=True).order_by('code')
+    kpi_defs = NetworkKPIDefinition.objects.filter(is_active=True)
+    if technology and technology.upper() != 'ALL':
+        kpi_defs = kpi_defs.filter(technology__in=[technology.upper(), 'ALL'])
+    kpi_defs = kpi_defs.order_by('code')
+
     qs = NetworkKPIEntry.objects.select_related('kpi').all()
 
     if start_date:
