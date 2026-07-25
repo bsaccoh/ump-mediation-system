@@ -294,8 +294,15 @@ function loadCampaigns() {
     const tech = document.getElementById('filterTech').value;
 
     fetch(`{% url 'regulatory:drive_test_api' %}?operator=${operator}&technology=${tech}`)
-        .then(r => r.json()).then(d => {
+        .then(r => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+        })
+        .then(d => {
             renderTable(d.records || []);
+        })
+        .catch(err => {
+            console.error('drive_test_api failed:', err);
         });
 }
 

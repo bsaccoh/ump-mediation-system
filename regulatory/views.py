@@ -806,7 +806,8 @@ def drive_test_api(request):
         samples_cnt = analysis.total_samples if analysis else 0
         
         # Calculate distance estimate if not stored
-        dist_km = str(r.total_distance_km) if r.total_distance_km > Decimal('0') else f"{max(0.40, round(samples_cnt * 0.0027, 2)):.2f}"
+        tot_dist = r.total_distance_km or Decimal('0')
+        dist_km = str(tot_dist) if tot_dist > Decimal('0') else f"{max(0.40, round(samples_cnt * 0.0027, 2)):.2f}"
 
         # Extract route type
         r_type = 'urban'
@@ -845,6 +846,7 @@ def drive_test_api(request):
     return JsonResponse({'records': data, 'total': total, 'page': page, 'pages': pages})
 
 
+@csrf_exempt
 @login_required
 @require_POST
 def drive_test_upload(request):
