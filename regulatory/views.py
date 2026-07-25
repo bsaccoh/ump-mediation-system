@@ -1440,4 +1440,63 @@ def kpi_config_delete(request, pk):
     return JsonResponse({'success': True})
 
 
+# =============================================================================
+# 11. NatCA Compliance Audit & Regulatory Penalty Engine
+# =============================================================================
+
+@login_required
+def compliance_audit_api(request):
+    """JSON API endpoint returning NatCA Compliance Audit & Penalty data."""
+    from .engines.compliance_audit import run_compliance_audit
+    start = _date(request.GET.get('start'))
+    end = _date(request.GET.get('end'))
+    op = request.GET.get('operator', '').strip().lower()
+    region = request.GET.get('region', '').strip()
+    district = request.GET.get('district', '').strip()
+
+    audit_res = run_compliance_audit(
+        start_date=start, end_date=end, operator_code=op,
+        region=region, district=district
+    )
+    return JsonResponse(audit_res)
+
+
+@login_required
+def download_audit_pdf(request):
+    """Generate and download official NatCA Executive Audit PDF Report."""
+    from .engines.compliance_audit import run_compliance_audit
+    from .engines.audit_reports import generate_natca_audit_pdf
+    start = _date(request.GET.get('start'))
+    end = _date(request.GET.get('end'))
+    op = request.GET.get('operator', '').strip().lower()
+    region = request.GET.get('region', '').strip()
+    district = request.GET.get('district', '').strip()
+
+    audit_res = run_compliance_audit(start_date=start, end_date=end, operator_code=op, region=region, district=district)
+    pdf_bytes = generate_natca_audit_pdf(audit_res)
+
+    resp = HttpResponse(pdf_bytes, content_type='application/pdf')
+    resp['Content-Disposition'] = f'attachment; filename="NatCA_Audit_Report_{date.today().isoformat()}.pdf"'
+    return resp
+
+
+@login_required
+def download_audit_excel(request):
+    """Generate and download detailed NatCA Audit Excel Workbook."""
+    from .engines.compliance_audit import run_compliance_audit
+    from .engines.audit_reports import generate_natca_audit_excel
+    start = _date(request.GET.get('start'))
+    end = _date(request.GET.get('end'))
+    op = request.GET.get('operator', '').strip().lower()
+    region = request.GET.get('region', '').strip()
+    district = request.GET.get('district', '').strip()
+
+    audit_res = run_compliance_audit(start_date=start, end_date=end, operator_code=op, region=region, district=district)
+    xlsx_bytes = generate_natca_audit_excel(audit_res)
+
+    resp = HttpResponse(xlsx_bytes, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    resp['Content-Disposition'] = f'attachment; filename="NatCA_Audit_Workbook_{date.today().isoformat()}.xlsx"'
+    return resp
+
+
 

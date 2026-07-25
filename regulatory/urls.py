@@ -87,6 +87,11 @@ urlpatterns = [
     path('kpis/save/', views.kpi_config_save, name='kpi_config_save'),
     path('kpis/<int:pk>/delete/', views.kpi_config_delete, name='kpi_config_delete'),
 
+    # 11. NatCA Compliance Audit & Regulatory Penalty Engine
+    path('network-performance/audit/api/', views.compliance_audit_api, name='compliance_audit_api'),
+    path('network-performance/audit/pdf/', views.download_audit_pdf, name='download_audit_pdf'),
+    path('network-performance/audit/excel/', views.download_audit_excel, name='download_audit_excel'),
+
     # Regulatory Profile (admin)
     path('profile/save/', views.profile_save, name='profile_save'),
 ]

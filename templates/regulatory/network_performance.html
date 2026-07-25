@@ -65,6 +65,15 @@
                 <button class="btn btn-primary btn-sm" onclick="loadPerformanceData()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
             </div>
             <div class="col-auto ms-auto">
+                <div class="btn-group me-1">
+                    <button type="button" class="btn btn-outline-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="bi bi-shield-check me-1"></i> NatCA Audit Report
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                        <li><a class="dropdown-item small" href="#" onclick="downloadAuditReport('pdf')"><i class="bi bi-file-pdf text-danger me-2"></i> PDF Executive Audit Summary</a></li>
+                        <li><a class="dropdown-item small" href="#" onclick="downloadAuditReport('excel')"><i class="bi bi-file-excel text-success me-2"></i> Excel Detailed Audit Workbook</a></li>
+                    </ul>
+                </div>
                 <button class="btn btn-outline-primary btn-sm me-1" data-bs-toggle="modal" data-bs-target="#importModal">
                     <i class="bi bi-file-earmark-arrow-up"></i> Bulk Import
                 </button>
@@ -599,6 +608,16 @@ function deleteEntry(id) {
             if (d.success) { showAlert('Deleted entry.'); loadPerformanceData(); }
             else showAlert(d.error || 'Delete failed', 'danger');
         });
+}
+
+function downloadAuditReport(fmt) {
+    const start = document.getElementById('dateFrom').value;
+    const end = document.getElementById('dateTo').value;
+    const operator = document.getElementById('filterOperator').value;
+    const region = document.getElementById('filterRegion').value;
+    const district = document.getElementById('filterDistrict').value;
+    const baseUrl = fmt === 'pdf' ? "{% url 'regulatory:download_audit_pdf' %}" : "{% url 'regulatory:download_audit_excel' %}";
+    window.location.href = `${baseUrl}?start=${start}&end=${end}&operator=${operator}&region=${region}&district=${district}`;
 }
 
 document.addEventListener('DOMContentLoaded', loadPerformanceData);

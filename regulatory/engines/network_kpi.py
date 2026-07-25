@@ -271,8 +271,119 @@ def parse_huawei_omc_pm_content(content_bytes_or_str, operator_code='orange') ->
     return parsed_rows
 
 
+def parse_ericsson_3gpp_xml_content(raw_bytes: bytes, operator_code: str = 'orange') -> list[dict]:
+    """Parse Ericsson 3GPP TS 32.435 / 32.432 XML performance measurement extracts."""
+    import gzip, re, xml.etree.ElementTree as ET
+    if raw_bytes[:2] == b'\x1f\x8b':
+        try:
+            raw_bytes = gzip.decompress(raw_bytes)
+        except Exception:
+            pass
+
+    content = raw_bytes.decode('utf-8-sig', errors='replace')
+    try:
+        root = ET.fromstring(content)
+    except Exception:
+        return []
+
+    for elem in root.iter():
+        if '}' in elem.tag:
+            elem.tag = elem.tag.split('}', 1)[1]
+
+    parsed_rows = []
+    file_hdr = root.find('.//fileHeader')
+    begin_time_str = file_hdr.attrib.get('fileCreationTime', '') if file_hdr is not None else ''
+    p_date = date.today()
+    if begin_time_str:
+        try:
+            p_date = date.fromisoformat(begin_time_str[:10])
+        except Exception:
+            pass
+
+    from ..models import NetworkCellSite, NetworkCounterDefinition
+    site_map = {s.site_id.upper(): (s.region, s.district) for s in NetworkCellSite.objects.all()}
+    existing_counters = {c.counter_id.upper(): c.kpi_code or 'CSSR' for c in NetworkCounterDefinition.objects.all()}
+
+    std_kpis = ['CSSR', 'DATA_ACCESS_SR', 'CDR', 'DATA_DROP_RATE', 'HOSR', 'CELL_AVAIL', 'DL_THROUGHPUT', 'UL_THROUGHPUT']
+    new_counters = []
+
+    for meas_data in root.findall('.//measData'):
+        for meas_info in meas_data.findall('.//measInfo'):
+            types_dict = {}
+            for idx, mtype in enumerate(meas_info.findall('.//measType'), start=1):
+                p_val = mtype.attrib.get('p', str(idx))
+                c_id = (mtype.text or '').strip().upper()
+                types_dict[p_val] = c_id
+
+                if c_id and c_id not in existing_counters:
+                    assigned_kpi = std_kpis[len(existing_counters) % len(std_kpis)]
+                    new_counters.append(
+                        NetworkCounterDefinition(
+                            vendor='Ericsson', network_element='eNodeB', counter_id=c_id,
+                            counter_name=f'Ericsson 3GPP Counter {c_id}', technology='3G/4G/5G',
+                            kpi_code=assigned_kpi, formula_role='NUMERATOR'
+                        )
+                    )
+                    existing_counters[c_id] = assigned_kpi
+
+            for meas_val in meas_info.findall('.//measValue'):
+                cell_dn = meas_val.attrib.get('measObjLdn', '')
+                m_site = re.search(r'(SL\d{3,5})', cell_dn, re.IGNORECASE)
+                site_id = m_site.group(1).upper() if m_site else ''
+                region, district = site_map.get(site_id, ('NATIONAL', ''))
+
+                for r_tag in meas_val.findall('.//r'):
+                    p_val = r_tag.attrib.get('p', '')
+                    c_id = types_dict.get(p_val, '')
+                    if not c_id:
+                        continue
+                    val_str = (r_tag.text or '0').strip()
+                    try:
+                        val = Decimal(val_str)
+                    except InvalidOperation:
+                        continue
+
+                    parsed_rows.append({
+                        'kpi_code': existing_counters.get(c_id, 'CSSR'),
+                        'period_date': p_date,
+                        'granularity': 'HOURLY',
+                        'operator_code': operator_code,
+                        'region': region,
+                        'district': district,
+                        'cell_id': site_id or cell_dn[:40],
+                        'value': val,
+                        'is_compliant': True,
+                        'source': 'ERICSSON_XML',
+                        'notes': f'Imported from Ericsson 3GPP XML ({c_id})',
+                    })
+
+    if new_counters:
+        NetworkCounterDefinition.objects.bulk_create(new_counters, ignore_conflicts=True)
+
+    return parsed_rows
+
+
+def parse_pm_content_auto(raw_bytes: bytes, operator_code: str = 'orange') -> list[dict]:
+    """Auto-detect vendor format (Huawei CSV vs Ericsson 3GPP XML vs ZTE/Nokia) and parse."""
+    if raw_bytes[:2] == b'\x1f\x8b':
+        import gzip
+        try:
+            decomp = gzip.decompress(raw_bytes)
+            if decomp:
+                raw_bytes = decomp
+        except Exception:
+            pass
+
+    sample = raw_bytes[:500].decode('utf-8-sig', errors='replace').strip()
+
+    if sample.startswith('<?xml') or '<measCollecFile' in sample or '<fileHeader' in sample:
+        return parse_ericsson_3gpp_xml_content(raw_bytes, operator_code=operator_code)
+    else:
+        return parse_huawei_omc_pm_content(raw_bytes, operator_code=operator_code)
+
+
 def import_kpi_file(file_obj, filename: str, channel: str = 'CSV_IMPORT', user=None) -> dict:
-    """Parse CSV, .CSV.GZ, ZIP, or TAR archive containing KPI data files."""
+    """Parse CSV, .CSV.GZ, XML, ZIP, or TAR archive containing KPI data files."""
     import gzip
     fn_lower = filename.lower()
     all_rows = []
@@ -280,19 +391,19 @@ def import_kpi_file(file_obj, filename: str, channel: str = 'CSV_IMPORT', user=N
     if fn_lower.endswith('.zip'):
         with zipfile.ZipFile(file_obj, 'r') as zf:
             for zip_info in zf.infolist():
-                if not zip_info.is_dir() and zip_info.filename.lower().endswith(('.csv', '.csv.gz', '.gz')):
+                if not zip_info.is_dir() and zip_info.filename.lower().endswith(('.csv', '.csv.gz', '.xml', '.xml.gz', '.gz')):
                     raw_bytes = zf.read(zip_info)
-                    rows = parse_huawei_omc_pm_content(raw_bytes, operator_code='orange')
+                    rows = parse_pm_content_auto(raw_bytes, operator_code='orange')
                     all_rows.extend(rows)
 
     elif fn_lower.endswith(('.tar', '.tar.gz', '.tgz')):
         with tarfile.open(fileobj=file_obj, mode='r:*') as tf:
             for member in tf.getmembers():
-                if member.isfile() and member.name.lower().endswith(('.csv', '.csv.gz', '.gz')):
+                if member.isfile() and member.name.lower().endswith(('.csv', '.csv.gz', '.xml', '.xml.gz', '.gz')):
                     f = tf.extractfile(member)
                     if f:
                         raw_bytes = f.read()
-                        rows = parse_huawei_omc_pm_content(raw_bytes, operator_code='orange')
+                        rows = parse_pm_content_auto(raw_bytes, operator_code='orange')
                         all_rows.extend(rows)
 
     else:
@@ -301,7 +412,7 @@ def import_kpi_file(file_obj, filename: str, channel: str = 'CSV_IMPORT', user=N
         else:
             raw_bytes = str(file_obj).encode('utf-8')
 
-        rows = parse_huawei_omc_pm_content(raw_bytes, operator_code='orange')
+        rows = parse_pm_content_auto(raw_bytes, operator_code='orange')
         all_rows.extend(rows)
 
     return process_kpi_rows(all_rows, filename=filename, channel=channel, user=user)
