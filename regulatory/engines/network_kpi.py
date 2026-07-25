@@ -137,24 +137,11 @@ def process_kpi_rows(rows: list[dict], filename: str, channel: str = 'MANUAL', u
         success_count += 1
 
     with transaction.atomic():
-        # Upsert entries
-        for entry in entries_to_create:
-            NetworkKPIEntry.objects.update_or_create(
-                kpi=entry.kpi,
-                period_date=entry.period_date,
-                granularity=entry.granularity,
-                operator_code=entry.operator_code,
-                region=entry.region,
-                district=entry.district,
-                cell_id=entry.cell_id,
-                defaults={
-                    'value': entry.value,
-                    'is_compliant': entry.is_compliant,
-                    'source': entry.source,
-                    'import_log': entry.import_log,
-                    'notes': entry.notes,
-                }
-            )
+        NetworkKPIEntry.objects.bulk_create(
+            entries_to_create,
+            batch_size=2000,
+            ignore_conflicts=True
+        )
 
     import_log.status = 'COMPLETED' if not errors else 'COMPLETED_WITH_ERRORS'
     import_log.record_count = success_count

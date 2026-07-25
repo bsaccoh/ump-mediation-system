@@ -542,12 +542,13 @@ async function submitImport(e) {
     let processedCount = 0;
     let totalRecords = 0;
     let totalErrors = 0;
-    const chunkSize = 5; // Send 5 files per HTTP request chunk
 
-    for (let i = 0; i < totalFiles; i += chunkSize) {
-        const chunk = files.slice(i, i + chunkSize);
+    for (let i = 0; i < totalFiles; i++) {
+        const file = files[i];
+        label.textContent = `Processing file ${i + 1} of ${totalFiles} (${file.name})...`;
+
         const formData = new FormData();
-        chunk.forEach(f => formData.append('files', f));
+        formData.append('files', file);
 
         try {
             const resp = await fetch("{% url 'regulatory:network_performance_import' %}", {
@@ -555,21 +556,21 @@ async function submitImport(e) {
             });
             const d = await resp.json();
             if (d.success) {
-                processedCount += chunk.length;
+                processedCount++;
                 totalRecords += (d.record_count || 0);
                 totalErrors += (d.error_count || 0);
             } else {
-                totalErrors += chunk.length;
+                totalErrors++;
             }
         } catch (err) {
-            totalErrors += chunk.length;
+            totalErrors++;
         }
 
-        const pct = Math.min(100, Math.round((processedCount / totalFiles) * 100));
+        const pct = Math.min(100, Math.round(((i + 1) / totalFiles) * 100));
         bar.style.width = pct + '%';
         bar.textContent = pct + '%';
         percentSpan.textContent = pct + '%';
-        processedSpan.textContent = processedCount.toLocaleString();
+        processedSpan.textContent = (i + 1).toLocaleString();
         recordsSpan.textContent = totalRecords.toLocaleString();
     }
 
