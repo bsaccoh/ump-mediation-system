@@ -872,38 +872,73 @@ def drive_test_upload(request):
 
     from .engines.drive_test import parse_drive_test_file, analyse_campaign
 
+    relative_paths = request.POST.getlist('relative_paths')
     imported_campaigns = []
     total_samples_parsed = 0
     errors = []
 
     for idx, f in enumerate(files):
+        rel_path = relative_paths[idx] if idx < len(relative_paths) else f.name
+        full_str = f"{f.name} {rel_path}".lower()
+
         c_name = base_name if (len(files) == 1 and base_name) else f.name.rsplit('.', 1)[0]
-        fn_lower = f.name.lower()
         fmt = 'csv'
         for ext in ('zip', 'tar.gz', 'tgz', 'trp', 'lpg', 'nmf', 'xlsx', 'xls', 'csv'):
-            if fn_lower.endswith('.' + ext):
+            if full_str.endswith('.' + ext) or f.name.lower().endswith('.' + ext):
                 fmt = ext
                 break
 
-        f_tech = tech
-        if '2g' in fn_lower or 'gsm' in fn_lower: f_tech = '2G'
-        elif '3g' in fn_lower or 'umts' in fn_lower: f_tech = '3G'
-        elif '4g' in fn_lower or 'lte' in fn_lower: f_tech = '4G'
-        elif '5g' in fn_lower or 'nr' in fn_lower: f_tech = '5G'
-
+        # 1. Smart Operator Auto-Detection from Folder & Filename
         f_op = operator_code
-        if 'orange' in fn_lower: f_op = 'orange'
-        elif 'africell' in fn_lower: f_op = 'africell'
-        elif 'qcell' in fn_lower: f_op = 'qcell'
-        elif 'sierratel' in fn_lower: f_op = 'sierratel'
-        elif 'onemobile' in fn_lower: f_op = 'onemobile'
+        if 'orange' in full_str: f_op = 'orange'
+        elif 'africell' in full_str: f_op = 'africell'
+        elif 'qcell' in full_str: f_op = 'qcell'
+        elif 'sierratel' in full_str or 'sierra_tel' in full_str: f_op = 'sierratel'
+        elif 'onemobile' in full_str or 'one_mobile' in full_str: f_op = 'onemobile'
+
+        # 2. Smart Technology Auto-Detection from Folder & Filename
+        f_tech = tech
+        if '2g' in full_str or 'gsm' in full_str: f_tech = '2G'
+        elif '3g' in full_str or 'umts' in full_str: f_tech = '3G'
+        elif '4g' in full_str or 'lte' in full_str: f_tech = '4G'
+        elif '5g' in full_str or 'nr' in full_str: f_tech = '5G'
+
+        # 3. Smart Region & District Auto-Detection from Folder & Filename
+        f_region = region
+        f_district = ''
+        if 'bo' in full_str:
+            f_region, f_district = 'SOUTHERN', 'Bo District'
+        elif 'kenema' in full_str:
+            f_region, f_district = 'EASTERN', 'Kenema District'
+        elif 'makeni' in full_str or 'bombali' in full_str:
+            f_region, f_district = 'NORTHERN', 'Bombali District'
+        elif 'freetown' in full_str or 'western' in full_str:
+            f_region, f_district = 'WESTERN_AREA', 'Western Area Urban'
+
+        # 4. Smart Test Date Auto-Extraction
+        f_date = test_date
+        import re
+        date_iso = re.search(r'(20\d{2})[-_]?([01]\d)[-_]?([0-3]\d)', full_str)
+        if date_iso:
+            try:
+                f_date = date(int(date_iso.group(1)), int(date_iso.group(2)), int(date_iso.group(3)))
+            except Exception:
+                pass
+        else:
+            date_text = re.search(r'([0-3]\d)[-_](Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[-_](20\d{2})', full_str, re.IGNORECASE)
+            if date_text:
+                try:
+                    f_date = datetime.strptime(f"{date_text.group(1)}-{date_text.group(2)}-{date_text.group(3)}", "%d-%b-%Y").date()
+                except Exception:
+                    pass
 
         campaign = DriveTestCampaign.objects.create(
             name=c_name,
-            test_date=test_date,
+            test_date=f_date,
             operator_code=f_op,
             operator_name=operator_name_dict.get(f_op, operator_name),
-            region=region,
+            region=f_region,
+            district=f_district,
             route_description=f"Route: {route_type} | Device: {device_model} | Tester: {tester_name}".strip(' |'),
             technology=f_tech,
             tool_used=tool,

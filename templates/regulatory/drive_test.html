@@ -355,7 +355,9 @@ function submitUpload(e) {
     formData.append('tester_name', document.getElementById('campaignTester').value);
 
     for (let i = 0; i < selectedFilesList.length; i++) {
-        formData.append('files', selectedFilesList[i]);
+        const file = selectedFilesList[i];
+        formData.append('files', file);
+        formData.append('relative_paths', file.webkitRelativePath || file.name);
     }
 
     const progressContainer = document.getElementById('progressContainer');
