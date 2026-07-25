@@ -1,0 +1,366 @@
+{% extends "base.html" %}
+{% block title %}Network Performance (PM KPIs) — Regulatory{% endblock %}
+{% block page_title %}Network Performance (PM KPIs){% endblock %}
+
+{% block content %}
+<style>
+.kpi-card { border-left: 4px solid #0d6efd; transition: transform 0.2s; }
+.kpi-card:hover { transform: translateY(-2px); }
+.kpi-card.pass { border-left-color: #198754; }
+.kpi-card.fail { border-left-color: #dc3545; }
+.kpi-num { font-size: 1.5rem; font-weight: 700; color: #212529; }
+.kpi-lbl { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: #6c757d; }
+.kpi-target { font-size: .7rem; color: #888; }
+.report-card .card-header { background: #fafafa; border-bottom: 1px solid #eee; font-weight: 600; }
+</style>
+
+<!-- Filter & Action Bar -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small mb-1">From</label>
+                <input type="date" id="dateFrom" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">To</label>
+                <input type="date" id="dateTo" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Region</label>
+                <select id="filterRegion" class="form-select form-select-sm">
+                    <option value="">All Regions</option>
+                    <option value="NATIONAL">National</option>
+                    <option value="WESTERN_AREA">Western Area</option>
+                    <option value="NORTHERN">Northern Province</option>
+                    <option value="SOUTHERN">Southern Province</option>
+                    <option value="EASTERN">Eastern Province</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary btn-sm" onclick="loadPerformanceData()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+            </div>
+            <div class="col-auto ms-auto">
+                <button class="btn btn-outline-success btn-sm me-1" data-bs-toggle="modal" data-bs-target="#importModal">
+                    <i class="bi bi-file-earmark-arrow-up"></i> Bulk Import (CSV/ZIP)
+                </button>
+                <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#entryModal" onclick="openNewEntry()">
+                    <i class="bi bi-plus-lg"></i> Manual Entry
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="alertBox" class="alert" style="display:none;"></div>
+
+<!-- 12 PM KPI Summary Cards -->
+<div class="row g-3 mb-3" id="kpiSummaryRow">
+    <div class="col-12 text-center text-muted py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Loading NatCA PM KPIs...</div>
+</div>
+
+<!-- Charts Section -->
+<div class="row g-3 mb-3">
+    <div class="col-lg-6">
+        <div class="card report-card">
+            <div class="card-header"><i class="bi bi-graph-up-arrow"></i> Accessibility & Retainability (CSSR / CDR)</div>
+            <div class="card-body" style="height:280px"><canvas id="chartAccess"></canvas></div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card report-card">
+            <div class="card-header"><i class="bi bi-speedometer"></i> Data Throughput (DL / UL Mbps)</div>
+            <div class="card-body" style="height:280px"><canvas id="chartThroughput"></canvas></div>
+        </div>
+    </div>
+</div>
+
+<!-- KPI Entries Data Table -->
+<div class="card">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span class="fw-semibold"><i class="bi bi-table"></i> PM KPI Records</span>
+        <span class="badge bg-secondary" id="recordCount">0 Records</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>KPI Code</th>
+                    <th>KPI Name</th>
+                    <th>Date</th>
+                    <th>Region</th>
+                    <th>Value</th>
+                    <th>NatCA Target</th>
+                    <th>Status</th>
+                    <th>Source</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="kpiTableBody">
+                <tr><td colspan="9" class="text-center text-muted py-4">No records found.</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Bulk Import Modal -->
+<div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-file-earmark-arrow-up"></i> Bulk Import PM KPIs</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="importForm" onsubmit="submitImport(event)">
+                <div class="modal-body">
+                    <p class="small text-muted mb-2">Upload `.csv`, `.zip`, or `.tar.gz` containing PM KPI records.</p>
+                    <div class="mb-3">
+                        <label class="form-label">Select File</label>
+                        <input type="file" id="importFile" class="form-control" accept=".csv,.zip,.tar,.gz,.tgz" required>
+                    </div>
+                    <div class="small bg-light p-2 rounded border">
+                        <strong>Expected Columns:</strong> <code>kpi_code</code>, <code>period_date</code>, <code>value</code>, <code>region</code>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Upload & Process</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Manual Entry Modal -->
+<div class="modal fade" id="entryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="entryModalTitle">Manual KPI Entry</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="entryForm" onsubmit="submitEntry(event)">
+                <input type="hidden" id="entryId">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">KPI Definition</label>
+                        <select id="entryKpiCode" class="form-select" required>
+                            {% for kpi in kpi_defs %}
+                            <option value="{{ kpi.code }}">{{ kpi.name }} ({{ kpi.code }}) — Target: {{ kpi.natca_threshold }}{{ kpi.unit }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Period Date</label>
+                            <input type="date" id="entryDate" class="form-control" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Region</label>
+                            <input type="text" id="entryRegion" class="form-control" value="NATIONAL" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Measured Value</label>
+                        <input type="number" step="0.0001" id="entryValue" class="form-control" placeholder="e.g. 98.50" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea id="entryNotes" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success btn-sm">Save Measurement</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+let charts = {};
+function getCSRF() { return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''; }
+function showAlert(msg, type='success') {
+    const b = document.getElementById('alertBox'); b.className = `alert alert-${type}`; b.textContent = msg; b.style.display = 'block';
+    setTimeout(() => b.style.display = 'none', 4000);
+}
+
+// Default to last 30 days
+(function(){
+    const today = new Date();
+    const ago = new Date(today.getTime() - 30*86400*1000);
+    document.getElementById('dateFrom').value = ago.toISOString().slice(0,10);
+    document.getElementById('dateTo').value = today.toISOString().slice(0,10);
+})();
+
+function loadPerformanceData() {
+    const start = document.getElementById('dateFrom').value;
+    const end = document.getElementById('dateTo').value;
+    const region = document.getElementById('filterRegion').value;
+
+    fetch(`{% url 'regulatory:network_performance_api' %}?start=${start}&end=${end}&region=${region}`)
+        .then(r => r.json()).then(d => {
+            renderTable(d.records || []);
+            renderKPICards(d.records || []);
+            renderCharts(d.records || []);
+        });
+}
+
+function renderKPICards(records) {
+    const kpis = [
+        { code: 'NET_AVAIL', name: 'Network Avail.', target: '>=99.5%' },
+        { code: 'CELL_AVAIL', name: 'Cell Avail.', target: '>=99.0%' },
+        { code: 'CSSR', name: 'CSSR', target: '>=95.0%' },
+        { code: 'DATA_ACCESS_SR', name: 'Data Access SR', target: '>=95.0%' },
+        { code: 'CDR', name: 'Call Drop Rate', target: '<=2.0%' },
+        { code: 'DATA_DROP_RATE', name: 'Data Drop Rate', target: '<=2.0%' },
+        { code: 'HOSR', name: 'Handover SR', target: '>=95.0%' },
+        { code: 'DL_THROUGHPUT', name: 'DL Throughput', target: '>=5.0 Mbps' },
+        { code: 'UL_THROUGHPUT', name: 'UL Throughput', target: '>=1.0 Mbps' },
+        { code: 'LATENCY', name: 'Latency', target: '<=100ms' },
+        { code: 'CELL_UTIL', name: 'Cell Utilization', target: '<=85.0%' },
+        { code: 'QOS_SCORE', name: 'QoS Score', target: '>=90.0%' },
+    ];
+
+    const cardHtml = kpis.map(k => {
+        const matches = records.filter(r => r.kpi_code === k.code);
+        let valStr = 'N/A';
+        let passClass = '';
+        if (matches.length > 0) {
+            const latest = matches[0];
+            valStr = `${parseFloat(latest.value).toFixed(2)} ${latest.unit}`;
+            passClass = latest.is_compliant ? 'pass' : 'fail';
+        }
+        return `
+            <div class="col-md-3 col-sm-6">
+                <div class="card kpi-card ${passClass} py-2 px-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="kpi-lbl">${k.name}</span>
+                        <span class="kpi-target">NatCA: ${k.target}</span>
+                    </div>
+                    <div class="kpi-num mt-1">${valStr}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    document.getElementById('kpiSummaryRow').innerHTML = cardHtml;
+}
+
+function renderTable(records) {
+    document.getElementById('recordCount').textContent = `${records.length} Records`;
+    if (!records.length) {
+        document.getElementById('kpiTableBody').innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">No PM KPI records found for selected filters.</td></tr>`;
+        return;
+    }
+
+    document.getElementById('kpiTableBody').innerHTML = records.map(r => `
+        <tr>
+            <td><code>${r.kpi_code}</code></td>
+            <td class="fw-semibold">${r.kpi_name}</td>
+            <td>${r.period_date}</td>
+            <td><span class="badge bg-light text-dark border">${r.region}</span></td>
+            <td class="fw-bold">${parseFloat(r.value).toFixed(2)} ${r.unit}</td>
+            <td class="text-muted small">${r.natca_threshold} ${r.unit}</td>
+            <td>
+                ${r.is_compliant 
+                    ? '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>PASS</span>' 
+                    : '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>FAIL</span>'}
+            </td>
+            <td><span class="badge bg-info text-dark">${r.source}</span></td>
+            <td class="text-end">
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteEntry(${r.id})"><i class="bi bi-trash"></i></button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function renderCharts(records) {
+    // Access chart (CSSR / CDR)
+    const cssrRecs = records.filter(r => r.kpi_code === 'CSSR');
+    const labels = cssrRecs.map(r => r.period_date).reverse();
+    const cssrVals = cssrRecs.map(r => parseFloat(r.value)).reverse();
+    
+    const ctxA = document.getElementById('chartAccess').getContext('2d');
+    if (charts.access) charts.access.destroy();
+    charts.access = new Chart(ctxA, {
+        type: 'line',
+        data: { labels, datasets: [{ label: 'CSSR (%)', data: cssrVals, borderColor: '#198754', tension: 0.3, fill: false }] },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+
+    // Throughput chart (DL / UL)
+    const dlRecs = records.filter(r => r.kpi_code === 'DL_THROUGHPUT');
+    const dlVals = dlRecs.map(r => parseFloat(r.value)).reverse();
+
+    const ctxT = document.getElementById('chartThroughput').getContext('2d');
+    if (charts.throughput) charts.throughput.destroy();
+    charts.throughput = new Chart(ctxT, {
+        type: 'line',
+        data: { labels, datasets: [{ label: 'DL Throughput (Mbps)', data: dlVals, borderColor: '#0d6efd', tension: 0.3, fill: false }] },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+}
+
+function openNewEntry() {
+    document.getElementById('entryForm').reset();
+    document.getElementById('entryId').value = '';
+    document.getElementById('entryDate').value = new Date().toISOString().slice(0,10);
+}
+
+function submitEntry(e) {
+    e.preventDefault();
+    const params = new URLSearchParams({
+        csrfmiddlewaretoken: getCSRF(),
+        id: document.getElementById('entryId').value,
+        kpi_code: document.getElementById('entryKpiCode').value,
+        period_date: document.getElementById('entryDate').value,
+        region: document.getElementById('entryRegion').value,
+        value: document.getElementById('entryValue').value,
+        notes: document.getElementById('entryNotes').value,
+    });
+
+    fetch("{% url 'regulatory:network_performance_save' %}", { method: 'POST', body: params, headers: {'X-CSRFToken': getCSRF()} })
+        .then(r => r.json()).then(d => {
+            if (d.success) {
+                showAlert('Measurement saved successfully.');
+                bootstrap.Modal.getInstance(document.getElementById('entryModal')).hide();
+                loadPerformanceData();
+            } else {
+                showAlert(d.error || 'Save failed', 'danger');
+            }
+        });
+}
+
+function submitImport(e) {
+    e.preventDefault();
+    const formData = new FormData();
+    formData.append('file', document.getElementById('importFile').files[0]);
+
+    fetch("{% url 'regulatory:network_performance_import' %}", {
+        method: 'POST', body: formData, headers: {'X-CSRFToken': getCSRF()}
+    }).then(r => r.json()).then(d => {
+        if (d.success) {
+            showAlert(`Imported ${d.record_count} PM KPI measurements.`);
+            bootstrap.Modal.getInstance(document.getElementById('importModal')).hide();
+            loadPerformanceData();
+        } else {
+            showAlert(d.error || 'Import failed', 'danger');
+        }
+    });
+}
+
+function deleteEntry(id) {
+    if (!confirm('Delete this measurement entry?')) return;
+    fetch(`/regulatory/network-performance/${id}/delete/`, { method: 'POST', headers: {'X-CSRFToken': getCSRF()} })
+        .then(r => r.json()).then(d => {
+            if (d.success) { showAlert('Deleted entry.'); loadPerformanceData(); }
+            else showAlert(d.error || 'Delete failed', 'danger');
+        });
+}
+
+document.addEventListener('DOMContentLoaded', loadPerformanceData);
+</script>
+{% endblock %}

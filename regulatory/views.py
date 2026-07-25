@@ -22,6 +22,8 @@ from .decorators import lawful_intercept_required
 from .models import (
     RegulatoryProfile, RetailRevenue, RegulatoryReport,
     LeviedPeriod, LEARequest, LEAExtractionLog, QoSMetric,
+    NetworkKPIDefinition, NetworkKPIEntry, NetworkKPIImportLog,
+    DriveTestCampaign, DriveTestSample, DriveTestAnalysis,
 )
 
 
@@ -583,3 +585,271 @@ def profile_save(request):
     p.updated_by = request.user
     p.save()
     return JsonResponse({'success': True})
+
+
+# =============================================================================
+# 6. Network Performance Monitoring (PM KPIs)
+# =============================================================================
+
+@login_required
+def network_performance_view(request):
+    return render(request, 'regulatory/network_performance.html', {
+        'title': 'Network Performance (PM KPIs)',
+        'kpi_defs': NetworkKPIDefinition.objects.filter(is_active=True),
+        'total_entries': NetworkKPIEntry.objects.count(),
+    })
+
+
+@login_required
+def network_performance_api(request):
+    start = _date(request.GET.get('start'))
+    end = _date(request.GET.get('end'))
+    code = request.GET.get('code', '').strip().upper()
+    region = request.GET.get('region', '').strip()
+    page = request.GET.get('page', 1)
+
+    qs = NetworkKPIEntry.objects.select_related('kpi').all()
+    if start:
+        qs = qs.filter(period_date__gte=start)
+    if end:
+        qs = qs.filter(period_date__lte=end)
+    if code:
+        qs = qs.filter(kpi__code=code)
+    if region:
+        qs = qs.filter(region__icontains=region)
+
+    rows, total, page, pages = _paginate(qs, page)
+    data = [{
+        'id': r.pk,
+        'kpi_code': r.kpi.code,
+        'kpi_name': r.kpi.name,
+        'unit': r.kpi.unit,
+        'period_date': r.period_date.isoformat(),
+        'granularity': r.granularity,
+        'region': r.region,
+        'cell_id': r.cell_id,
+        'value': str(r.value),
+        'natca_threshold': str(r.kpi.natca_threshold),
+        'is_compliant': r.is_compliant,
+        'source': r.source,
+        'notes': r.notes,
+    } for r in rows]
+    return JsonResponse({'records': data, 'total': total, 'page': page, 'pages': pages})
+
+
+@login_required
+@require_POST
+def network_performance_import(request):
+    """Handle bulk file import (CSV, ZIP, TAR.GZ)."""
+    if 'file' not in request.FILES:
+        return JsonResponse({'success': False, 'error': 'No file uploaded'})
+    uploaded_file = request.FILES['file']
+    try:
+        from .engines.network_kpi import import_kpi_file
+        res = import_kpi_file(
+            file_obj=uploaded_file,
+            filename=uploaded_file.name,
+            channel='CSV_IMPORT',
+            user=request.user,
+        )
+        return JsonResponse(res)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_POST
+def network_performance_api_push(request):
+    """REST API endpoint for automated NMS/OSS push of KPI payload."""
+    import json
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+        rows = data if isinstance(data, list) else data.get('records', [])
+        from .engines.network_kpi import process_kpi_rows
+        res = process_kpi_rows(
+            rows=rows,
+            filename=f"API_Push_{timezone.now():%Y%m%d_%H%M%S}.json",
+            channel='API',
+            user=request.user if request.user.is_authenticated else None,
+        )
+        return JsonResponse(res)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@require_POST
+def network_performance_save(request):
+    pk = request.POST.get('id')
+    code = request.POST.get('kpi_code', '').strip().upper()
+    try:
+        kpi_def = NetworkKPIDefinition.objects.get(code=code)
+        if pk:
+            obj = NetworkKPIEntry.objects.get(pk=pk)
+        else:
+            obj = NetworkKPIEntry()
+
+        obj.kpi = kpi_def
+        obj.period_date = _date(request.POST.get('period_date')) or date.today()
+        obj.granularity = request.POST.get('granularity', 'DAILY').upper()
+        obj.region = request.POST.get('region', 'NATIONAL').strip() or 'NATIONAL'
+        obj.cell_id = request.POST.get('cell_id', '').strip()
+        obj.value = _decimal(request.POST.get('value'))
+        from .engines.network_kpi import check_kpi_compliance
+        obj.is_compliant = check_kpi_compliance(kpi_def, obj.value)
+        obj.source = 'MANUAL'
+        obj.notes = request.POST.get('notes', '').strip()
+        obj.save()
+
+        # Recompute QoS score if needed
+        from .engines.network_kpi import compute_qos_compliance_score
+        compute_qos_compliance_score(obj.period_date, obj.region)
+
+        return JsonResponse({'success': True, 'id': obj.pk, 'is_compliant': obj.is_compliant})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@require_POST
+def network_performance_delete(request, pk):
+    get_object_or_404(NetworkKPIEntry, pk=pk).delete()
+    return JsonResponse({'success': True})
+
+
+# =============================================================================
+# 7. Drive Test Management
+# =============================================================================
+
+@login_required
+def drive_test_list(request):
+    return render(request, 'regulatory/drive_test.html', {
+        'title': 'Drive Test Campaigns',
+        'total': DriveTestCampaign.objects.count(),
+        'status_choices': DriveTestCampaign.Status.choices,
+    })
+
+
+@login_required
+def drive_test_api(request):
+    status = request.GET.get('status', '').strip()
+    q = request.GET.get('q', '').strip()
+    page = request.GET.get('page', 1)
+
+    qs = DriveTestCampaign.objects.select_related('analysis').all()
+    if status:
+        qs = qs.filter(status=status)
+    if q:
+        qs = qs.filter(Q(name__icontains=q) | Q(region__icontains=q) | Q(route_description__icontains=q))
+
+    rows, total, page, pages = _paginate(qs, page)
+    data = []
+    for r in rows:
+        analysis = getattr(r, 'analysis', None)
+        data.append({
+            'id': r.pk,
+            'name': r.name,
+            'test_date': r.test_date.isoformat(),
+            'region': r.region,
+            'technology': r.technology,
+            'tool_used': r.tool_used,
+            'operator_name': r.operator_name,
+            'status': r.status,
+            'raw_file_url': r.raw_file.url if r.raw_file else '',
+            'total_samples': analysis.total_samples if analysis else 0,
+            'coverage_pct': str(analysis.coverage_pct) if analysis else '0.00',
+            'avg_rsrp': str(analysis.avg_rsrp) if analysis else '0.00',
+            'avg_dl_tp': str(analysis.avg_dl_throughput) if analysis else '0.00',
+            'natca_compliant': analysis.natca_compliant if analysis else False,
+        })
+    return JsonResponse({'records': data, 'total': total, 'page': page, 'pages': pages})
+
+
+@login_required
+@require_POST
+def drive_test_upload(request):
+    name = request.POST.get('name', '').strip()
+    test_date = _date(request.POST.get('test_date')) or date.today()
+    region = request.POST.get('region', 'WESTERN_AREA').strip()
+    tech = request.POST.get('technology', '4G').strip()
+    tool = request.POST.get('tool_used', 'TEMS').strip()
+
+    if not name or 'file' not in request.FILES:
+        return JsonResponse({'success': False, 'error': 'Name and measurement file required'})
+
+    f = request.FILES['file']
+    fn_lower = f.name.lower()
+    fmt = 'csv'
+    for ext in ('zip', 'tar.gz', 'tgz', 'trp', 'lpg', 'nmf', 'csv'):
+        if fn_lower.endswith('.' + ext):
+            fmt = ext
+            break
+
+    campaign = DriveTestCampaign.objects.create(
+        name=name,
+        test_date=test_date,
+        region=region,
+        technology=tech,
+        tool_used=tool,
+        raw_file=f,
+        file_format=fmt,
+        created_by=request.user,
+    )
+
+    try:
+        from .engines.drive_test import parse_drive_test_file, analyse_campaign
+        f.seek(0)
+        sample_count = parse_drive_test_file(f, f.name, campaign)
+        analyse_campaign(campaign, user=request.user)
+        return JsonResponse({'success': True, 'id': campaign.pk, 'samples': sample_count})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+def drive_test_detail(request, pk):
+    campaign = get_object_or_404(DriveTestCampaign.objects.select_related('analysis'), pk=pk)
+    analysis = getattr(campaign, 'analysis', None)
+    return render(request, 'regulatory/drive_test_detail.html', {
+        'title': f'Drive Test: {campaign.name}',
+        'campaign': campaign,
+        'analysis': analysis,
+    })
+
+
+@login_required
+def drive_test_samples_api(request, pk):
+    campaign = get_object_or_404(DriveTestCampaign, pk=pk)
+    samples = DriveTestSample.objects.filter(campaign=campaign)[:2000]
+    data = [{
+        'id': s.pk,
+        'lat': float(s.latitude),
+        'lng': float(s.longitude),
+        'rsrp': float(s.rsrp) if s.rsrp is not None else None,
+        'rsrq': float(s.rsrq) if s.rsrq is not None else None,
+        'sinr': float(s.sinr) if s.sinr is not None else None,
+        'dl_tp': float(s.dl_throughput) if s.dl_throughput is not None else None,
+        'ul_tp': float(s.ul_throughput) if s.ul_throughput is not None else None,
+        'mos': float(s.voice_mos) if s.voice_mos is not None else None,
+        'cell_id': s.cell_id,
+    } for s in samples]
+    return JsonResponse({'success': True, 'samples': data})
+
+
+@login_required
+@require_POST
+def drive_test_analyse(request, pk):
+    campaign = get_object_or_404(DriveTestCampaign, pk=pk)
+    try:
+        from .engines.drive_test import analyse_campaign
+        analysis = analyse_campaign(campaign, user=request.user)
+        return JsonResponse({'success': True, 'compliant': analysis.natca_compliant})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@require_POST
+def drive_test_delete(request, pk):
+    get_object_or_404(DriveTestCampaign, pk=pk).delete()
+    return JsonResponse({'success': True})
+

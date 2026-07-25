@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% block title %}Drive Test Detail — {{ campaign.name }}{% endblock %}
+{% block page_title %}Drive Test Detail: {{ campaign.name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+#driveMap { height: 420px; width: 100%; border-radius: 6px; }
+.kpi-card-detail { border-top: 3px solid #0d6efd; background: #fff; }
+.kpi-val { font-size: 1.4rem; font-weight: 700; color: #111; }
+.kpi-title { font-size: 0.72rem; text-transform: uppercase; color: #6c757d; font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <a href="{% url 'regulatory:drive_test_list' %}" class="btn btn-outline-secondary btn-sm me-2"><i class="bi bi-arrow-left"></i> Back to Campaigns</a>
+        <span class="badge bg-primary fs-6">{{ campaign.technology }}</span>
+        <span class="badge bg-secondary fs-6 me-2">{{ campaign.tool_used }}</span>
+        <span class="text-muted small"><i class="bi bi-geo-alt"></i> {{ campaign.region }} | Survey Date: {{ campaign.test_date }}</span>
+    </div>
+    <div>
+        {% if analysis and analysis.natca_compliant %}
+            <span class="badge bg-success fs-6 py-2 px-3 me-2"><i class="bi bi-patch-check-fill me-1"></i> NatCA Compliant</span>
+        {% else %}
+            <span class="badge bg-warning text-dark fs-6 py-2 px-3 me-2"><i class="bi bi-exclamation-triangle-fill me-1"></i> NatCA Non-Compliant</span>
+        {% endif %}
+        <button class="btn btn-primary btn-sm" onclick="reAnalyse()"><i class="bi bi-cpu me-1"></i> Re-Analyse Campaign</button>
+    </div>
+</div>
+
+<div id="alertBox" class="alert" style="display:none;"></div>
+
+<!-- 11 Drive Test KPI Cards -->
+<div class="row g-2 mb-3">
+    <div class="col-md-2 col-4">
+        <div class="card kpi-card-detail p-2 text-center">
+            <div class="kpi-title">Coverage %</div>
+            <div class="kpi-val text-primary">{{ analysis.coverage_pct|default:"0.00" }}%</div>
+        </div>
+    </div>
+    <div class="col-md-2 col-4">
+        <div class="card kpi-card-detail p-2 text-center">
+            <div class="kpi-title">Avg RSRP</div>
+            <div class="kpi-val">{{ analysis.avg_rsrp|default:"0.00" }} <small class="fs-6">dBm</small></div>
+        </div>
+    </div>
+    <div class="col-md-2 col-4">
+        <div class="card kpi-card-detail p-2 text-center">
+            <div class="kpi-title">Avg RSRQ</div>
+            <div class="kpi-val">{{ analysis.avg_rsrq|default:"0.00" }} <small class="fs-6">dB</small></div>
+        </div>
+    </div>
+    <div class="col-md-2 col-4">
+        <div class="card kpi-card-detail p-2 text-center">
+            <div class="kpi-title">Avg SINR</div>
+            <div class="kpi-val">{{ analysis.avg_sinr|default:"0.00" }} <small class="fs-6">dB</small></div>
+        </div>
+    </div>
+    <div class="col-md-2 col-4">
+        <div class="card kpi-card-detail p-2 text-center">
+            <div class="kpi-title">DL Throughput</div>
+            <div class="kpi-val text-success">{{ analysis.avg_dl_throughput|default:"0.00" }} <small class="fs-6">Mbps</small></div>
+        </div>
+    </div>
+    <div class="col-md-2 col-4">
+        <div class="card kpi-card-detail p-2 text-center">
+            <div class="kpi-title">UL Throughput</div>
+            <div class="kpi-val text-info">{{ analysis.avg_ul_throughput|default:"0.00" }} <small class="fs-6">Mbps</small></div>
+        </div>
+    </div>
+
+    <div class="col-md-2 col-4 mt-2">
+        <div class="card kpi-card-detail p-2 text-center">
+            <div class="kpi-title">CSSR %</div>
+            <div class="kpi-val">{{ analysis.cssr_pct|default:"100.00" }}%</div>
+        </div>
+    </div>
+    <div class="col-md-2 col-4 mt-2">
+        <div class="card kpi-card-detail p-2 text-center">
+            <div class="kpi-title">Call Drop Rate</div>
+            <div class="kpi-val text-danger">{{ analysis.drop_rate_pct|default:"0.00" }}%</div>
+        </div>
+    </div>
+    <div class="col-md-2 col-4 mt-2">
+        <div class="card kpi-card-detail p-2 text-center">
+            <div class="kpi-title">Handover SR</div>
+            <div class="kpi-val">{{ analysis.handover_sr_pct|default:"100.00" }}%</div>
+        </div>
+    </div>
+    <div class="col-md-2 col-4 mt-2">
+        <div class="card kpi-card-detail p-2 text-center">
+            <div class="kpi-title">Ping / RTT</div>
+            <div class="kpi-val">{{ analysis.avg_ping_rtt|default:"0.00" }} <small class="fs-6">ms</small></div>
+        </div>
+    </div>
+    <div class="col-md-2 col-4 mt-2">
+        <div class="card kpi-card-detail p-2 text-center">
+            <div class="kpi-title">Voice MOS</div>
+            <div class="kpi-val text-warning">{{ analysis.avg_voice_mos|default:"0.00" }} <small class="fs-6">/ 5.0</small></div>
+        </div>
+    </div>
+    <div class="col-md-2 col-4 mt-2">
+        <div class="card kpi-card-detail p-2 text-center bg-light">
+            <div class="kpi-title">Total Samples</div>
+            <div class="kpi-val">{{ analysis.total_samples|default:"0" }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Interactive Map & Signal Distribution -->
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-map"></i> Geolocation Signal Map (RSRP Color Legend)</span>
+                <span class="small text-muted">
+                    <span style="color:#198754">■ Excellent (>-85)</span> &nbsp;
+                    <span style="color:#0d6efd">■ Good (-85..-100)</span> &nbsp;
+                    <span style="color:#fd7e14">■ Fair (-100..-110)</span> &nbsp;
+                    <span style="color:#dc3545">■ Poor (<-110)</span>
+                </span>
+            </div>
+            <div class="card-body p-1">
+                <div id="driveMap"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header bg-white fw-semibold"><i class="bi bi-bar-chart"></i> RSRP Distribution</div>
+            <div class="card-body" style="height:190px;"><canvas id="rsrpChart"></canvas></div>
+        </div>
+        <div class="card">
+            <div class="card-header bg-white fw-semibold"><i class="bi bi-speedometer2"></i> DL Throughput Distribution</div>
+            <div class="card-body" style="height:190px;"><canvas id="tpChart"></canvas></div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script>
+function getCSRF() { return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''; }
+function showAlert(msg, type='success') {
+    const b = document.getElementById('alertBox'); b.className = `alert alert-${type}`; b.textContent = msg; b.style.display = 'block';
+    setTimeout(() => b.style.display = 'none', 4000);
+}
+
+// Initialize Leaflet Map (Freetown SL default view)
+const map = L.map('driveMap').setView([8.484, -13.230], 12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+function getColor(rsrp) {
+    if (rsrp === null || rsrp === undefined) return '#6c757d';
+    if (rsrp >= -85) return '#198754';  // Excellent - Green
+    if (rsrp >= -100) return '#0d6efd'; // Good - Blue
+    if (rsrp >= -110) return '#fd7e14'; // Fair - Orange
+    return '#dc3545';                   // Poor - Red
+}
+
+function loadMapSamples() {
+    fetch("{% url 'regulatory:drive_test_samples_api' campaign.pk %}")
+        .then(r => r.json()).then(d => {
+            const samples = d.samples || [];
+            if (!samples.length) return;
+
+            const bounds = [];
+            const rsrpBuckets = { excellent: 0, good: 0, fair: 0, poor: 0 };
+            const tpBuckets = { high: 0, med: 0, low: 0 };
+
+            samples.forEach(s => {
+                const lat = s.lat; const lng = s.lng;
+                bounds.push([lat, lng]);
+
+                const marker = L.circleMarker([lat, lng], {
+                    radius: 5,
+                    fillColor: getColor(s.rsrp),
+                    color: '#fff',
+                    weight: 1,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                }).addTo(map);
+
+                marker.bindPopup(`
+                    <strong>Cell ID:</strong> ${s.cell_id || 'N/A'}<br>
+                    <strong>RSRP:</strong> ${s.rsrp !== null ? s.rsrp + ' dBm' : 'N/A'}<br>
+                    <strong>RSRQ:</strong> ${s.rsrq !== null ? s.rsrq + ' dB' : 'N/A'}<br>
+                    <strong>SINR:</strong> ${s.sinr !== null ? s.sinr + ' dB' : 'N/A'}<br>
+                    <strong>DL Throughput:</strong> ${s.dl_tp !== null ? s.dl_tp + ' Mbps' : 'N/A'}
+                `);
+
+                // Tally buckets
+                if (s.rsrp >= -85) rsrpBuckets.excellent++;
+                else if (s.rsrp >= -100) rsrpBuckets.good++;
+                else if (s.rsrp >= -110) rsrpBuckets.fair++;
+                else rsrpBuckets.poor++;
+
+                if (s.dl_tp >= 10) tpBuckets.high++;
+                else if (s.dl_tp >= 5) tpBuckets.med++;
+                else tpBuckets.low++;
+            });
+
+            if (bounds.length) map.fitBounds(bounds);
+
+            renderDistCharts(rsrpBuckets, tpBuckets);
+        });
+}
+
+function renderDistCharts(rsrp, tp) {
+    new Chart(document.getElementById('rsrpChart').getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Excellent (>-85)', 'Good (-85..-100)', 'Fair (-100..-110)', 'Poor (<-110)'],
+            datasets: [{ data: [rsrp.excellent, rsrp.good, rsrp.fair, rsrp.poor], backgroundColor: ['#198754', '#0d6efd', '#fd7e14', '#dc3545'] }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10 } } } }
+    });
+
+    new Chart(document.getElementById('tpChart').getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: ['High (>=10M)', 'Med (5..10M)', 'Low (<5M)'],
+            datasets: [{ label: 'Samples', data: [tp.high, tp.med, tp.low], backgroundColor: ['#198754', '#0d6efd', '#dc3545'] }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+}
+
+function reAnalyse() {
+    fetch("{% url 'regulatory:drive_test_analyse' campaign.pk %}", { method: 'POST', headers: {'X-CSRFToken': getCSRF()} })
+        .then(r => r.json()).then(d => {
+            if (d.success) { showAlert('Campaign re-analysed.'); location.reload(); }
+            else showAlert(d.error || 'Analysis failed', 'danger');
+        });
+}
+
+document.addEventListener('DOMContentLoaded', loadMapSamples);
+</script>
+{% endblock %}

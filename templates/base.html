@@ -297,6 +297,16 @@
                             <i class="bi bi-speedometer2"></i><span class="nav-link-text"> QoS / KPIs</span>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/regulatory/network-performance' in request.path %}active{% endif %}" href="{% url 'regulatory:network_performance_view' %}" title="Network Performance">
+                            <i class="bi bi-diagram-3"></i><span class="nav-link-text"> Network Performance</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/regulatory/drive-test' in request.path %}active{% endif %}" href="{% url 'regulatory:drive_test_list' %}" title="Drive Test">
+                            <i class="bi bi-geo-alt"></i><span class="nav-link-text"> Drive Test</span>
+                        </a>
+                    </li>
                 </ul>
             </li>
 

@@ -56,7 +56,7 @@ CRUD pages with search (and CSV import where applicable) for:
 
 ## 7. Business Modules
 - **Interconnect billing** — partners, rates, billing cycles, invoices, exchange rates, receivables ageing.
-- **Regulatory** — NATCOM reports and LEA extraction/export.
+- **Regulatory (NatCA Compliance)** — NATCOM/NatCA periodic reports, Levy & USF computation, Retail revenue entry, Lawful Intercept (LEA), QoS/KPI snapshots, **Network Performance Monitoring (12 PM KPIs)**, and **Drive Test Management (11 Drive Test metrics)** with interactive Leaflet.js signal mapping & multi-format support (`.trp`, `.lpg`, `.nmf`, `.csv`, `.zip`, `.tar.gz`).
 - **Roaming** — inbound-roamer detection, per-partner roaming settlement files, disputes.
 
 ## 8. Dashboards & Analytics

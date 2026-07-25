@@ -379,3 +379,270 @@ class QoSMetric(models.Model):
 
     def __str__(self):
         return f'{self.metric_date} [{self.granularity}] ASR={self.asr_pct}% Drop={self.drop_rate_pct}%'
+
+
+# ---------------------------------------------------------------------------
+# 8. NetworkKPIDefinition — Registry of PM KPIs with NatCA thresholds
+# ---------------------------------------------------------------------------
+
+class NetworkKPIDefinition(models.Model):
+    """Definition and regulatory threshold for a Performance Management (PM) KPI."""
+
+    class Direction(models.TextChoices):
+        ABOVE = 'ABOVE', 'Must be Greater/Equal Threshold'
+        BELOW = 'BELOW', 'Must be Less/Equal Threshold'
+
+    class Technology(models.TextChoices):
+        TECH_2G = '2G', '2G (GSM)'
+        TECH_3G = '3G', '3G (UMTS)'
+        TECH_4G = '4G', '4G (LTE)'
+        TECH_5G = '5G', '5G (NR)'
+        ALL     = 'ALL', 'All Technologies / Composite'
+
+    code = models.CharField(max_length=40, unique=True, db_index=True,
+                            help_text='Unique identifier e.g. NET_AVAIL, CSSR, CDR')
+    name = models.CharField(max_length=120)
+    unit = models.CharField(max_length=20, default='%', help_text='%, Mbps, ms, score')
+    description = models.TextField(blank=True)
+
+    natca_threshold = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal('95.00'),
+        help_text='Regulatory target threshold set by NatCA',
+    )
+    threshold_direction = models.CharField(
+        max_length=8, choices=Direction.choices, default=Direction.ABOVE,
+    )
+    technology = models.CharField(
+        max_length=8, choices=Technology.choices, default=Technology.ALL,
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'reg_kpi_definitions'
+        ordering = ['code']
+        verbose_name = 'Network KPI Definition'
+        verbose_name_plural = 'Network KPI Definitions'
+
+    def __str__(self):
+        dir_str = '>=' if self.threshold_direction == self.Direction.ABOVE else '<='
+        return f'{self.name} ({self.code}): target {dir_str} {self.natca_threshold} {self.unit}'
+
+
+# ---------------------------------------------------------------------------
+# 9. NetworkKPIEntry — Measurement entries per period/region
+# ---------------------------------------------------------------------------
+
+class NetworkKPIEntry(models.Model):
+    """Measurement value for a PM KPI."""
+
+    class Granularity(models.TextChoices):
+        HOURLY  = 'HOURLY',  'Hourly'
+        DAILY   = 'DAILY',   'Daily'
+        WEEKLY  = 'WEEKLY',  'Weekly'
+        MONTHLY = 'MONTHLY', 'Monthly'
+
+    class Source(models.TextChoices):
+        MANUAL     = 'MANUAL',     'Manual Entry'
+        CSV_IMPORT = 'CSV_IMPORT', 'CSV/File Import'
+        SFTP       = 'SFTP',       'SFTP Automated Sync'
+        API        = 'API',        'REST API Push'
+
+    kpi = models.ForeignKey(NetworkKPIDefinition, on_delete=models.CASCADE,
+                             related_name='entries')
+    period_date = models.DateField(db_index=True)
+    granularity = models.CharField(max_length=8, choices=Granularity.choices,
+                                     default=Granularity.DAILY, db_index=True)
+    region = models.CharField(max_length=80, default='NATIONAL', db_index=True)
+    cell_id = models.CharField(max_length=80, blank=True, help_text='Optional specific cell/node ID')
+
+    value = models.DecimalField(max_digits=12, decimal_places=4)
+    is_compliant = models.BooleanField(default=True, db_index=True)
+
+    source = models.CharField(max_length=12, choices=Source.choices,
+                                default=Source.MANUAL)
+    import_log = models.ForeignKey('NetworkKPIImportLog', on_delete=models.SET_NULL,
+                                   null=True, blank=True, related_name='entries',
+                                   db_constraint=False)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'reg_kpi_entries'
+        ordering = ['-period_date', 'kpi__code', 'region']
+        unique_together = [('kpi', 'period_date', 'granularity', 'region', 'cell_id')]
+        verbose_name = 'Network KPI Entry'
+        verbose_name_plural = 'Network KPI Entries'
+
+    def __str__(self):
+        status = 'PASS' if self.is_compliant else 'FAIL'
+        return f'{self.kpi.code} on {self.period_date} ({self.region}): {self.value} {self.kpi.unit} [{status}]'
+
+
+# ---------------------------------------------------------------------------
+# 10. NetworkKPIImportLog — Bulk import audit trail
+# ---------------------------------------------------------------------------
+
+class NetworkKPIImportLog(models.Model):
+    """Audit record for bulk KPI uploads or API pushes."""
+
+    filename = models.CharField(max_length=255)
+    imported_at = models.DateTimeField(auto_now_add=True)
+    imported_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+',
+        db_constraint=False,
+    )
+    channel = models.CharField(max_length=20, default='MANUAL')
+    record_count = models.IntegerField(default=0)
+    error_count = models.IntegerField(default=0)
+    status = models.CharField(max_length=20, default='COMPLETED')
+    errors_json = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        db_table = 'reg_kpi_import_logs'
+        ordering = ['-imported_at']
+        verbose_name = 'Network KPI Import Log'
+        verbose_name_plural = 'Network KPI Import Logs'
+
+    def __str__(self):
+        return f'Import {self.filename} @ {self.imported_at:%Y-%m-%d %H:%M} ({self.record_count} recs)'
+
+
+# ---------------------------------------------------------------------------
+# 11. DriveTestCampaign — Drive Test Campaign
+# ---------------------------------------------------------------------------
+
+class DriveTestCampaign(models.Model):
+    """Drive Test survey event/campaign."""
+
+    class Status(models.TextChoices):
+        UPLOADED = 'UPLOADED', 'Uploaded'
+        ANALYSED = 'ANALYSED', 'Analysed'
+        REPORTED = 'REPORTED', 'Report Generated'
+
+    name = models.CharField(max_length=160)
+    test_date = models.DateField(db_index=True)
+    region = models.CharField(max_length=80, default='WESTERN_AREA', db_index=True)
+    route_description = models.TextField(blank=True, help_text='e.g. Freetown Central - Aberdeen - Lumley Beach Route')
+
+    technology = models.CharField(max_length=10, default='4G', help_text='2G/3G/4G/5G')
+    tool_used = models.CharField(max_length=80, default='TEMS', help_text='TEMS, Nemo, SwissQual, XCAL, CSV, etc.')
+    operator_name = models.CharField(max_length=80, default='Orange SL')
+
+    status = models.CharField(max_length=12, choices=Status.choices,
+                                default=Status.UPLOADED, db_index=True)
+
+    raw_file = models.FileField(upload_to='regulatory/drivetest/', blank=True, null=True)
+    file_format = models.CharField(max_length=20, default='csv', help_text='csv, trp, lpg, nmf, zip, tar.gz')
+    notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+',
+        db_constraint=False,
+    )
+
+    class Meta:
+        db_table = 'reg_drive_campaigns'
+        ordering = ['-test_date', '-created_at']
+        verbose_name = 'Drive Test Campaign'
+        verbose_name_plural = 'Drive Test Campaigns'
+
+    def __str__(self):
+        return f'{self.name} ({self.test_date}) [{self.status}]'
+
+
+# ---------------------------------------------------------------------------
+# 12. DriveTestSample — Geolocation measurement points
+# ---------------------------------------------------------------------------
+
+class DriveTestSample(models.Model):
+    """Single geo-referenced drive test measurement point."""
+
+    campaign = models.ForeignKey(DriveTestCampaign, on_delete=models.CASCADE,
+                                  related_name='samples')
+
+    latitude = models.DecimalField(max_digits=10, decimal_places=7)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7)
+    timestamp = models.DateTimeField(null=True, blank=True)
+
+    # 11 Drive Test KPI fields
+    rsrp = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True, help_text='RSRP in dBm')
+    rsrq = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True, help_text='RSRQ in dB')
+    sinr = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True, help_text='SINR in dB')
+
+    dl_throughput = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, help_text='DL Throughput (Mbps)')
+    ul_throughput = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, help_text='UL Throughput (Mbps)')
+
+    cssr_status = models.BooleanField(null=True, blank=True, help_text='True=Call Setup Success, False=Failure')
+    drop_status = models.BooleanField(null=True, blank=True, help_text='True=Call Dropped, False=Normal')
+    handover_status = models.BooleanField(null=True, blank=True, help_text='True=Handover Success, False=Failure')
+
+    ping_rtt = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, help_text='Ping RTT in ms')
+    voice_mos = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True, help_text='Voice MOS score 1.0-5.0')
+
+    # Network identifiers
+    technology = models.CharField(max_length=10, default='4G')
+    cell_id = models.CharField(max_length=40, blank=True)
+    pci = models.IntegerField(null=True, blank=True)
+    earfcn = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'reg_drive_samples'
+        ordering = ['timestamp', 'id']
+        verbose_name = 'Drive Test Sample'
+        verbose_name_plural = 'Drive Test Samples'
+
+    def __str__(self):
+        return f'Sample {self.pk} @ ({self.latitude}, {self.longitude}) RSRP={self.rsrp}dBm'
+
+
+# ---------------------------------------------------------------------------
+# 13. DriveTestAnalysis — Aggregated drive test results & NatCA compliance
+# ---------------------------------------------------------------------------
+
+class DriveTestAnalysis(models.Model):
+    """Analysis summary of a drive test campaign against NatCA benchmarks."""
+
+    campaign = models.OneToOneField(DriveTestCampaign, on_delete=models.CASCADE,
+                                     related_name='analysis')
+
+    total_samples = models.IntegerField(default=0)
+    coverage_pct = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0'))
+
+    avg_rsrp = models.DecimalField(max_digits=7, decimal_places=2, default=Decimal('0'))
+    avg_rsrq = models.DecimalField(max_digits=7, decimal_places=2, default=Decimal('0'))
+    avg_sinr = models.DecimalField(max_digits=7, decimal_places=2, default=Decimal('0'))
+
+    avg_dl_throughput = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal('0'))
+    avg_ul_throughput = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal('0'))
+
+    cssr_pct = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0'))
+    drop_rate_pct = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0'))
+    handover_sr_pct = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0'))
+
+    avg_ping_rtt = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal('0'))
+    avg_voice_mos = models.DecimalField(max_digits=4, decimal_places=2, default=Decimal('0'))
+
+    natca_compliant = models.BooleanField(default=False)
+    analysis_json = models.JSONField(default=dict, blank=True)
+
+    analysed_at = models.DateTimeField(auto_now=True)
+    analysed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+',
+        db_constraint=False,
+    )
+
+    class Meta:
+        db_table = 'reg_drive_analysis'
+        verbose_name = 'Drive Test Analysis'
+        verbose_name_plural = 'Drive Test Analyses'
+
+    def __str__(self):
+        status = 'COMPLIANT' if self.natca_compliant else 'NON-COMPLIANT'
+        return f'Analysis for {self.campaign.name}: Coverage={self.coverage_pct}% [{status}]'
+

@@ -46,6 +46,23 @@ urlpatterns = [
     path('qos/api/', views.qos_api, name='qos_api'),
     path('qos/refresh/', views.qos_refresh, name='qos_refresh'),
 
+    # 6. Network Performance Monitoring (PM KPIs)
+    path('network-performance/', views.network_performance_view, name='network_performance_view'),
+    path('network-performance/api/', views.network_performance_api, name='network_performance_api'),
+    path('network-performance/import/', views.network_performance_import, name='network_performance_import'),
+    path('network-performance/api/push/', views.network_performance_api_push, name='network_performance_api_push'),
+    path('network-performance/save/', views.network_performance_save, name='network_performance_save'),
+    path('network-performance/<int:pk>/delete/', views.network_performance_delete, name='network_performance_delete'),
+
+    # 7. Drive Test Management
+    path('drive-test/', views.drive_test_list, name='drive_test_list'),
+    path('drive-test/api/', views.drive_test_api, name='drive_test_api'),
+    path('drive-test/upload/', views.drive_test_upload, name='drive_test_upload'),
+    path('drive-test/<int:pk>/', views.drive_test_detail, name='drive_test_detail'),
+    path('drive-test/<int:pk>/samples/', views.drive_test_samples_api, name='drive_test_samples_api'),
+    path('drive-test/<int:pk>/analyse/', views.drive_test_analyse, name='drive_test_analyse'),
+    path('drive-test/<int:pk>/delete/', views.drive_test_delete, name='drive_test_delete'),
+
     # Regulatory Profile (admin)
     path('profile/save/', views.profile_save, name='profile_save'),
 ]
