@@ -454,34 +454,56 @@ function renderMapToCurrentIndex() {
 
     mapMarkersGroup.clearLayers();
 
-    // Render traversed sample markers up to currentIndex
-    for (let i = 0; i <= currentIndex; i++) {
-        const s = allSamples[i];
+    // 1. Draw Full Route Polyline Track across all sample points
+    const fullTrackLatLngs = allSamples.map(s => [s.lat, s.lng]);
+    L.polyline(fullTrackLatLngs, {
+        color: '#6c757d',
+        weight: 5,
+        opacity: 0.4,
+        lineCap: 'round',
+        lineJoin: 'round'
+    }).addTo(mapMarkersGroup);
+
+    // 2. Draw ALL sample measurement points across the full drive test route
+    allSamples.forEach((s, idx) => {
         let val = s.rsrp;
         if (activeMetric === 'RSRQ') val = s.rsrq;
         else if (activeMetric === 'SINR') val = s.sinr;
         else if (activeMetric === 'DL') val = s.dl_tp;
 
+        const isTraversed = idx <= currentIndex;
+
         L.circleMarker([s.lat, s.lng], {
-            radius: 5,
+            radius: isTraversed ? 6 : 4,
             fillColor: getMetricColor(val, activeMetric),
-            color: '#fff',
-            weight: 1,
-            fillOpacity: 0.85
+            color: isTraversed ? '#ffffff' : '#495057',
+            weight: isTraversed ? 1.5 : 0.5,
+            fillOpacity: isTraversed ? 0.95 : 0.45
         }).bindPopup(`
-            <strong>Point #${i + 1}</strong><br>
+            <strong>Point #${idx + 1}</strong><br>
+            <strong>Cell ID:</strong> ${s.cell_id || 'N/A'}<br>
             <strong>RSRP:</strong> ${s.rsrp !== null ? s.rsrp + ' dBm' : 'N/A'}<br>
             <strong>SINR:</strong> ${s.sinr !== null ? s.sinr + ' dB' : 'N/A'}<br>
             <strong>DL Throughput:</strong> ${s.dl_tp !== null ? s.dl_tp + ' Mbps' : 'N/A'}
         `).addTo(mapMarkersGroup);
+    });
+
+    // 3. Highlight Traversed Sub-Polyline up to currentIndex
+    if (currentIndex > 0) {
+        const traversedLatLngs = fullTrackLatLngs.slice(0, currentIndex + 1);
+        L.polyline(traversedLatLngs, {
+            color: '#0d6efd',
+            weight: 6,
+            opacity: 0.85
+        }).addTo(mapMarkersGroup);
     }
 
-    // Vehicle Marker (Pulsing glowing position cursor)
+    // 4. Vehicle Position Marker (Pulsing glowing position indicator)
     const curSample = allSamples[currentIndex];
     if (curSample) {
         if (!vehicleMarker) {
             vehicleMarker = L.circleMarker([curSample.lat, curSample.lng], {
-                radius: 9,
+                radius: 10,
                 fillColor: '#dc3545',
                 color: '#ffffff',
                 weight: 3,
