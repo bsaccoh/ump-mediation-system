@@ -399,7 +399,10 @@ function submitUpload(e) {
         method: 'POST',
         body: formData,
         headers: {'X-CSRFToken': getCSRF()}
-    }).then(r => r.json()).then(d => {
+    }).then(r => {
+        if (!r.ok) return r.text().then(t => { throw new Error(`HTTP ${r.status}: ${t.substring(0, 200)}`); });
+        return r.json();
+    }).then(d => {
         clearInterval(interval);
         progressBar.style.width = '100%';
         progressPercent.textContent = '100%';

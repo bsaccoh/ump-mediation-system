@@ -7,6 +7,7 @@ are gated by :py:func:`regulatory.decorators.lawful_intercept_required`.
 from __future__ import annotations
 
 import io
+import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
@@ -850,6 +851,7 @@ def drive_test_api(request):
 @login_required
 @require_POST
 def drive_test_upload(request):
+  try:
     files = request.FILES.getlist('files') or request.FILES.getlist('file')
     if not files:
         return JsonResponse({'success': False, 'error': 'No measurement files provided.'})
@@ -919,7 +921,7 @@ def drive_test_upload(request):
 
         # 4. Smart Test Date Auto-Extraction
         f_date = test_date
-        import re
+
         date_iso = re.search(r'(20\d{2})[-_]?([01]\d)[-_]?([0-3]\d)', full_str)
         if date_iso:
             try:
@@ -969,6 +971,10 @@ def drive_test_upload(request):
         'campaigns': imported_campaigns,
         'warnings': errors,
     })
+  except Exception as exc:
+    import traceback
+    traceback.print_exc()
+    return JsonResponse({'success': False, 'error': f'Server error: {str(exc)}'}, status=500)
 
 
 @login_required
