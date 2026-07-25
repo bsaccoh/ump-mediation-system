@@ -818,42 +818,90 @@ def drive_test_api(request):
 @login_required
 @require_POST
 def drive_test_upload(request):
-    name = request.POST.get('name', '').strip()
+    files = request.FILES.getlist('files') or request.FILES.getlist('file')
+    if not files:
+        return JsonResponse({'success': False, 'error': 'No measurement files provided.'})
+
+    operator_code = request.POST.get('operator_code', 'orange').strip().lower()
+    operator_name_dict = {
+        'orange': 'Orange Sierra Leone',
+        'africell': 'Africell Sierra Leone',
+        'qcell': 'QCell Sierra Leone',
+        'sierratel': 'Sierra Tel',
+        'onemobile': 'One-Mobile',
+    }
+    operator_name = request.POST.get('operator_name') or operator_name_dict.get(operator_code, 'Orange SL')
+    base_name = request.POST.get('name', '').strip()
     test_date = _date(request.POST.get('test_date')) or date.today()
     region = request.POST.get('region', 'WESTERN_AREA').strip()
+    route_type = request.POST.get('route_type', 'Urban').strip()
     tech = request.POST.get('technology', '4G').strip()
     tool = request.POST.get('tool_used', 'TEMS').strip()
+    device_model = request.POST.get('device_model', '').strip()
+    tester_name = request.POST.get('tester_name', '').strip()
 
-    if not name or 'file' not in request.FILES:
-        return JsonResponse({'success': False, 'error': 'Name and measurement file required'})
+    from .engines.drive_test import parse_drive_test_file, analyse_campaign
 
-    f = request.FILES['file']
-    fn_lower = f.name.lower()
-    fmt = 'csv'
-    for ext in ('zip', 'tar.gz', 'tgz', 'trp', 'lpg', 'nmf', 'csv'):
-        if fn_lower.endswith('.' + ext):
-            fmt = ext
-            break
+    imported_campaigns = []
+    total_samples_parsed = 0
+    errors = []
 
-    campaign = DriveTestCampaign.objects.create(
-        name=name,
-        test_date=test_date,
-        region=region,
-        technology=tech,
-        tool_used=tool,
-        raw_file=f,
-        file_format=fmt,
-        created_by=request.user,
-    )
+    for idx, f in enumerate(files):
+        c_name = base_name if (len(files) == 1 and base_name) else f.name.rsplit('.', 1)[0]
+        fn_lower = f.name.lower()
+        fmt = 'csv'
+        for ext in ('zip', 'tar.gz', 'tgz', 'trp', 'lpg', 'nmf', 'xlsx', 'xls', 'csv'):
+            if fn_lower.endswith('.' + ext):
+                fmt = ext
+                break
 
-    try:
-        from .engines.drive_test import parse_drive_test_file, analyse_campaign
-        f.seek(0)
-        sample_count = parse_drive_test_file(f, f.name, campaign)
-        analyse_campaign(campaign, user=request.user)
-        return JsonResponse({'success': True, 'id': campaign.pk, 'samples': sample_count})
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        f_tech = tech
+        if '2g' in fn_lower or 'gsm' in fn_lower: f_tech = '2G'
+        elif '3g' in fn_lower or 'umts' in fn_lower: f_tech = '3G'
+        elif '4g' in fn_lower or 'lte' in fn_lower: f_tech = '4G'
+        elif '5g' in fn_lower or 'nr' in fn_lower: f_tech = '5G'
+
+        f_op = operator_code
+        if 'orange' in fn_lower: f_op = 'orange'
+        elif 'africell' in fn_lower: f_op = 'africell'
+        elif 'qcell' in fn_lower: f_op = 'qcell'
+        elif 'sierratel' in fn_lower: f_op = 'sierratel'
+        elif 'onemobile' in fn_lower: f_op = 'onemobile'
+
+        campaign = DriveTestCampaign.objects.create(
+            name=c_name,
+            test_date=test_date,
+            operator_code=f_op,
+            operator_name=operator_name_dict.get(f_op, operator_name),
+            region=region,
+            route_description=f"Route: {route_type} | Device: {device_model} | Tester: {tester_name}".strip(' |'),
+            technology=f_tech,
+            tool_used=tool,
+            raw_file=f,
+            file_format=fmt,
+            created_by=request.user,
+        )
+
+        try:
+            f.seek(0)
+            sample_count = parse_drive_test_file(f, f.name, campaign)
+            analyse_campaign(campaign, user=request.user)
+            total_samples_parsed += sample_count
+            imported_campaigns.append({'id': campaign.pk, 'name': campaign.name, 'samples': sample_count})
+        except Exception as e:
+            campaign.delete()
+            errors.append(f"{f.name}: {str(e)}")
+
+    if not imported_campaigns and errors:
+        return JsonResponse({'success': False, 'error': '; '.join(errors)})
+
+    return JsonResponse({
+        'success': True,
+        'count': len(imported_campaigns),
+        'total_samples': total_samples_parsed,
+        'campaigns': imported_campaigns,
+        'warnings': errors,
+    })
 
 
 @login_required

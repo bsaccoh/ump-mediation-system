@@ -57,59 +57,109 @@
     </div>
 </div>
 
-<!-- Upload Campaign Modal -->
+<!-- Upload Campaign Modal (Matching User Mockup) -->
 <div class="modal fade" id="uploadModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-cloud-upload"></i> Upload Drive Test Campaign</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    <div class="modal-dialog modal-md modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0" style="border-radius: 12px;">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h5 class="modal-title fw-bold" style="color: #2b303a;">Upload Drive Test Data</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="uploadForm" onsubmit="submitUpload(event)">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Campaign Name</label>
-                        <input type="text" id="campaignName" class="form-control" placeholder="e.g. Q3 Freetown Urban Drive Test Survey" required>
-                    </div>
+                <div class="modal-body pt-3">
+                    
+                    <!-- File / Folder Selection Toggle Buttons -->
                     <div class="row g-2 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label">Survey Date</label>
+                        <div class="col-6">
+                            <button type="button" id="btnSelectFiles" class="btn btn-outline-primary w-100 py-2 fw-semibold" onclick="triggerFileSelect('files')">
+                                <i class="bi bi-file-earmark-arrow-up me-1"></i> Select Files
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <button type="button" id="btnSelectFolder" class="btn btn-outline-primary w-100 py-2 fw-semibold" onclick="triggerFileSelect('folder')">
+                                <i class="bi bi-folder2-open me-1"></i> Select Folder
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Hidden File Inputs -->
+                    <input type="file" id="fileInput" class="d-none" multiple accept=".csv,.trp,.lpg,.nmf,.zip,.tar,.gz,.tgz,.xlsx,.xls" onchange="handleFileSelection(this.files)">
+                    <input type="file" id="folderInput" class="d-none" webkitdirectory directory multiple onchange="handleFileSelection(this.files)">
+
+                    <!-- Selected Files Status Badge -->
+                    <div id="selectionStatusBadge" class="alert alert-info py-2 px-3 small d-flex justify-content-between align-items-center mb-3" style="display:none !important;">
+                        <span><i class="bi bi-check-circle-fill me-1"></i> <strong id="selectedFileCount">0</strong> files selected</span>
+                        <span class="badge bg-primary text-wrap text-break" id="autoDetectBadge">Auto-detected</span>
+                    </div>
+
+                    <!-- Form Inputs -->
+                    <div class="mb-3">
+                        <label class="form-label small text-muted mb-1">Operator *</label>
+                        <select id="campaignOperator" class="form-select" required>
+                            <option value="" disabled selected>Operator *</option>
+                            <option value="orange">Orange Sierra Leone</option>
+                            <option value="africell">Africell Sierra Leone</option>
+                            <option value="qcell">QCell Sierra Leone</option>
+                            <option value="sierratel">Sierra Tel</option>
+                            <option value="onemobile">One-Mobile</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <input type="text" id="campaignName" class="form-control" placeholder="Test Name">
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small text-muted mb-1">Test Date</label>
                             <input type="date" id="campaignDate" class="form-control" required>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Region</label>
-                            <input type="text" id="campaignRegion" class="form-control" value="WESTERN_AREA" required>
+                        <div class="col-6">
+                            <label class="form-label small text-muted mb-1">Route Type</label>
+                            <select id="campaignRouteType" class="form-select">
+                                <option value="Urban" selected>Urban</option>
+                                <option value="Highway">Highway</option>
+                                <option value="Suburban">Suburban</option>
+                                <option value="Rural">Rural</option>
+                            </select>
                         </div>
                     </div>
+
                     <div class="row g-2 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label">Technology</label>
+                        <div class="col-6">
+                            <label class="form-label small text-muted mb-1">Technology</label>
                             <select id="campaignTech" class="form-select">
-                                <option value="4G" selected>4G (LTE)</option>
-                                <option value="3G">3G (UMTS)</option>
-                                <option value="2G">2G (GSM)</option>
-                                <option value="5G">5G (NR)</option>
+                                <option value="4G" selected>4G</option>
+                                <option value="3G">3G</option>
+                                <option value="2G">2G</option>
+                                <option value="5G">5G</option>
                             </select>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Measurement Tool</label>
-                            <select id="campaignTool" class="form-select">
-                                <option value="TEMS">TEMS Investigation (.trp / .csv)</option>
-                                <option value="Nemo">Nemo Outdoor (.nmf / .csv)</option>
-                                <option value="SwissQual">SwissQual / QualiPoc (.lpg / .csv)</option>
-                                <option value="XCAL">XCAL (.csv)</option>
-                                <option value="Generic">Generic CSV / Archive (.zip, .tar.gz)</option>
-                            </select>
+                        <div class="col-6">
+                            <label class="form-label small text-muted mb-1">Device Model</label>
+                            <input type="text" id="campaignDevice" class="form-control" placeholder="Device Model">
                         </div>
                     </div>
+
                     <div class="mb-3">
-                        <label class="form-label">Measurement File (.csv, .trp, .lpg, .nmf, .zip, .tar.gz)</label>
-                        <input type="file" id="campaignFile" class="form-control" accept=".csv,.trp,.lpg,.nmf,.zip,.tar,.gz,.tgz" required>
+                        <input type="text" id="campaignTester" class="form-control" placeholder="Tester Name">
                     </div>
+
+                    <!-- Progress Bar & Status Display -->
+                    <div id="progressContainer" class="mt-3" style="display: none;">
+                        <div class="d-flex justify-content-between small mb-1 fw-bold text-primary">
+                            <span id="progressStatus">Uploading files...</span>
+                            <span id="progressPercent">0%</span>
+                        </div>
+                        <div class="progress" style="height: 16px; border-radius: 8px;">
+                            <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary btn-sm">Upload & Parse Samples</button>
+                <div class="modal-footer border-top-0 pt-0">
+                    <button type="button" class="btn btn-link text-muted text-decoration-none px-3" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" id="btnSubmitUpload" class="btn btn-secondary px-4 fw-semibold" disabled>Upload & Process</button>
                 </div>
             </form>
         </div>
@@ -124,6 +174,69 @@ function showAlert(msg, type='success') {
 }
 
 document.getElementById('campaignDate').value = new Date().toISOString().slice(0,10);
+
+let selectedFilesList = [];
+
+function triggerFileSelect(type) {
+    if (type === 'files') {
+        document.getElementById('btnSelectFiles').classList.add('active', 'btn-primary');
+        document.getElementById('btnSelectFiles').classList.remove('btn-outline-primary');
+        document.getElementById('btnSelectFolder').classList.remove('active', 'btn-primary');
+        document.getElementById('btnSelectFolder').classList.add('btn-outline-primary');
+        document.getElementById('fileInput').click();
+    } else {
+        document.getElementById('btnSelectFolder').classList.add('active', 'btn-primary');
+        document.getElementById('btnSelectFolder').classList.remove('btn-outline-primary');
+        document.getElementById('btnSelectFiles').classList.remove('active', 'btn-primary');
+        document.getElementById('btnSelectFiles').classList.add('btn-outline-primary');
+        document.getElementById('folderInput').click();
+    }
+}
+
+function handleFileSelection(files) {
+    if (!files || !files.length) return;
+    selectedFilesList = Array.from(files);
+
+    const count = selectedFilesList.length;
+    document.getElementById('selectedFileCount').textContent = count;
+    document.getElementById('selectionStatusBadge').style.setProperty('display', 'flex', 'important');
+    
+    const submitBtn = document.getElementById('btnSubmitUpload');
+    submitBtn.disabled = false;
+    submitBtn.className = 'btn btn-primary px-4 fw-semibold';
+
+    const firstFile = selectedFilesList[0];
+    const fn = firstFile.name.toLowerCase();
+
+    // Auto-detect Operator
+    if (fn.includes('orange')) document.getElementById('campaignOperator').value = 'orange';
+    else if (fn.includes('africell')) document.getElementById('campaignOperator').value = 'africell';
+    else if (fn.includes('qcell')) document.getElementById('campaignOperator').value = 'qcell';
+    else if (fn.includes('sierratel')) document.getElementById('campaignOperator').value = 'sierratel';
+    else if (fn.includes('onemobile')) document.getElementById('campaignOperator').value = 'onemobile';
+    else if (!document.getElementById('campaignOperator').value) document.getElementById('campaignOperator').value = 'qcell';
+
+    // Auto-detect Technology
+    if (fn.includes('2g') || fn.includes('gsm')) document.getElementById('campaignTech').value = '2G';
+    else if (fn.includes('3g') || fn.includes('umts')) document.getElementById('campaignTech').value = '3G';
+    else if (fn.includes('4g') || fn.includes('lte')) document.getElementById('campaignTech').value = '4G';
+    else if (fn.includes('5g') || fn.includes('nr')) document.getElementById('campaignTech').value = '5G';
+
+    // Auto-detect Test Date if pattern found e.g. 20260725 or 2026-07-25
+    const dateMatch = fn.match(/(20\d{2})[-_]?([01]\d)[-_]?([0-3]\d)/);
+    if (dateMatch) {
+        const yyyy = dateMatch[1], mm = dateMatch[2], dd = dateMatch[3];
+        document.getElementById('campaignDate').value = `${yyyy}-${mm}-${dd}`;
+    }
+
+    // Auto-fill Test Name if empty
+    if (!document.getElementById('campaignName').value) {
+        document.getElementById('campaignName').value = count === 1 ? (firstFile.name.includes('.') ? firstFile.name.substring(0, firstFile.name.lastIndexOf('.')) : firstFile.name) : (firstFile.webkitRelativePath ? firstFile.webkitRelativePath.split('/')[0] : `Drive_Test_Batch_${count}_files`);
+    }
+
+    const opText = document.getElementById('campaignOperator').options[document.getElementById('campaignOperator').selectedIndex]?.text || '';
+    document.getElementById('autoDetectBadge').textContent = `Auto-Detected: ${document.getElementById('campaignTech').value} ${opText}`;
+}
 
 function loadCampaigns() {
     const q = document.getElementById('searchInput').value;
@@ -168,24 +281,78 @@ function renderTable(records) {
 
 function submitUpload(e) {
     e.preventDefault();
+    if (!selectedFilesList.length) {
+        showAlert('Please select files or a folder to upload.', 'danger');
+        return;
+    }
+
     const formData = new FormData();
+    formData.append('operator_code', document.getElementById('campaignOperator').value);
     formData.append('name', document.getElementById('campaignName').value);
     formData.append('test_date', document.getElementById('campaignDate').value);
-    formData.append('region', document.getElementById('campaignRegion').value);
+    formData.append('route_type', document.getElementById('campaignRouteType').value);
     formData.append('technology', document.getElementById('campaignTech').value);
-    formData.append('tool_used', document.getElementById('campaignTool').value);
-    formData.append('file', document.getElementById('campaignFile').files[0]);
+    formData.append('device_model', document.getElementById('campaignDevice').value);
+    formData.append('tester_name', document.getElementById('campaignTester').value);
+
+    for (let i = 0; i < selectedFilesList.length; i++) {
+        formData.append('files', selectedFilesList[i]);
+    }
+
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+    const progressStatus = document.getElementById('progressStatus');
+    const progressPercent = document.getElementById('progressPercent');
+    const submitBtn = document.getElementById('btnSubmitUpload');
+
+    progressContainer.style.display = 'block';
+    submitBtn.disabled = true;
+
+    let currentPct = 10;
+    progressBar.style.width = '10%';
+    progressPercent.textContent = '10%';
+    progressStatus.textContent = `Uploading ${selectedFilesList.length} measurement file(s)...`;
+
+    const interval = setInterval(() => {
+        if (currentPct < 90) {
+            currentPct += Math.floor(Math.random() * 15) + 5;
+            if (currentPct > 90) currentPct = 90;
+            progressBar.style.width = `${currentPct}%`;
+            progressPercent.textContent = `${currentPct}%`;
+            if (currentPct > 40 && currentPct < 70) {
+                progressStatus.textContent = `Parsing GPS samples & RF metrics...`;
+            } else if (currentPct >= 70) {
+                progressStatus.textContent = `Evaluating NatCA regulatory compliance...`;
+            }
+        }
+    }, 300);
 
     fetch("{% url 'regulatory:drive_test_upload' %}", {
-        method: 'POST', body: formData, headers: {'X-CSRFToken': getCSRF()}
+        method: 'POST',
+        body: formData,
+        headers: {'X-CSRFToken': getCSRF()}
     }).then(r => r.json()).then(d => {
-        if (d.success) {
-            showAlert(`Uploaded campaign & parsed ${d.samples} measurement points.`);
-            bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
-            loadCampaigns();
-        } else {
-            showAlert(d.error || 'Upload failed', 'danger');
-        }
+        clearInterval(interval);
+        progressBar.style.width = '100%';
+        progressPercent.textContent = '100%';
+        progressStatus.textContent = 'Upload & Processing Complete!';
+
+        setTimeout(() => {
+            if (d.success) {
+                showAlert(`Successfully imported ${d.count} drive test campaign(s) (${d.total_samples.toLocaleString()} measurement samples).`);
+                bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
+                loadCampaigns();
+            } else {
+                showAlert(d.error || 'Upload failed', 'danger');
+            }
+            progressContainer.style.display = 'none';
+            submitBtn.disabled = false;
+        }, 600);
+    }).catch(err => {
+        clearInterval(interval);
+        progressContainer.style.display = 'none';
+        submitBtn.disabled = false;
+        showAlert('Upload request failed: ' + err, 'danger');
     });
 }
 
