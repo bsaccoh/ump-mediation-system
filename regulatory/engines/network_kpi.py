@@ -1,7 +1,8 @@
 """Network Performance (PM KPI) Engine.
 
 Handles bulk file imports (CSV, ZIP, TAR.GZ), API payload ingestion, NatCA
-threshold compliance checking, and calculation of the composite QoS Compliance Score.
+threshold compliance checking, multi-operator breakdown (Orange, Africell, QCell,
+Sierra Tel, One-Mobile), District-level aggregation, and calculation of National Market Averages.
 """
 from __future__ import annotations
 
@@ -13,7 +14,11 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
+from django.db.models import Avg, Count
 from django.utils import timezone
+
+
+VALID_OPERATORS = {'orange', 'africell', 'qcell', 'sierratel', 'onemobile', 'ALL', 'NATIONAL_AVG'}
 
 
 def _parse_decimal(val, default='0.0'):
@@ -56,7 +61,9 @@ def process_kpi_rows(rows: list[dict], filename: str, channel: str = 'MANUAL', u
     - kpi_code (or code, kpi)
     - period_date (or date)
     - value
+    - operator_code (or operator, default 'orange')
     - region (optional, default 'NATIONAL')
+    - district (optional, default '')
     - granularity (optional, default 'DAILY')
     - cell_id (optional)
     """
@@ -83,7 +90,12 @@ def process_kpi_rows(rows: list[dict], filename: str, channel: str = 'MANUAL', u
         kpi_def = kpi_defs[code]
         p_date = _parse_date(row.get('period_date') or row.get('date'))
         val_dec = _parse_decimal(row.get('value'))
+        op_code = str(row.get('operator_code') or row.get('operator') or 'orange').strip().lower()
+        if op_code not in VALID_OPERATORS:
+            op_code = 'orange'
+
         region = str(row.get('region') or 'NATIONAL').strip()
+        district = str(row.get('district') or '').strip()
         granularity = str(row.get('granularity') or 'DAILY').strip().upper()
         cell_id = str(row.get('cell_id') or '').strip()
 
@@ -94,7 +106,9 @@ def process_kpi_rows(rows: list[dict], filename: str, channel: str = 'MANUAL', u
                 kpi=kpi_def,
                 period_date=p_date,
                 granularity=granularity if granularity in dict(NetworkKPIEntry.Granularity.choices) else 'DAILY',
+                operator_code=op_code,
                 region=region,
+                district=district,
                 cell_id=cell_id,
                 value=val_dec,
                 is_compliant=is_compliant,
@@ -112,7 +126,9 @@ def process_kpi_rows(rows: list[dict], filename: str, channel: str = 'MANUAL', u
                 kpi=entry.kpi,
                 period_date=entry.period_date,
                 granularity=entry.granularity,
+                operator_code=entry.operator_code,
                 region=entry.region,
+                district=entry.district,
                 cell_id=entry.cell_id,
                 defaults={
                     'value': entry.value,
@@ -126,7 +142,7 @@ def process_kpi_rows(rows: list[dict], filename: str, channel: str = 'MANUAL', u
     import_log.record_count = success_count
     import_log.error_count = len(errors)
     import_log.status = 'COMPLETED' if not errors else ('PARTIAL' if success_count > 0 else 'FAILED')
-    import_log.errors_json = errors[:50]  # Store top 50 errors
+    import_log.errors_json = errors[:50]
     import_log.save()
 
     return {
@@ -162,7 +178,6 @@ def import_kpi_file(file_obj, filename: str, channel: str = 'CSV_IMPORT', user=N
                         all_rows.extend(list(reader))
 
     else:
-        # Standard CSV / Text file
         if hasattr(file_obj, 'read'):
             content = file_obj.read()
             if isinstance(content, bytes):
@@ -176,14 +191,16 @@ def import_kpi_file(file_obj, filename: str, channel: str = 'CSV_IMPORT', user=N
     return process_kpi_rows(all_rows, filename=filename, channel=channel, user=user)
 
 
-def compute_qos_compliance_score(period_date: date, region: str = 'NATIONAL') -> Decimal:
+def compute_qos_compliance_score(period_date: date, operator_code: str = 'orange', region: str = 'NATIONAL', district: str = '') -> Decimal:
     """Compute overall QoS Compliance Score (% of non-composite KPIs meeting threshold)."""
     from ..models import NetworkKPIEntry, NetworkKPIDefinition
 
     entries = NetworkKPIEntry.objects.filter(
         period_date=period_date,
         granularity='DAILY',
+        operator_code=operator_code,
         region=region,
+        district=district,
     ).exclude(kpi__code='QOS_SCORE')
 
     if not entries.exists():
@@ -194,7 +211,6 @@ def compute_qos_compliance_score(period_date: date, region: str = 'NATIONAL') ->
     score = (Decimal(compliant_count) / Decimal(total_count)) * Decimal('100.00')
     score = score.quantize(Decimal('0.01'))
 
-    # Update or create the QOS_SCORE entry
     qos_def, _ = NetworkKPIDefinition.objects.get_or_create(
         code='QOS_SCORE',
         defaults={
@@ -210,7 +226,9 @@ def compute_qos_compliance_score(period_date: date, region: str = 'NATIONAL') ->
         kpi=qos_def,
         period_date=period_date,
         granularity='DAILY',
+        operator_code=operator_code,
         region=region,
+        district=district,
         cell_id='',
         defaults={
             'value': score,
@@ -220,3 +238,58 @@ def compute_qos_compliance_score(period_date: date, region: str = 'NATIONAL') ->
         }
     )
     return score
+
+
+def get_operator_comparison_matrix(start_date=None, end_date=None, region='', district='') -> list[dict]:
+    """Build multi-operator comparative analysis grid across Orange, Africell, QCell, Sierra Tel, One-Mobile + National Average."""
+    from ..models import NetworkKPIDefinition, NetworkKPIEntry
+
+    kpi_defs = NetworkKPIDefinition.objects.filter(is_active=True).order_by('code')
+    qs = NetworkKPIEntry.objects.select_related('kpi').all()
+
+    if start_date:
+        qs = qs.filter(period_date__gte=start_date)
+    if end_date:
+        qs = qs.filter(period_date__lte=end_date)
+    if region:
+        qs = qs.filter(region__icontains=region)
+    if district:
+        qs = qs.filter(district__icontains=district)
+
+    operators = ['orange', 'africell', 'qcell', 'sierratel', 'onemobile']
+    matrix = []
+
+    for kpi in kpi_defs:
+        kpi_qs = qs.filter(kpi=kpi)
+        op_data = {}
+        all_vals = []
+
+        for op in operators:
+            op_entries = kpi_qs.filter(operator_code=op)
+            if op_entries.exists():
+                avg_val = op_entries.aggregate(avg=Avg('value'))['avg'] or 0.0
+                dec_val = Decimal(str(avg_val)).quantize(Decimal('0.01'))
+                is_comp = check_kpi_compliance(kpi, dec_val)
+                op_data[op] = {'value': str(dec_val), 'is_compliant': is_comp}
+                all_vals.append(dec_val)
+            else:
+                op_data[op] = {'value': 'N/A', 'is_compliant': True}
+
+        # Calculate National Market Average across operators
+        if all_vals:
+            nat_avg = (sum(all_vals) / Decimal(len(all_vals))).quantize(Decimal('0.01'))
+            nat_comp = check_kpi_compliance(kpi, nat_avg)
+            op_data['national_avg'] = {'value': str(nat_avg), 'is_compliant': nat_comp}
+        else:
+            op_data['national_avg'] = {'value': 'N/A', 'is_compliant': True}
+
+        matrix.append({
+            'code': kpi.code,
+            'name': kpi.name,
+            'unit': kpi.unit,
+            'natca_threshold': str(kpi.natca_threshold),
+            'direction': kpi.threshold_direction,
+            'operators': op_data,
+        })
+
+    return matrix

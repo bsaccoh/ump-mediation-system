@@ -66,8 +66,22 @@ class NetworkPerformanceTests(TestCase):
         NetworkKPIEntry.objects.create(kpi=self.kpi_cssr, period_date=d, value=Decimal('98.00'), is_compliant=True)
         NetworkKPIEntry.objects.create(kpi=self.kpi_cdr, period_date=d, value=Decimal('1.00'), is_compliant=True)
 
-        score = compute_qos_compliance_score(d, 'NATIONAL')
+        score = compute_qos_compliance_score(d, 'orange', 'NATIONAL')
         self.assertEqual(score, Decimal('100.00'))
+
+    def test_multi_operator_comparison_matrix(self):
+        from regulatory.engines.network_kpi import get_operator_comparison_matrix
+        d = date(2026, 7, 24)
+        NetworkKPIEntry.objects.create(kpi=self.kpi_cssr, period_date=d, operator_code='orange', region='SOUTHERN', district='Bo', value=Decimal('98.00'), is_compliant=True)
+        NetworkKPIEntry.objects.create(kpi=self.kpi_cssr, period_date=d, operator_code='africell', region='SOUTHERN', district='Bo', value=Decimal('94.00'), is_compliant=False)
+
+        matrix = get_operator_comparison_matrix(start_date=d, end_date=d, region='SOUTHERN', district='Bo')
+        cssr_row = next(m for m in matrix if m['code'] == 'CSSR')
+        self.assertEqual(cssr_row['operators']['orange']['value'], '98.00')
+        self.assertTrue(cssr_row['operators']['orange']['is_compliant'])
+        self.assertEqual(cssr_row['operators']['africell']['value'], '94.00')
+        self.assertFalse(cssr_row['operators']['africell']['is_compliant'])
+        self.assertEqual(cssr_row['operators']['national_avg']['value'], '96.00')
 
 
 class DriveTestTests(TestCase):

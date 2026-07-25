@@ -13,9 +13,11 @@ from reference.models import Operator, SourcePattern
 
 OPERATORS = [
     # code, name, plmn, mcc, mnc
-    ('orange',   'Orange Sierra Leone',   '61901', '619', '01'),
-    ('africell', 'Africell Sierra Leone', '61902', '619', '02'),
-    ('qcell',    'Qcell Sierra Leone',    '61903', '619', '03'),
+    ('orange',    'Orange Sierra Leone',   '61901', '619', '01'),
+    ('africell',  'Africell Sierra Leone', '61902', '619', '02'),
+    ('qcell',     'Qcell Sierra Leone',    '61903', '619', '03'),
+    ('sierratel', 'Sierra Tel',            '61904', '619', '04'),
+    ('onemobile', 'One-Mobile',            '61905', '619', '05'),
 ]
 
 # operator_code, pattern, vendor, network_element, decoder_type, priority

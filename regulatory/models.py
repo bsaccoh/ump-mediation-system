@@ -454,7 +454,10 @@ class NetworkKPIEntry(models.Model):
     period_date = models.DateField(db_index=True)
     granularity = models.CharField(max_length=8, choices=Granularity.choices,
                                      default=Granularity.DAILY, db_index=True)
+    operator_code = models.CharField(max_length=30, default='orange', db_index=True,
+                                      help_text='orange, africell, qcell, sierratel, onemobile, ALL')
     region = models.CharField(max_length=80, default='NATIONAL', db_index=True)
+    district = models.CharField(max_length=80, blank=True, db_index=True)
     cell_id = models.CharField(max_length=80, blank=True, help_text='Optional specific cell/node ID')
 
     value = models.DecimalField(max_digits=12, decimal_places=4)
@@ -470,14 +473,14 @@ class NetworkKPIEntry(models.Model):
 
     class Meta:
         db_table = 'reg_kpi_entries'
-        ordering = ['-period_date', 'kpi__code', 'region']
-        unique_together = [('kpi', 'period_date', 'granularity', 'region', 'cell_id')]
+        ordering = ['-period_date', 'kpi__code', 'operator_code', 'region', 'district']
+        unique_together = [('kpi', 'period_date', 'granularity', 'operator_code', 'region', 'district', 'cell_id')]
         verbose_name = 'Network KPI Entry'
         verbose_name_plural = 'Network KPI Entries'
 
     def __str__(self):
         status = 'PASS' if self.is_compliant else 'FAIL'
-        return f'{self.kpi.code} on {self.period_date} ({self.region}): {self.value} {self.kpi.unit} [{status}]'
+        return f'{self.kpi.code} on {self.period_date} ({self.operator_code} - {self.region}/{self.district}): {self.value} {self.kpi.unit} [{status}]'
 
 
 # ---------------------------------------------------------------------------
@@ -524,7 +527,9 @@ class DriveTestCampaign(models.Model):
 
     name = models.CharField(max_length=160)
     test_date = models.DateField(db_index=True)
+    operator_code = models.CharField(max_length=30, default='orange', db_index=True)
     region = models.CharField(max_length=80, default='WESTERN_AREA', db_index=True)
+    district = models.CharField(max_length=80, blank=True, db_index=True)
     route_description = models.TextField(blank=True, help_text='e.g. Freetown Central - Aberdeen - Lumley Beach Route')
 
     technology = models.CharField(max_length=10, default='4G', help_text='2G/3G/4G/5G')

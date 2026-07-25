@@ -605,7 +605,9 @@ def network_performance_api(request):
     start = _date(request.GET.get('start'))
     end = _date(request.GET.get('end'))
     code = request.GET.get('code', '').strip().upper()
+    operator = request.GET.get('operator', '').strip().lower()
     region = request.GET.get('region', '').strip()
+    district = request.GET.get('district', '').strip()
     page = request.GET.get('page', 1)
 
     qs = NetworkKPIEntry.objects.select_related('kpi').all()
@@ -615,8 +617,12 @@ def network_performance_api(request):
         qs = qs.filter(period_date__lte=end)
     if code:
         qs = qs.filter(kpi__code=code)
+    if operator:
+        qs = qs.filter(operator_code=operator)
     if region:
         qs = qs.filter(region__icontains=region)
+    if district:
+        qs = qs.filter(district__icontains=district)
 
     rows, total, page, pages = _paginate(qs, page)
     data = [{
@@ -626,7 +632,9 @@ def network_performance_api(request):
         'unit': r.kpi.unit,
         'period_date': r.period_date.isoformat(),
         'granularity': r.granularity,
+        'operator_code': r.operator_code,
         'region': r.region,
+        'district': r.district,
         'cell_id': r.cell_id,
         'value': str(r.value),
         'natca_threshold': str(r.kpi.natca_threshold),
@@ -635,6 +643,19 @@ def network_performance_api(request):
         'notes': r.notes,
     } for r in rows]
     return JsonResponse({'records': data, 'total': total, 'page': page, 'pages': pages})
+
+
+@login_required
+def network_performance_comparison_api(request):
+    """Return multi-operator comparative analysis grid."""
+    start = _date(request.GET.get('start'))
+    end = _date(request.GET.get('end'))
+    region = request.GET.get('region', '').strip()
+    district = request.GET.get('district', '').strip()
+
+    from .engines.network_kpi import get_operator_comparison_matrix
+    matrix = get_operator_comparison_matrix(start_date=start, end_date=end, region=region, district=district)
+    return JsonResponse({'success': True, 'matrix': matrix})
 
 
 @login_required
@@ -691,7 +712,9 @@ def network_performance_save(request):
         obj.kpi = kpi_def
         obj.period_date = _date(request.POST.get('period_date')) or date.today()
         obj.granularity = request.POST.get('granularity', 'DAILY').upper()
+        obj.operator_code = request.POST.get('operator_code', 'orange').strip().lower() or 'orange'
         obj.region = request.POST.get('region', 'NATIONAL').strip() or 'NATIONAL'
+        obj.district = request.POST.get('district', '').strip()
         obj.cell_id = request.POST.get('cell_id', '').strip()
         obj.value = _decimal(request.POST.get('value'))
         from .engines.network_kpi import check_kpi_compliance
@@ -702,7 +725,7 @@ def network_performance_save(request):
 
         # Recompute QoS score if needed
         from .engines.network_kpi import compute_qos_compliance_score
-        compute_qos_compliance_score(obj.period_date, obj.region)
+        compute_qos_compliance_score(obj.period_date, obj.operator_code, obj.region, obj.district)
 
         return JsonResponse({'success': True, 'id': obj.pk, 'is_compliant': obj.is_compliant})
     except Exception as e:

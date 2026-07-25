@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Network Performance (PM KPIs) — Regulatory{% endblock %}
-{% block page_title %}Network Performance (PM KPIs){% endblock %}
+{% block page_title %}Network Performance & Operator Benchmarking{% endblock %}
 
 {% block content %}
 <style>
-.kpi-card { border-left: 4px solid #0d6efd; transition: transform 0.2s; }
+.kpi-card { border-left: 4px solid #0d6efd; transition: transform 0.2s; background: #fff; }
 .kpi-card:hover { transform: translateY(-2px); }
 .kpi-card.pass { border-left-color: #198754; }
 .kpi-card.fail { border-left-color: #dc3545; }
@@ -12,12 +12,47 @@
 .kpi-lbl { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: #6c757d; }
 .kpi-target { font-size: .7rem; color: #888; }
 .report-card .card-header { background: #fafafa; border-bottom: 1px solid #eee; font-weight: 600; }
+.badge-op-orange { background-color: #ff6600; color: white; }
+.badge-op-africell { background-color: #e2001a; color: white; }
+.badge-op-qcell { background-color: #0056b3; color: white; }
+.badge-op-sierratel { background-color: #008080; color: white; }
+.badge-op-onemobile { background-color: #6f42c1; color: white; }
+.badge-op-national { background-color: #343a40; color: white; }
 </style>
 
-<!-- Filter & Action Bar -->
+<!-- Filter & Multi-Operator Action Bar -->
 <div class="card mb-3">
     <div class="card-body py-2">
         <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Operator</label>
+                <select id="filterOperator" class="form-select form-select-sm" onchange="loadPerformanceData()">
+                    <option value="">All Operators (National Average)</option>
+                    <option value="orange">Orange Sierra Leone</option>
+                    <option value="africell">Africell Sierra Leone</option>
+                    <option value="qcell">QCell Sierra Leone</option>
+                    <option value="sierratel">Sierra Tel</option>
+                    <option value="onemobile">One-Mobile</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Region</label>
+                <select id="filterRegion" class="form-select form-select-sm" onchange="onRegionChange()">
+                    <option value="">All Regions</option>
+                    <option value="WESTERN_AREA">Western Area</option>
+                    <option value="NORTHERN">Northern Province</option>
+                    <option value="SOUTHERN">Southern Province</option>
+                    <option value="EASTERN">Eastern Province</option>
+                    <option value="NORTH_WESTERN">North-Western Province</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">District</label>
+                <select id="filterDistrict" class="form-select form-select-sm" onchange="loadPerformanceData()">
+                    <option value="">All Districts</option>
+                    <!-- Populated via JS -->
+                </select>
+            </div>
             <div class="col-md-2">
                 <label class="form-label small mb-1">From</label>
                 <input type="date" id="dateFrom" class="form-control form-control-sm">
@@ -26,23 +61,12 @@
                 <label class="form-label small mb-1">To</label>
                 <input type="date" id="dateTo" class="form-control form-control-sm">
             </div>
-            <div class="col-md-2">
-                <label class="form-label small mb-1">Region</label>
-                <select id="filterRegion" class="form-select form-select-sm">
-                    <option value="">All Regions</option>
-                    <option value="NATIONAL">National</option>
-                    <option value="WESTERN_AREA">Western Area</option>
-                    <option value="NORTHERN">Northern Province</option>
-                    <option value="SOUTHERN">Southern Province</option>
-                    <option value="EASTERN">Eastern Province</option>
-                </select>
-            </div>
             <div class="col-auto">
                 <button class="btn btn-primary btn-sm" onclick="loadPerformanceData()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
             </div>
             <div class="col-auto ms-auto">
                 <button class="btn btn-outline-success btn-sm me-1" data-bs-toggle="modal" data-bs-target="#importModal">
-                    <i class="bi bi-file-earmark-arrow-up"></i> Bulk Import (CSV/ZIP)
+                    <i class="bi bi-file-earmark-arrow-up"></i> Bulk Import
                 </button>
                 <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#entryModal" onclick="openNewEntry()">
                     <i class="bi bi-plus-lg"></i> Manual Entry
@@ -59,36 +83,64 @@
     <div class="col-12 text-center text-muted py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Loading NatCA PM KPIs...</div>
 </div>
 
-<!-- Charts Section -->
+<!-- 5-Operator Comparative Analysis Table -->
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span class="fw-bold text-dark"><i class="bi bi-bar-chart-steps text-primary"></i> 5-Operator Performance & National Market Benchmark</span>
+        <span class="small text-muted">Comparative Audit (Orange | Africell | QCell | Sierra Tel | One-Mobile)</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover align-middle mb-0 text-center">
+            <thead class="table-dark">
+                <tr>
+                    <th class="text-start">NatCA Metric</th>
+                    <th>NatCA Target</th>
+                    <th><span class="badge badge-op-orange">Orange</span></th>
+                    <th><span class="badge badge-op-africell">Africell</span></th>
+                    <th><span class="badge badge-op-qcell">QCell</span></th>
+                    <th><span class="badge badge-op-sierratel">Sierra Tel</span></th>
+                    <th><span class="badge badge-op-onemobile">One-Mobile</span></th>
+                    <th><span class="badge badge-op-national">National Avg</span></th>
+                </tr>
+            </thead>
+            <tbody id="matrixTableBody">
+                <tr><td colspan="8" class="text-center text-muted py-3">Loading multi-operator benchmarking grid...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Comparative Charts Section -->
 <div class="row g-3 mb-3">
     <div class="col-lg-6">
         <div class="card report-card">
-            <div class="card-header"><i class="bi bi-graph-up-arrow"></i> Accessibility & Retainability (CSSR / CDR)</div>
-            <div class="card-body" style="height:280px"><canvas id="chartAccess"></canvas></div>
+            <div class="card-header"><i class="bi bi-graph-up-arrow"></i> Call Setup Success Rate (CSSR %) by Operator</div>
+            <div class="card-body" style="height:280px"><canvas id="chartOperatorCSSR"></canvas></div>
         </div>
     </div>
     <div class="col-lg-6">
         <div class="card report-card">
-            <div class="card-header"><i class="bi bi-speedometer"></i> Data Throughput (DL / UL Mbps)</div>
-            <div class="card-body" style="height:280px"><canvas id="chartThroughput"></canvas></div>
+            <div class="card-header"><i class="bi bi-speedometer"></i> Average DL Throughput (Mbps) by Operator</div>
+            <div class="card-body" style="height:280px"><canvas id="chartOperatorTP"></canvas></div>
         </div>
     </div>
 </div>
 
-<!-- KPI Entries Data Table -->
+<!-- Detailed Records Table -->
 <div class="card">
     <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
-        <span class="fw-semibold"><i class="bi bi-table"></i> PM KPI Records</span>
+        <span class="fw-semibold"><i class="bi bi-table"></i> Filtered KPI Measurement Logs</span>
         <span class="badge bg-secondary" id="recordCount">0 Records</span>
     </div>
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
                 <tr>
+                    <th>Operator</th>
                     <th>KPI Code</th>
                     <th>KPI Name</th>
                     <th>Date</th>
-                    <th>Region</th>
+                    <th>Region / District</th>
                     <th>Value</th>
                     <th>NatCA Target</th>
                     <th>Status</th>
@@ -97,7 +149,7 @@
                 </tr>
             </thead>
             <tbody id="kpiTableBody">
-                <tr><td colspan="9" class="text-center text-muted py-4">No records found.</td></tr>
+                <tr><td colspan="10" class="text-center text-muted py-4">No records found.</td></tr>
             </tbody>
         </table>
     </div>
@@ -119,7 +171,7 @@
                         <input type="file" id="importFile" class="form-control" accept=".csv,.zip,.tar,.gz,.tgz" required>
                     </div>
                     <div class="small bg-light p-2 rounded border">
-                        <strong>Expected Columns:</strong> <code>kpi_code</code>, <code>period_date</code>, <code>value</code>, <code>region</code>
+                        <strong>Expected Columns:</strong> <code>kpi_code</code>, <code>period_date</code>, <code>value</code>, <code>operator_code</code>, <code>region</code>, <code>district</code>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -143,6 +195,16 @@
                 <input type="hidden" id="entryId">
                 <div class="modal-body">
                     <div class="mb-3">
+                        <label class="form-label">Operator</label>
+                        <select id="entryOperator" class="form-select" required>
+                            <option value="orange">Orange Sierra Leone</option>
+                            <option value="africell">Africell Sierra Leone</option>
+                            <option value="qcell">QCell Sierra Leone</option>
+                            <option value="sierratel">Sierra Tel</option>
+                            <option value="onemobile">One-Mobile</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label">KPI Definition</label>
                         <select id="entryKpiCode" class="form-select" required>
                             {% for kpi in kpi_defs %}
@@ -157,8 +219,19 @@
                         </div>
                         <div class="col-6">
                             <label class="form-label">Region</label>
-                            <input type="text" id="entryRegion" class="form-control" value="NATIONAL" required>
+                            <select id="entryRegion" class="form-select" required>
+                                <option value="NATIONAL">National</option>
+                                <option value="WESTERN_AREA">Western Area</option>
+                                <option value="NORTHERN">Northern Province</option>
+                                <option value="SOUTHERN">Southern Province</option>
+                                <option value="EASTERN">Eastern Province</option>
+                                <option value="NORTH_WESTERN">North-Western Province</option>
+                            </select>
                         </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">District (Optional)</label>
+                        <input type="text" id="entryDistrict" class="form-control" placeholder="e.g. Western Area Urban, Bo">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Measured Value</label>
@@ -181,10 +254,34 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 let charts = {};
+const DISTRICTS_BY_REGION = {
+    'WESTERN_AREA': ['Western Area Urban', 'Western Area Rural'],
+    'NORTHERN': ['Bombali', 'Falaba', 'Koinadugu', 'Tonkolili'],
+    'SOUTHERN': ['Bo', 'Bonthe', 'Moyamba', 'Pujehun'],
+    'EASTERN': ['Kailahun', 'Kenema', 'Kono'],
+    'NORTH_WESTERN': ['Kambia', 'Karene', 'Port Loko'],
+};
+
 function getCSRF() { return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''; }
 function showAlert(msg, type='success') {
     const b = document.getElementById('alertBox'); b.className = `alert alert-${type}`; b.textContent = msg; b.style.display = 'block';
     setTimeout(() => b.style.display = 'none', 4000);
+}
+
+function onRegionChange() {
+    const reg = document.getElementById('filterRegion').value;
+    const distSel = document.getElementById('filterDistrict');
+    distSel.innerHTML = '<option value="">All Districts</option>';
+    if (reg && DISTRICTS_BY_REGION[reg]) {
+        DISTRICTS_BY_REGION[reg].forEach(d => {
+            distSel.innerHTML += `<option value="${d}">${d}</option>`;
+        });
+    } else {
+        Object.values(DISTRICTS_BY_REGION).flat().forEach(d => {
+            distSel.innerHTML += `<option value="${d}">${d}</option>`;
+        });
+    }
+    loadPerformanceData();
 }
 
 // Default to last 30 days
@@ -193,18 +290,26 @@ function showAlert(msg, type='success') {
     const ago = new Date(today.getTime() - 30*86400*1000);
     document.getElementById('dateFrom').value = ago.toISOString().slice(0,10);
     document.getElementById('dateTo').value = today.toISOString().slice(0,10);
+    onRegionChange();
 })();
 
 function loadPerformanceData() {
     const start = document.getElementById('dateFrom').value;
     const end = document.getElementById('dateTo').value;
+    const operator = document.getElementById('filterOperator').value;
     const region = document.getElementById('filterRegion').value;
+    const district = document.getElementById('filterDistrict').value;
 
-    fetch(`{% url 'regulatory:network_performance_api' %}?start=${start}&end=${end}&region=${region}`)
+    fetch(`{% url 'regulatory:network_performance_api' %}?start=${start}&end=${end}&operator=${operator}&region=${region}&district=${district}`)
         .then(r => r.json()).then(d => {
             renderTable(d.records || []);
             renderKPICards(d.records || []);
-            renderCharts(d.records || []);
+        });
+
+    fetch(`{% url 'regulatory:network_performance_comparison_api' %}?start=${start}&end=${end}&region=${region}&district=${district}`)
+        .then(r => r.json()).then(d => {
+            renderMatrix(d.matrix || []);
+            renderComparativeCharts(d.matrix || []);
         });
 }
 
@@ -249,19 +354,87 @@ function renderKPICards(records) {
     document.getElementById('kpiSummaryRow').innerHTML = cardHtml;
 }
 
-function renderTable(records) {
-    document.getElementById('recordCount').textContent = `${records.length} Records`;
-    if (!records.length) {
-        document.getElementById('kpiTableBody').innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">No PM KPI records found for selected filters.</td></tr>`;
+function renderMatrix(matrix) {
+    if (!matrix.length) {
+        document.getElementById('matrixTableBody').innerHTML = `<tr><td colspan="8" class="text-center text-muted py-3">No benchmarking data available.</td></tr>`;
         return;
     }
 
+    document.getElementById('matrixTableBody').innerHTML = matrix.map(m => {
+        const dirStr = m.direction === 'ABOVE' ? '>=' : '<=';
+        const targetStr = `${dirStr} ${m.natca_threshold} ${m.unit}`;
+
+        const cell = (opKey) => {
+            const item = m.operators[opKey] || {};
+            if (item.value === 'N/A') return `<span class="text-muted">N/A</span>`;
+            const badgeClass = item.is_compliant ? 'bg-success' : 'bg-danger';
+            return `<span class="badge ${badgeClass}">${item.value} ${m.unit}</span>`;
+        };
+
+        return `
+            <tr>
+                <td class="text-start fw-bold">${m.name} <code>(${m.code})</code></td>
+                <td class="text-muted small">${targetStr}</td>
+                <td>${cell('orange')}</td>
+                <td>${cell('africell')}</td>
+                <td>${cell('qcell')}</td>
+                <td>${cell('sierratel')}</td>
+                <td>${cell('onemobile')}</td>
+                <td class="bg-light fw-bold">${cell('national_avg')}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function renderComparativeCharts(matrix) {
+    const cssrItem = matrix.find(m => m.code === 'CSSR') || {};
+    const tpItem = matrix.find(m => m.code === 'DL_THROUGHPUT') || {};
+
+    const ops = ['Orange', 'Africell', 'QCell', 'Sierra Tel', 'One-Mobile', 'National Avg'];
+    const keys = ['orange', 'africell', 'qcell', 'sierratel', 'onemobile', 'national_avg'];
+
+    const cssrVals = keys.map(k => parseFloat((cssrItem.operators || {})[k]?.value || 0));
+    const tpVals = keys.map(k => parseFloat((tpItem.operators || {})[k]?.value || 0));
+
+    const ctxC = document.getElementById('chartOperatorCSSR').getContext('2d');
+    if (charts.opCssr) charts.opCssr.destroy();
+    charts.opCssr = new Chart(ctxC, {
+        type: 'bar',
+        data: { labels: ops, datasets: [{ label: 'CSSR (%)', data: cssrVals, backgroundColor: ['#ff6600', '#e2001a', '#0056b3', '#008080', '#6f42c1', '#343a40'] }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+
+    const ctxT = document.getElementById('chartOperatorTP').getContext('2d');
+    if (charts.opTp) charts.opTp.destroy();
+    charts.opTp = new Chart(ctxT, {
+        type: 'bar',
+        data: { labels: ops, datasets: [{ label: 'DL Throughput (Mbps)', data: tpVals, backgroundColor: ['#ff6600', '#e2001a', '#0056b3', '#008080', '#6f42c1', '#343a40'] }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+}
+
+function renderTable(records) {
+    document.getElementById('recordCount').textContent = `${records.length} Records`;
+    if (!records.length) {
+        document.getElementById('kpiTableBody').innerHTML = `<tr><td colspan="10" class="text-center text-muted py-4">No PM KPI records found for selected filters.</td></tr>`;
+        return;
+    }
+
+    const opBadge = (op) => {
+        const cls = { orange: 'badge-op-orange', africell: 'badge-op-africell', qcell: 'badge-op-qcell', sierratel: 'badge-op-sierratel', onemobile: 'badge-op-onemobile' }[op] || 'badge-op-national';
+        return `<span class="badge ${cls}">${op.toUpperCase()}</span>`;
+    };
+
     document.getElementById('kpiTableBody').innerHTML = records.map(r => `
         <tr>
+            <td>${opBadge(r.operator_code)}</td>
             <td><code>${r.kpi_code}</code></td>
             <td class="fw-semibold">${r.kpi_name}</td>
             <td>${r.period_date}</td>
-            <td><span class="badge bg-light text-dark border">${r.region}</span></td>
+            <td>
+                <span class="badge bg-light text-dark border">${r.region}</span>
+                ${r.district ? `<span class="badge bg-secondary ms-1">${r.district}</span>` : ''}
+            </td>
             <td class="fw-bold">${parseFloat(r.value).toFixed(2)} ${r.unit}</td>
             <td class="text-muted small">${r.natca_threshold} ${r.unit}</td>
             <td>
@@ -277,33 +450,6 @@ function renderTable(records) {
     `).join('');
 }
 
-function renderCharts(records) {
-    // Access chart (CSSR / CDR)
-    const cssrRecs = records.filter(r => r.kpi_code === 'CSSR');
-    const labels = cssrRecs.map(r => r.period_date).reverse();
-    const cssrVals = cssrRecs.map(r => parseFloat(r.value)).reverse();
-    
-    const ctxA = document.getElementById('chartAccess').getContext('2d');
-    if (charts.access) charts.access.destroy();
-    charts.access = new Chart(ctxA, {
-        type: 'line',
-        data: { labels, datasets: [{ label: 'CSSR (%)', data: cssrVals, borderColor: '#198754', tension: 0.3, fill: false }] },
-        options: { responsive: true, maintainAspectRatio: false }
-    });
-
-    // Throughput chart (DL / UL)
-    const dlRecs = records.filter(r => r.kpi_code === 'DL_THROUGHPUT');
-    const dlVals = dlRecs.map(r => parseFloat(r.value)).reverse();
-
-    const ctxT = document.getElementById('chartThroughput').getContext('2d');
-    if (charts.throughput) charts.throughput.destroy();
-    charts.throughput = new Chart(ctxT, {
-        type: 'line',
-        data: { labels, datasets: [{ label: 'DL Throughput (Mbps)', data: dlVals, borderColor: '#0d6efd', tension: 0.3, fill: false }] },
-        options: { responsive: true, maintainAspectRatio: false }
-    });
-}
-
 function openNewEntry() {
     document.getElementById('entryForm').reset();
     document.getElementById('entryId').value = '';
@@ -315,9 +461,11 @@ function submitEntry(e) {
     const params = new URLSearchParams({
         csrfmiddlewaretoken: getCSRF(),
         id: document.getElementById('entryId').value,
+        operator_code: document.getElementById('entryOperator').value,
         kpi_code: document.getElementById('entryKpiCode').value,
         period_date: document.getElementById('entryDate').value,
         region: document.getElementById('entryRegion').value,
+        district: document.getElementById('entryDistrict').value,
         value: document.getElementById('entryValue').value,
         notes: document.getElementById('entryNotes').value,
     });

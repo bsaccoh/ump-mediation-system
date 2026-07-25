@@ -49,6 +49,7 @@ urlpatterns = [
     # 6. Network Performance Monitoring (PM KPIs)
     path('network-performance/', views.network_performance_view, name='network_performance_view'),
     path('network-performance/api/', views.network_performance_api, name='network_performance_api'),
+    path('network-performance/comparison/', views.network_performance_comparison_api, name='network_performance_comparison_api'),
     path('network-performance/import/', views.network_performance_import, name='network_performance_import'),
     path('network-performance/api/push/', views.network_performance_api_push, name='network_performance_api_push'),
     path('network-performance/save/', views.network_performance_save, name='network_performance_save'),
