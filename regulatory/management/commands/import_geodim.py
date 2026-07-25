@@ -9,7 +9,7 @@ from decimal import Decimal, InvalidOperation
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from regulatory.models import NetworkCellSite
+from regulatory.models import NetworkCellSite, NetworkSectorCell
 
 
 def _dec(val):
@@ -151,7 +151,7 @@ class Command(BaseCommand):
                         'site_id': site_id,
                         'cell_id': cell_id,
                         'defaults': {
-                            'site_name': ne_name or site_id,
+                            'bts_name': row_dict.get('BTS Name') or ne_name or site_id,
                             'cell_name': cell_name,
                             'ne_name': ne_name,
                             'bts_enodeb_id': bts_id,
@@ -163,13 +163,13 @@ class Command(BaseCommand):
                             'technology': tech,
                             'latitude': lat,
                             'longitude': lng,
-                            'status': NetworkCellSite.Status.ACTIVE,
+                            'status': 'ACTIVE',
                         }
                     })
 
                 with transaction.atomic():
                     for item in cells_to_upsert:
-                        NetworkCellSite.objects.update_or_create(
+                        NetworkSectorCell.objects.update_or_create(
                             operator_code=item['operator_code'],
                             site_id=item['site_id'],
                             cell_id=item['cell_id'],

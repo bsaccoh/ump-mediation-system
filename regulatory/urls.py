@@ -67,6 +67,7 @@ urlpatterns = [
     # 8. Cell Site & Geo Dimension (GeoDim) Management
     path('sites/', views.site_list_view, name='site_list_view'),
     path('sites/api/', views.site_api, name='site_api'),
+    path('sites/sectors/api/', views.sector_cell_api, name='sector_cell_api'),
     path('sites/save/', views.site_save, name='site_save'),
     path('sites/import/', views.site_import, name='site_import'),
     path('sites/template/', views.site_download_template, name='site_download_template'),

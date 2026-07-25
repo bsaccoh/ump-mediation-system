@@ -5,34 +5,26 @@
 {% block extra_css %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
-#siteMap { height: 380px; width: 100%; border-radius: 6px; }
-.badge-op-orange { background-color: #ff6600; color: white; }
-.badge-op-africell { background-color: #e2001a; color: white; }
-.badge-op-qcell { background-color: #0056b3; color: white; }
-.badge-op-sierratel { background-color: #008080; color: white; }
-.badge-op-onemobile { background-color: #6f42c1; color: white; }
-.btn-group-mode .btn.active { background-color: #0d6efd; color: white; }
+#siteMap { height: 350px; width: 100%; border-radius: 4px; }
+.nav-tabs .nav-link { color: #495057; font-weight: 500; }
+.nav-tabs .nav-link.active { font-weight: 600; color: #0d6efd; border-bottom: 2px solid #0d6efd; }
+.badge-clean { background-color: #f8f9fa; color: #212529; border: 1px solid #dee2e6; font-weight: 500; }
+.badge-op { background-color: #343a40; color: #ffffff; font-weight: 500; }
 </style>
 {% endblock %}
 
 {% block content %}
 <!-- Filter & Action Bar -->
-<div class="card mb-3">
+<div class="card mb-3 border-0 shadow-sm">
     <div class="card-body py-2">
         <div class="row g-2 align-items-end">
-            <div class="col-md-2">
-                <label class="form-label small mb-1">View Mode</label>
-                <select id="filterMode" class="form-select form-select-sm" onchange="loadSites()">
-                    <option value="physical" selected>Physical Sites (650 Towers)</option>
-                    <option value="sectors">Sector Cells (14,517 Cells)</option>
-                    <option value="">All Inventory Records</option>
-                </select>
+            <div class="col-md-3">
+                <label class="form-label small text-muted mb-1">Search Inventory</label>
+                <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search ID, name, CGI, BSC..." onkeyup="onSearchChange()">
             </div>
             <div class="col-md-2">
-                <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search site ID, cell ID, CGI, town..." onkeyup="loadSites()">
-            </div>
-            <div class="col-md-2">
-                <select id="filterOperator" class="form-select form-select-sm" onchange="loadSites()">
+                <label class="form-label small text-muted mb-1">Operator</label>
+                <select id="filterOperator" class="form-select form-select-sm" onchange="reloadCurrentTab()">
                     <option value="">All Operators</option>
                     <option value="orange">Orange Sierra Leone</option>
                     <option value="africell">Africell Sierra Leone</option>
@@ -42,6 +34,7 @@
                 </select>
             </div>
             <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">Region</label>
                 <select id="filterRegion" class="form-select form-select-sm" onchange="onRegionChange()">
                     <option value="">All Regions</option>
                     <option value="Western Area">Western Area</option>
@@ -52,18 +45,19 @@
                 </select>
             </div>
             <div class="col-md-2">
-                <select id="filterDistrict" class="form-select form-select-sm" onchange="loadSites()">
+                <label class="form-label small text-muted mb-1">District</label>
+                <select id="filterDistrict" class="form-select form-select-sm" onchange="reloadCurrentTab()">
                     <option value="">All Districts</option>
                 </select>
             </div>
             <div class="col-auto ms-auto">
-                <a href="{% url 'regulatory:site_download_template' %}" class="btn btn-outline-secondary btn-sm me-1" title="Download sample CSV format">
+                <a href="{% url 'regulatory:site_download_template' %}" class="btn btn-outline-secondary btn-sm me-1" title="Download sample format">
                     <i class="bi bi-download"></i> CSV Template
                 </a>
-                <button class="btn btn-outline-success btn-sm me-1" data-bs-toggle="modal" data-bs-target="#importModal">
+                <button class="btn btn-outline-dark btn-sm me-1" data-bs-toggle="modal" data-bs-target="#importModal">
                     <i class="bi bi-file-earmark-arrow-up"></i> Bulk Import
                 </button>
-                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#siteModal" onclick="openNewSite()">
+                <button class="btn btn-dark btn-sm" data-bs-toggle="modal" data-bs-target="#siteModal" onclick="openNewSite()">
                     <i class="bi bi-plus-lg"></i> Add Cell Site
                 </button>
             </div>
@@ -73,65 +67,118 @@
 
 <div id="alertBox" class="alert" style="display:none;"></div>
 
-<!-- Interactive Cell Site Map -->
-<div class="card mb-3">
-    <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center py-2">
-        <span><i class="bi bi-geo-alt-fill text-danger"></i> Operator Tower Locations & Geodim Map</span>
-        <span class="small text-muted">
-            <span style="color:#ff6600">■ Orange</span> &nbsp;
-            <span style="color:#e2001a">■ Africell</span> &nbsp;
-            <span style="color:#0056b3">■ QCell</span> &nbsp;
-            <span style="color:#008080">■ Sierra Tel</span> &nbsp;
-            <span style="color:#6f42c1">■ One-Mobile</span>
-        </span>
+<!-- Interactive Geographic Tower Map -->
+<div class="card mb-3 border-0 shadow-sm">
+    <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center py-2 border-bottom-0">
+        <span><i class="bi bi-geo-alt text-dark me-1"></i> Geographic Cell Tower Locations</span>
+        <span class="small text-muted">Orange, Africell, QCell, Sierra Tel, One-Mobile</span>
     </div>
     <div class="card-body p-1">
         <div id="siteMap"></div>
     </div>
 </div>
 
-<!-- Cell Site Inventory Table -->
-<div class="card">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
-        <span class="fw-semibold"><i class="bi bi-building"></i> Geo-Dimension Site & Cell Inventory Reference</span>
-        <span class="badge bg-secondary" id="totalCount">0 Records</span>
-    </div>
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>Operator</th>
-                    <th>Site ID</th>
-                    <th>Site / NE Name</th>
-                    <th>Cell ID / Name</th>
-                    <th>Tech</th>
-                    <th>NatCA Classification</th>
-                    <th>Region / District</th>
-                    <th>BSC / CGI Info</th>
-                    <th>Status</th>
-                    <th class="text-end">Actions</th>
-                </tr>
-            </thead>
-            <tbody id="siteTableBody">
-                <tr><td colspan="10" class="text-center text-muted py-4">Loading cell sites...</td></tr>
-            </tbody>
-        </table>
-    </div>
-    <div class="card-footer bg-white py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <div class="d-flex align-items-center gap-2">
-            <span class="small text-muted" id="paginationInfo">Showing 0-0 of 0</span>
-            <select id="perPageSelect" class="form-select form-select-sm" style="width: auto;" onchange="currentPage=1; loadSites();">
-                <option value="15" selected>15 per page</option>
-                <option value="25">25 per page</option>
-                <option value="50">50 per page</option>
-                <option value="100">100 per page</option>
-                <option value="250">250 per page</option>
-            </select>
+<!-- Nav Tabs for Dedicated Tables -->
+<ul class="nav nav-tabs mb-3" id="inventoryTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="physical-tab" data-bs-toggle="tab" data-bs-target="#physical-panel" type="button" role="tab" onclick="switchTab('physical')">
+            <i class="bi bi-building"></i> Physical Cell Towers <span class="badge bg-secondary ms-1" id="physicalBadge">650</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="sectors-tab" data-bs-toggle="tab" data-bs-target="#sectors-panel" type="button" role="tab" onclick="switchTab('sectors')">
+            <i class="bi bi-broadcast"></i> Sector Cells &amp; Geo-Dimension <span class="badge bg-secondary ms-1" id="sectorsBadge">14,517</span>
+        </button>
+    </li>
+</ul>
+
+<!-- Tab Content Panels -->
+<div class="tab-content" id="inventoryTabContent">
+    
+    <!-- Table 1: Physical Cell Towers -->
+    <div class="tab-pane fade show active" id="physical-panel" role="tabpanel">
+        <div class="card border-0 shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Operator</th>
+                            <th>Site ID</th>
+                            <th>Site Name</th>
+                            <th>Height (m)</th>
+                            <th>Technology</th>
+                            <th>NatCA Classification</th>
+                            <th>Region / District</th>
+                            <th>Owner / Type</th>
+                            <th>Status</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="physicalTableBody">
+                        <tr><td colspan="10" class="text-center text-muted py-4">Loading physical sites...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <!-- Pagination Footer for Table 1 -->
+            <div class="card-footer bg-white py-2 d-flex justify-content-between align-items-center flex-wrap gap-2 border-top">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="small text-muted" id="physicalPaginationInfo">Showing 0-0 of 0</span>
+                    <select id="physicalPerPage" class="form-select form-select-sm" style="width: auto;" onchange="physicalPage=1; loadPhysicalSites();">
+                        <option value="15" selected>15 per page</option>
+                        <option value="25">25 per page</option>
+                        <option value="50">50 per page</option>
+                        <option value="100">100 per page</option>
+                    </select>
+                </div>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0" id="physicalPaginationNav"></ul>
+                </nav>
+            </div>
         </div>
-        <nav>
-            <ul class="pagination pagination-sm mb-0" id="paginationNav"></ul>
-        </nav>
     </div>
+
+    <!-- Table 2: Sector Cells & Geo-Dimension -->
+    <div class="tab-pane fade" id="sectors-panel" role="tabpanel">
+        <div class="card border-0 shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Operator</th>
+                            <th>Site ID</th>
+                            <th>BTS / NE Name</th>
+                            <th>Cell Name</th>
+                            <th>Cell ID</th>
+                            <th>eNodeB / BTS ID</th>
+                            <th>CGI / ECGI</th>
+                            <th>BSC Name</th>
+                            <th>Technology</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sectorsTableBody">
+                        <tr><td colspan="10" class="text-center text-muted py-4">Loading sector cells...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <!-- Pagination Footer for Table 2 -->
+            <div class="card-footer bg-white py-2 d-flex justify-content-between align-items-center flex-wrap gap-2 border-top">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="small text-muted" id="sectorsPaginationInfo">Showing 0-0 of 0</span>
+                    <select id="sectorsPerPage" class="form-select form-select-sm" style="width: auto;" onchange="sectorsPage=1; loadSectorCells();">
+                        <option value="15" selected>15 per page</option>
+                        <option value="25">25 per page</option>
+                        <option value="50">50 per page</option>
+                        <option value="100">100 per page</option>
+                    </select>
+                </div>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0" id="sectorsPaginationNav"></ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <!-- Add/Edit Site Modal -->
@@ -139,7 +186,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="siteModalTitle">Configure Cell Site</h5>
+                <h5 class="modal-title" id="siteModalTitle">Configure Cell Site Infrastructure</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form id="siteForm" onsubmit="submitSite(event)">
@@ -170,17 +217,6 @@
                         <div class="col-md-6">
                             <label class="form-label">Site Name</label>
                             <input type="text" id="siteName" class="form-control" placeholder="e.g. SL0001_WILBERFORCE" required>
-                        </div>
-                    </div>
-
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label">Cell ID</label>
-                            <input type="text" id="cellId" class="form-control" placeholder="e.g. 10011">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Cell Name</label>
-                            <input type="text" id="cellName" class="form-control" placeholder="e.g. 2G_WILBERFORCE-11">
                         </div>
                     </div>
 
@@ -250,7 +286,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success btn-sm">Save Cell Site</button>
+                    <button type="submit" class="btn btn-dark btn-sm">Save Cell Site</button>
                 </div>
             </form>
         </div>
@@ -262,7 +298,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-file-earmark-arrow-up"></i> Bulk Import Site Inventory (Excel / CSV)</h5>
+                <h5 class="modal-title"><i class="bi bi-file-earmark-arrow-up"></i> Bulk Import Inventory (.xlsx, .csv)</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form id="importForm" onsubmit="submitImport(event)">
@@ -278,7 +314,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary btn-sm">Upload & Import</button>
+                    <button type="submit" class="btn btn-dark btn-sm">Upload &amp; Import</button>
                 </div>
             </form>
         </div>
@@ -290,6 +326,9 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 let map, markers = [];
+let activeTab = 'physical';
+let physicalPage = 1;
+let sectorsPage = 1;
 
 const DISTRICTS_BY_REGION = {
     'Western Area': ['Western Area Urban', 'Western Area Rural'],
@@ -312,12 +351,23 @@ function onRegionChange() {
     if (reg && DISTRICTS_BY_REGION[reg]) {
         DISTRICTS_BY_REGION[reg].forEach(d => distSel.innerHTML += `<option value="${d}">${d}</option>`);
     }
-    loadSites();
+    reloadCurrentTab();
 }
 
-function getOpColor(op) {
-    const colors = { orange: '#ff6600', africell: '#e2001a', qcell: '#0056b3', sierratel: '#008080', onemobile: '#6f42c1' };
-    return colors[op] || '#343a40';
+function switchTab(tab) {
+    activeTab = tab;
+    if (tab === 'physical') loadPhysicalSites();
+    else if (tab === 'sectors') loadSectorCells();
+}
+
+function onSearchChange() {
+    if (activeTab === 'physical') { physicalPage = 1; loadPhysicalSites(); }
+    else { sectorsPage = 1; loadSectorCells(); }
+}
+
+function reloadCurrentTab() {
+    if (activeTab === 'physical') loadPhysicalSites();
+    else loadSectorCells();
 }
 
 function initMap() {
@@ -332,19 +382,17 @@ function updateMap(records) {
     markers = [];
 
     const bounds = [];
-    records.slice(0, 1500).forEach(r => {
+    records.slice(0, 1000).forEach(r => {
         if (r.latitude && r.longitude) {
             bounds.push([r.latitude, r.longitude]);
             const marker = L.circleMarker([r.latitude, r.longitude], {
-                radius: 6, fillColor: getOpColor(r.operator_code), color: '#fff', weight: 1, fillOpacity: 0.85
+                radius: 5, fillColor: '#212529', color: '#fff', weight: 1, fillOpacity: 0.8
             }).addTo(map);
 
             marker.bindPopup(`
                 <strong>[${r.operator_code.toUpperCase()}] ${r.site_id}</strong><br>
-                ${r.site_name}<br>
-                ${r.cell_name ? `<strong>Cell:</strong> ${r.cell_name}<br>` : ''}
-                ${r.cgi_ecgi ? `<strong>CGI:</strong> <code>${r.cgi_ecgi}</code><br>` : ''}
-                <small>${r.district || r.region} | ${r.natca_classification || r.technology}</small>
+                ${r.site_name || r.cell_name}<br>
+                <small>${r.district || r.region || ''} | ${r.natca_classification || r.technology}</small>
             `);
             markers.push(marker);
         }
@@ -353,32 +401,42 @@ function updateMap(records) {
     if (bounds.length) map.fitBounds(bounds);
 }
 
-let currentPage = 1;
-
-function loadSites(page = currentPage) {
-    currentPage = page;
-    const mode = document.getElementById('filterMode').value;
+function loadPhysicalSites(page = physicalPage) {
+    physicalPage = page;
     const q = document.getElementById('searchInput').value;
     const operator = document.getElementById('filterOperator').value;
     const region = document.getElementById('filterRegion').value;
     const district = document.getElementById('filterDistrict').value;
-    const perPage = parseInt(document.getElementById('perPageSelect').value || '15');
+    const perPage = parseInt(document.getElementById('physicalPerPage').value || '15');
 
-    fetch(`{% url 'regulatory:site_api' %}?mode=${mode}&q=${q}&operator=${operator}&region=${region}&district=${district}&page=${page}&per_page=${perPage}`)
+    fetch(`{% url 'regulatory:site_api' %}?mode=physical&q=${q}&operator=${operator}&region=${region}&district=${district}&page=${page}&per_page=${perPage}`)
         .then(r => r.json()).then(d => {
-            renderTable(d.records || []);
+            renderPhysicalTable(d.records || []);
             updateMap(d.records || []);
-            renderPaginationNav(d.total || 0, d.page || 1, d.pages || 1, perPage, 'loadSites');
+            renderPaginationControls(d.total || 0, d.page || 1, d.pages || 1, perPage, 'physicalBadge', 'physicalPaginationInfo', 'physicalPaginationNav', 'loadPhysicalSites');
         });
 }
 
-function renderPaginationNav(total, page, pages, perPage, clickFuncName) {
-    document.getElementById('totalCount').textContent = `${total.toLocaleString()} Records`;
+function loadSectorCells(page = sectorsPage) {
+    sectorsPage = page;
+    const q = document.getElementById('searchInput').value;
+    const operator = document.getElementById('filterOperator').value;
+    const perPage = parseInt(document.getElementById('sectorsPerPage').value || '15');
+
+    fetch(`{% url 'regulatory:sector_cell_api' %}?q=${q}&operator=${operator}&page=${page}&per_page=${perPage}`)
+        .then(r => r.json()).then(d => {
+            renderSectorsTable(d.records || []);
+            renderPaginationControls(d.total || 0, d.page || 1, d.pages || 1, perPage, 'sectorsBadge', 'sectorsPaginationInfo', 'sectorsPaginationNav', 'loadSectorCells');
+        });
+}
+
+function renderPaginationControls(total, page, pages, perPage, badgeId, infoId, navId, clickFuncName) {
+    document.getElementById(badgeId).textContent = total.toLocaleString();
     const start = total ? (page - 1) * perPage + 1 : 0;
     const end = Math.min(total, page * perPage);
-    document.getElementById('paginationInfo').textContent = `Showing ${start.toLocaleString()} - ${end.toLocaleString()} of ${total.toLocaleString()} records`;
+    document.getElementById(infoId).textContent = `Showing ${start.toLocaleString()} - ${end.toLocaleString()} of ${total.toLocaleString()} records`;
 
-    const nav = document.getElementById('paginationNav');
+    const nav = document.getElementById(navId);
     if (!nav) return;
     if (pages <= 1) { nav.innerHTML = ''; return; }
 
@@ -397,48 +455,54 @@ function renderPaginationNav(total, page, pages, perPage, clickFuncName) {
     nav.innerHTML = html;
 }
 
-function renderTable(records) {
-    document.getElementById('totalCount').textContent = `${records.length} Records`;
+function renderPhysicalTable(records) {
     if (!records.length) {
-        document.getElementById('siteTableBody').innerHTML = `<tr><td colspan="10" class="text-center text-muted py-4">No site inventory records found.</td></tr>`;
+        document.getElementById('physicalTableBody').innerHTML = `<tr><td colspan="10" class="text-center text-muted py-4">No physical site records found.</td></tr>`;
         return;
     }
 
-    const opBadge = (op) => {
-        const cls = { orange: 'badge-op-orange', africell: 'badge-op-africell', qcell: 'badge-op-qcell', sierratel: 'badge-op-sierratel', onemobile: 'badge-op-onemobile' }[op] || 'bg-secondary';
-        return `<span class="badge ${cls}">${op.toUpperCase()}</span>`;
-    };
-
-    document.getElementById('siteTableBody').innerHTML = records.map(r => `
+    document.getElementById('physicalTableBody').innerHTML = records.map(r => `
         <tr>
-            <td>${opBadge(r.operator_code)}</td>
+            <td><span class="badge badge-op">${r.operator_code.toUpperCase()}</span></td>
             <td class="fw-bold"><code>${r.site_id}</code></td>
             <td>${r.site_name}</td>
+            <td>${r.height_m ? `${r.height_m}m` : '-'}</td>
+            <td><span class="badge badge-clean">${r.technology}</span></td>
+            <td>${r.natca_classification ? `<span class="badge badge-clean">${r.natca_classification}</span>` : '-'}</td>
             <td>
-                ${r.cell_name ? `<div>${r.cell_name}</div>` : ''}
-                ${r.cell_id ? `<code>${r.cell_id}</code>` : '<span class="text-muted small">Physical Site</span>'}
-            </td>
-            <td><span class="badge bg-primary">${r.technology}</span></td>
-            <td>
-                ${r.natca_classification ? `<span class="badge bg-info text-dark">${r.natca_classification}</span>` : ''}
-                ${r.classification ? `<span class="badge bg-warning text-dark ms-1">${r.classification}</span>` : ''}
+                <div>${r.region}</div>
+                <small class="text-muted">${r.district || ''}</small>
             </td>
             <td>
-                <span class="badge bg-light text-dark border">${r.region}</span>
-                ${r.district ? `<span class="badge bg-secondary ms-1">${r.district}</span>` : ''}
+                <div>${r.site_owner || '-'}</div>
+                <small class="text-muted">${r.site_type || ''}</small>
             </td>
-            <td class="small text-muted">
-                ${r.cgi_ecgi ? `CGI: <code>${r.cgi_ecgi}</code><br>` : ''}
-                ${r.bsc_rnc_name ? `BSC: ${r.bsc_rnc_name}` : ''}
-            </td>
-            <td>
-                ${r.status === 'ACTIVE' 
-                    ? '<span class="badge bg-success">ACTIVE</span>' 
-                    : '<span class="badge bg-warning text-dark">' + r.status + '</span>'}
-            </td>
+            <td><span class="badge badge-clean">${r.status}</span></td>
             <td class="text-end">
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteSite(${r.id})"><i class="bi bi-trash"></i></button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="deleteSite(${r.id})"><i class="bi bi-trash"></i></button>
             </td>
+        </tr>
+    `).join('');
+}
+
+function renderSectorsTable(records) {
+    if (!records.length) {
+        document.getElementById('sectorsTableBody').innerHTML = `<tr><td colspan="10" class="text-center text-muted py-4">No sector cell records found.</td></tr>`;
+        return;
+    }
+
+    document.getElementById('sectorsTableBody').innerHTML = records.map(r => `
+        <tr>
+            <td><span class="badge badge-op">${r.operator_code.toUpperCase()}</span></td>
+            <td class="fw-bold"><code>${r.site_id}</code></td>
+            <td>${r.ne_name || r.bts_name}</td>
+            <td class="fw-semibold">${r.cell_name}</td>
+            <td><code>${r.cell_id}</code></td>
+            <td><code>${r.bts_enodeb_id || '-'}</code></td>
+            <td><code>${r.cgi_ecgi || '-'}</code></td>
+            <td>${r.bsc_rnc_name || '-'}</td>
+            <td><span class="badge badge-clean">${r.technology}</span></td>
+            <td><span class="badge badge-clean">${r.status}</span></td>
         </tr>
     `).join('');
 }
@@ -456,8 +520,6 @@ function submitSite(e) {
         operator_code: document.getElementById('siteOperator').value,
         site_id: document.getElementById('siteId').value,
         site_name: document.getElementById('siteName').value,
-        cell_id: document.getElementById('cellId').value,
-        cell_name: document.getElementById('cellName').value,
         technology: document.getElementById('siteTech').value,
         natca_classification: document.getElementById('siteNatcaClass').value,
         classification: document.getElementById('siteClassif').value,
@@ -476,7 +538,7 @@ function submitSite(e) {
             if (d.success) {
                 showAlert('Cell site saved successfully.');
                 bootstrap.Modal.getInstance(document.getElementById('siteModal')).hide();
-                loadSites();
+                loadPhysicalSites();
             } else showAlert(d.error || 'Save failed', 'danger');
         });
 }
@@ -492,23 +554,23 @@ function submitImport(e) {
         if (d.success) {
             showAlert(`Imported ${d.count} inventory records.`);
             bootstrap.Modal.getInstance(document.getElementById('importModal')).hide();
-            loadSites();
+            reloadCurrentTab();
         } else showAlert(d.error || 'Import failed', 'danger');
     });
 }
 
 function deleteSite(id) {
-    if (!confirm('Delete this cell site entry?')) return;
+    if (!confirm('Delete this physical site entry?')) return;
     fetch(`/regulatory/sites/${id}/delete/`, { method: 'POST', headers: {'X-CSRFToken': getCSRF()} })
         .then(r => r.json()).then(d => {
-            if (d.success) { showAlert('Record deleted.'); loadSites(); }
+            if (d.success) { showAlert('Record deleted.'); loadPhysicalSites(); }
             else showAlert(d.error || 'Delete failed', 'danger');
         });
 }
 
 document.addEventListener('DOMContentLoaded', function() {
     initMap();
-    loadSites();
+    loadPhysicalSites();
 });
 </script>
 {% endblock %}

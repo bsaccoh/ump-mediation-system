@@ -24,7 +24,7 @@ from .models import (
     LeviedPeriod, LEARequest, LEAExtractionLog, QoSMetric,
     NetworkKPIDefinition, NetworkKPIEntry, NetworkKPIImportLog,
     DriveTestCampaign, DriveTestSample, DriveTestAnalysis,
-    NetworkCellSite, NetworkCounterDefinition,
+    NetworkCellSite, NetworkSectorCell, NetworkCounterDefinition,
 )
 
 
@@ -963,6 +963,52 @@ def site_api(request):
         'site_type': r.site_type,
         'status': r.status,
         'notes': r.notes,
+    } for r in rows]
+    return JsonResponse({'records': data, 'total': total, 'page': page, 'pages': pages})
+
+
+@login_required
+def sector_cell_api(request):
+    """JSON API endpoint for Sector Cell Geo-Dimension inventory (14,517 Cells)."""
+    operator = request.GET.get('operator', '').strip().lower()
+    tech = request.GET.get('technology', '').strip()
+    q = request.GET.get('q', '').strip()
+    page = request.GET.get('page', 1)
+
+    qs = NetworkSectorCell.objects.all()
+    if operator:
+        qs = qs.filter(operator_code=operator)
+    if tech:
+        qs = qs.filter(technology__icontains=tech)
+    if q:
+        qs = qs.filter(
+            Q(site_id__icontains=q) | Q(bts_name__icontains=q) |
+            Q(ne_name__icontains=q) | Q(cell_name__icontains=q) |
+            Q(cell_id__icontains=q) | Q(cgi_ecgi__icontains=q) |
+            Q(bsc_rnc_name__icontains=q)
+        )
+
+    per_page = request.GET.get('per_page') or request.GET.get('page_size') or 15
+    rows, total, page, pages = _paginate(qs, page, per_page=per_page)
+    data = [{
+        'id': r.pk,
+        'operator_code': r.operator_code,
+        'site_id': r.site_id,
+        'bts_name': r.bts_name,
+        'ne_name': r.ne_name,
+        'cell_name': r.cell_name,
+        'local_cell_id': r.local_cell_id,
+        'bts_enodeb_id': r.bts_enodeb_id,
+        'mcc': r.mcc,
+        'mnc': r.mnc,
+        'lac_tac': r.lac_tac,
+        'cell_id': r.cell_id,
+        'cgi_ecgi': r.cgi_ecgi,
+        'bsc_rnc_name': r.bsc_rnc_name,
+        'technology': r.technology,
+        'latitude': float(r.latitude) if r.latitude is not None else None,
+        'longitude': float(r.longitude) if r.longitude is not None else None,
+        'status': r.status,
     } for r in rows]
     return JsonResponse({'records': data, 'total': total, 'page': page, 'pages': pages})
 

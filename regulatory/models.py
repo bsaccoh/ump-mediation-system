@@ -714,6 +714,43 @@ class NetworkCellSite(models.Model):
         return f'[{self.operator_code.upper()}] {self.site_id} - {self.site_name} ({self.district})'
 
 
+class NetworkSectorCell(models.Model):
+    """Dedicated Sector Cell Parameters & Geo-Dimension Inventory (14,517 Cells)."""
+
+    operator_code = models.CharField(max_length=30, default='orange', db_index=True)
+    site_id = models.CharField(max_length=80, db_index=True, help_text='Parent Physical Site ID e.g. SL0001')
+    bts_name = models.CharField(max_length=160, blank=True, help_text='BTS Name e.g. 2G_WILBERFORCE')
+    ne_name = models.CharField(max_length=160, blank=True, help_text='NE Name e.g. SL0001_WILBERFORCE')
+    cell_name = models.CharField(max_length=160, db_index=True, help_text='Cell Name e.g. 2G_WILBERFORCE-11')
+    local_cell_id = models.IntegerField(null=True, blank=True, help_text='Local Cell ID e.g. 1')
+    bts_enodeb_id = models.CharField(max_length=80, blank=True, help_text='BTS ID / eNodeB ID e.g. 2001')
+
+    mcc = models.CharField(max_length=5, default='619')
+    mnc = models.CharField(max_length=5, default='01')
+    lac_tac = models.CharField(max_length=20, blank=True)
+    cell_id = models.CharField(max_length=80, db_index=True, help_text='Cell ID e.g. 10011')
+    cgi_ecgi = models.CharField(max_length=40, db_index=True, help_text='CGI e.g. 619012011810011')
+    bsc_rnc_name = models.CharField(max_length=100, blank=True, help_text='BSC Name e.g. HW_FTBSC02')
+
+    technology = models.CharField(max_length=30, default='4G', db_index=True, help_text='2G_HUAWEI, 3G_HUAWEI, 4G_HUAWEI, 5G_HUAWEI')
+    latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+
+    status = models.CharField(max_length=20, default='ACTIVE', db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'reg_sector_cells'
+        ordering = ['operator_code', 'site_id', 'cell_id']
+        unique_together = [('operator_code', 'site_id', 'cell_id')]
+        verbose_name = 'Sector Cell Inventory'
+        verbose_name_plural = 'Sector Cell Inventories'
+
+    def __str__(self):
+        return f'[{self.operator_code.upper()}] {self.cell_name} (Site {self.site_id})'
+
+
 # ---------------------------------------------------------------------------
 # 15. NetworkCounterDefinition — Counter Dictionary / Inventory Catalog
 # ---------------------------------------------------------------------------
