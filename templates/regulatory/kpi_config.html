@@ -1,0 +1,318 @@
+{% extends "base.html" %}
+{% block title %}PM KPI Threshold Config — Regulatory{% endblock %}
+{% block page_title %}PM KPI Definition &amp; Threshold Configuration{% endblock %}
+
+{% block extra_css %}
+<style>
+.badge-clean { background-color: #f8f9fa; color: #212529; border: 1px solid #dee2e6; font-weight: 500; }
+.badge-tech { background-color: #343a40; color: #ffffff; font-weight: 500; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Filter & Action Bar -->
+<div class="card mb-3 border-0 shadow-sm">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small text-muted mb-1">Search KPI Catalog</label>
+                <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search code, name, description..." onkeyup="onSearchChange()">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">Technology</label>
+                <select id="filterTech" class="form-select form-select-sm" onchange="loadKPIs()">
+                    <option value="">All Technologies</option>
+                    <option value="ALL">ALL (Composite)</option>
+                    <option value="2G">2G GSM</option>
+                    <option value="3G">3G UMTS</option>
+                    <option value="4G">4G LTE</option>
+                    <option value="5G">5G NR</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">Target Direction</label>
+                <select id="filterDirection" class="form-select form-select-sm" onchange="loadKPIs()">
+                    <option value="">All Directions</option>
+                    <option value="ABOVE">&ge; Higher is Better</option>
+                    <option value="BELOW">&le; Lower is Better</option>
+                </select>
+            </div>
+            <div class="col-auto ms-auto">
+                <button class="btn btn-dark btn-sm" data-bs-toggle="modal" data-bs-target="#kpiModal" onclick="openNewKPI()">
+                    <i class="bi bi-plus-lg"></i> Configure New KPI
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="alertBox" class="alert" style="display:none;"></div>
+
+<!-- KPI Catalog & Threshold Table -->
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white fw-semibold py-2 d-flex justify-content-between align-items-center border-bottom-0">
+        <span><i class="bi bi-sliders text-dark me-1"></i> NatCA Regulatory KPI Targets &amp; Compliance Rules</span>
+        <span class="small text-muted">Configurable Threshold Matrix</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>KPI Code</th>
+                    <th>KPI Name</th>
+                    <th>Technology</th>
+                    <th>NatCA Regulatory Threshold</th>
+                    <th>Target Direction</th>
+                    <th>Unit</th>
+                    <th>Status</th>
+                    <th>Last Updated</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="kpiTableBody">
+                <tr><td colspan="9" class="text-center text-muted py-4">Loading KPI definitions...</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <!-- 15 Records Per Page Datatable Pagination Footer -->
+    <div class="card-footer bg-white py-2 d-flex justify-content-between align-items-center flex-wrap gap-2 border-top">
+        <div class="d-flex align-items-center gap-2">
+            <span class="small text-muted" id="paginationInfo">Showing 0-0 of 0</span>
+            <select id="perPage" class="form-select form-select-sm" style="width: auto;" onchange="currentPage=1; loadKPIs();">
+                <option value="15" selected>15 per page</option>
+                <option value="25">25 per page</option>
+                <option value="50">50 per page</option>
+            </select>
+        </div>
+        <nav>
+            <ul class="pagination pagination-sm mb-0" id="paginationNav"></ul>
+        </nav>
+    </div>
+</div>
+
+<!-- Add / Edit KPI Threshold Modal -->
+<div class="modal fade" id="kpiModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="kpiModalTitle">Configure PM KPI &amp; NatCA Threshold</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="kpiForm" onsubmit="submitKPI(event)">
+                <input type="hidden" id="kpiRecordId">
+                <div class="modal-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">KPI Code (Identifier)</label>
+                            <input type="text" id="kpiCode" class="form-control" placeholder="e.g. CSSR, CDR, DL_THROUGHPUT" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">KPI Name</label>
+                            <input type="text" id="kpiName" class="form-control" placeholder="e.g. Call Setup Success Rate (CSSR)" required>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">NatCA Target Threshold</label>
+                            <input type="number" step="0.01" id="kpiThreshold" class="form-control" placeholder="e.g. 95.00" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Threshold Direction</label>
+                            <select id="kpiDirection" class="form-select" required>
+                                <option value="ABOVE">&ge; Higher or Equal to Target (Pass if &ge; Target)</option>
+                                <option value="BELOW">&le; Lower or Equal to Target (Pass if &le; Target)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Measurement Unit</label>
+                            <input type="text" id="kpiUnit" class="form-control" placeholder="e.g. %, Mbps, ms, score" required>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Technology Scope</label>
+                            <select id="kpiTech" class="form-select">
+                                <option value="ALL" selected>ALL (Composite / Multi-Tech)</option>
+                                <option value="2G">2G GSM</option>
+                                <option value="3G">3G UMTS</option>
+                                <option value="4G">4G LTE</option>
+                                <option value="5G">5G NR</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Status</label>
+                            <select id="kpiStatus" class="form-select">
+                                <option value="true" selected>ACTIVE (Enforce Compliance)</option>
+                                <option value="false">INACTIVE (Disabled)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Description &amp; Regulatory Context</label>
+                        <textarea id="kpiDesc" class="form-control" rows="3" placeholder="Provide NatCA regulatory specification, formula details, and compliance directives..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-dark btn-sm">Save KPI &amp; Threshold</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 1;
+
+function getCSRF() { return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''; }
+function showAlert(msg, type='success') {
+    const b = document.getElementById('alertBox'); b.className = `alert alert-${type}`; b.textContent = msg; b.style.display = 'block';
+    setTimeout(() => b.style.display = 'none', 4000);
+}
+
+function onSearchChange() {
+    currentPage = 1;
+    loadKPIs();
+}
+
+function loadKPIs(page = currentPage) {
+    currentPage = page;
+    const q = document.getElementById('searchInput').value;
+    const tech = document.getElementById('filterTech').value;
+    const direction = document.getElementById('filterDirection').value;
+    const perPage = parseInt(document.getElementById('perPage').value || '15');
+
+    fetch(`{% url 'regulatory:kpi_config_api' %}?q=${q}&technology=${tech}&direction=${direction}&page=${page}&per_page=${perPage}`)
+        .then(r => r.json()).then(d => {
+            renderTable(d.records || []);
+            renderPagination(d.total || 0, d.page || 1, d.pages || 1, perPage);
+        });
+}
+
+function renderTable(records) {
+    if (!records.length) {
+        document.getElementById('kpiTableBody').innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">No KPI definitions found.</td></tr>`;
+        return;
+    }
+
+    document.getElementById('kpiTableBody').innerHTML = records.map(r => `
+        <tr>
+            <td class="fw-bold"><code>${r.code}</code></td>
+            <td class="fw-semibold">${r.name}</td>
+            <td><span class="badge badge-tech">${r.technology}</span></td>
+            <td class="fw-bold">
+                ${r.threshold_direction === 'ABOVE' ? '&ge;' : '&le;'} ${parseFloat(r.natca_threshold).toFixed(2)} ${r.unit}
+            </td>
+            <td>
+                ${r.threshold_direction === 'ABOVE' 
+                    ? '<span class="badge badge-clean">&ge; Higher is Better</span>' 
+                    : '<span class="badge badge-clean">&le; Lower is Better</span>'}
+            </td>
+            <td><span class="badge badge-clean">${r.unit}</span></td>
+            <td>
+                ${r.is_active 
+                    ? '<span class="badge bg-dark">ACTIVE</span>' 
+                    : '<span class="badge bg-secondary">INACTIVE</span>'}
+            </td>
+            <td class="text-muted small">${r.updated_at || '-'}</td>
+            <td class="text-end">
+                <button class="btn btn-sm btn-outline-dark me-1" onclick="editKPI(${JSON.stringify(r).replace(/"/g, '&quot;')})"><i class="bi bi-pencil"></i></button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="deleteKPI(${r.id})"><i class="bi bi-trash"></i></button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function renderPagination(total, page, pages, perPage) {
+    const start = total ? (page - 1) * perPage + 1 : 0;
+    const end = Math.min(total, page * perPage);
+    document.getElementById('paginationInfo').textContent = `Showing ${start.toLocaleString()} - ${end.toLocaleString()} of ${total.toLocaleString()} records`;
+
+    const nav = document.getElementById('paginationNav');
+    if (!nav) return;
+    if (pages <= 1) { nav.innerHTML = ''; return; }
+
+    let html = '';
+    html += `<li class="page-item ${page === 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="event.preventDefault(); loadKPIs(1)">First</a></li>`;
+    html += `<li class="page-item ${page === 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="event.preventDefault(); loadKPIs(${page - 1})">&laquo; Prev</a></li>`;
+
+    const startP = Math.max(1, page - 2);
+    const endP = Math.min(pages, page + 2);
+    for (let p = startP; p <= endP; p++) {
+        html += `<li class="page-item ${p === page ? 'active' : ''}"><a class="page-link" href="#" onclick="event.preventDefault(); loadKPIs(${p})">${p}</a></li>`;
+    }
+
+    html += `<li class="page-item ${page === pages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="event.preventDefault(); loadKPIs(${page + 1})">Next &raquo;</a></li>`;
+    html += `<li class="page-item ${page === pages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="event.preventDefault(); loadKPIs(${pages})">Last (${pages})</a></li>`;
+    nav.innerHTML = html;
+}
+
+function openNewKPI() {
+    document.getElementById('kpiForm').reset();
+    document.getElementById('kpiRecordId').value = '';
+    document.getElementById('kpiCode').readOnly = false;
+    document.getElementById('kpiModalTitle').textContent = 'Configure New PM KPI';
+}
+
+function editKPI(item) {
+    document.getElementById('kpiRecordId').value = item.id;
+    document.getElementById('kpiCode').value = item.code;
+    document.getElementById('kpiCode').readOnly = true;
+    document.getElementById('kpiName').value = item.name;
+    document.getElementById('kpiThreshold').value = item.natca_threshold;
+    document.getElementById('kpiDirection').value = item.threshold_direction;
+    document.getElementById('kpiUnit').value = item.unit;
+    document.getElementById('kpiTech').value = item.technology;
+    document.getElementById('kpiStatus').value = item.is_active ? 'true' : 'false';
+    document.getElementById('kpiDesc').value = item.description || '';
+    document.getElementById('kpiModalTitle').textContent = `Edit Target: ${item.code}`;
+
+    new bootstrap.Modal(document.getElementById('kpiModal')).show();
+}
+
+function submitKPI(e) {
+    e.preventDefault();
+    const params = new URLSearchParams({
+        csrfmiddlewaretoken: getCSRF(),
+        id: document.getElementById('kpiRecordId').value,
+        code: document.getElementById('kpiCode').value,
+        name: document.getElementById('kpiName').value,
+        natca_threshold: document.getElementById('kpiThreshold').value,
+        threshold_direction: document.getElementById('kpiDirection').value,
+        unit: document.getElementById('kpiUnit').value,
+        technology: document.getElementById('kpiTech').value,
+        is_active: document.getElementById('kpiStatus').value,
+        description: document.getElementById('kpiDesc').value,
+    });
+
+    fetch("{% url 'regulatory:kpi_config_save' %}", { method: 'POST', body: params, headers: {'X-CSRFToken': getCSRF()} })
+        .then(r => r.json()).then(d => {
+            if (d.success) {
+                showAlert('PM KPI & Threshold saved successfully.');
+                bootstrap.Modal.getInstance(document.getElementById('kpiModal')).hide();
+                loadKPIs();
+            } else {
+                showAlert(d.error || 'Save failed', 'danger');
+            }
+        });
+}
+
+function deleteKPI(id) {
+    if (!confirm('Delete this KPI definition?')) return;
+    fetch(`/regulatory/kpis/${id}/delete/`, { method: 'POST', headers: {'X-CSRFToken': getCSRF()} })
+        .then(r => r.json()).then(d => {
+            if (d.success) { showAlert('KPI definition deleted.'); loadKPIs(); }
+            else showAlert(d.error || 'Delete failed', 'danger');
+        });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadKPIs();
+});
+</script>
+{% endblock %}

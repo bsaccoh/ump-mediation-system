@@ -1357,4 +1357,87 @@ def counter_delete(request, pk):
     return JsonResponse({'success': True})
 
 
+# =============================================================================
+# 10. PM KPI Definition & Threshold Configuration
+# =============================================================================
+
+@login_required
+def kpi_config_view(request):
+    """Render PM KPI Definition & Threshold Configuration management page."""
+    return render(request, 'regulatory/kpi_config.html', {
+        'tech_choices': NetworkKPIDefinition.Technology.choices,
+        'direction_choices': NetworkKPIDefinition.Direction.choices,
+    })
+
+
+@login_required
+def kpi_config_api(request):
+    """JSON API endpoint for querying PM KPI definitions and thresholds."""
+    tech = request.GET.get('technology', '').strip()
+    direction = request.GET.get('direction', '').strip()
+    q = request.GET.get('q', '').strip()
+    page = request.GET.get('page', 1)
+
+    qs = NetworkKPIDefinition.objects.all()
+    if tech:
+        qs = qs.filter(technology=tech)
+    if direction:
+        qs = qs.filter(threshold_direction=direction)
+    if q:
+        qs = qs.filter(
+            Q(code__icontains=q) | Q(name__icontains=q) | Q(description__icontains=q)
+        )
+
+    per_page = request.GET.get('per_page') or request.GET.get('page_size') or 15
+    rows, total, page, pages = _paginate(qs, page, per_page=per_page)
+    data = [{
+        'id': r.pk,
+        'code': r.code,
+        'name': r.name,
+        'unit': r.unit,
+        'description': r.description,
+        'natca_threshold': str(r.natca_threshold),
+        'threshold_direction': r.threshold_direction,
+        'technology': r.technology,
+        'is_active': r.is_active,
+        'updated_at': r.updated_at.strftime('%Y-%m-%d %H:%M') if r.updated_at else None,
+    } for r in rows]
+    return JsonResponse({'records': data, 'total': total, 'page': page, 'pages': pages})
+
+
+@login_required
+@require_POST
+def kpi_config_save(request):
+    """Save/update PM KPI definition and NatCA threshold."""
+    pk = request.POST.get('id')
+    code = request.POST.get('code', '').strip().upper()
+    try:
+        if pk:
+            obj = NetworkKPIDefinition.objects.get(pk=pk)
+        else:
+            obj = NetworkKPIDefinition()
+            obj.code = code
+
+        obj.name = request.POST.get('name', '').strip()
+        obj.unit = request.POST.get('unit', '%').strip() or '%'
+        obj.natca_threshold = _decimal(request.POST.get('natca_threshold'))
+        obj.threshold_direction = request.POST.get('threshold_direction', NetworkKPIDefinition.Direction.ABOVE)
+        obj.technology = request.POST.get('technology', NetworkKPIDefinition.Technology.ALL)
+        obj.description = request.POST.get('description', '').strip()
+        obj.is_active = request.POST.get('is_active', 'true').lower() in ('true', '1', 'yes')
+        obj.save()
+
+        return JsonResponse({'success': True, 'id': obj.pk, 'code': obj.code})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@require_POST
+def kpi_config_delete(request, pk):
+    """Delete a PM KPI definition."""
+    get_object_or_404(NetworkKPIDefinition, pk=pk).delete()
+    return JsonResponse({'success': True})
+
+
 

@@ -81,6 +81,12 @@ urlpatterns = [
     path('counters/template/', views.counter_download_template, name='counter_download_template'),
     path('counters/<int:pk>/delete/', views.counter_delete, name='counter_delete'),
 
+    # 10. PM KPI Definition & Threshold Configuration
+    path('kpis/', views.kpi_config_view, name='kpi_config_view'),
+    path('kpis/api/', views.kpi_config_api, name='kpi_config_api'),
+    path('kpis/save/', views.kpi_config_save, name='kpi_config_save'),
+    path('kpis/<int:pk>/delete/', views.kpi_config_delete, name='kpi_config_delete'),
+
     # Regulatory Profile (admin)
     path('profile/save/', views.profile_save, name='profile_save'),
 ]
