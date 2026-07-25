@@ -657,7 +657,7 @@ class DriveTestAnalysis(models.Model):
 # ---------------------------------------------------------------------------
 
 class NetworkCellSite(models.Model):
-    """Operator Cell Site & Geo Dimension Reference Data."""
+    """Operator Cell Site & Geo Dimension Reference Data (aligned with Geo-Dimension 2026 V1 spec)."""
 
     class Status(models.TextChoices):
         ACTIVE   = 'ACTIVE',   'Active'
@@ -666,19 +666,37 @@ class NetworkCellSite(models.Model):
 
     operator_code = models.CharField(max_length=30, default='orange', db_index=True,
                                       help_text='orange, africell, qcell, sierratel, onemobile')
-    site_id = models.CharField(max_length=80, db_index=True, help_text='Operator Site Identifier e.g. FTW001')
-    site_name = models.CharField(max_length=160, help_text='Site Name e.g. Lumley Beach Tower')
-    cell_id = models.CharField(max_length=80, blank=True, db_index=True, help_text='Specific Sector / Cell Identifier')
+    site_id = models.CharField(max_length=80, db_index=True, help_text='Operator Site Identifier e.g. SL0001')
+    site_name = models.CharField(max_length=160, help_text='Site Name e.g. SL0001_WILBERFORCE')
+    cell_id = models.CharField(max_length=80, blank=True, db_index=True, help_text='Specific Sector / Cell Identifier e.g. 10011')
+    cell_name = models.CharField(max_length=160, blank=True, help_text='Cell Name e.g. 2G_WILBERFORCE-11')
+    ne_name = models.CharField(max_length=160, blank=True, help_text='Network Element Name e.g. SL0001_WILBERFORCE')
+    bts_enodeb_id = models.CharField(max_length=80, blank=True, help_text='BTS / eNodeB ID e.g. 2001')
 
-    technology = models.CharField(max_length=10, default='4G', help_text='2G/3G/4G/5G')
-    region = models.CharField(max_length=80, default='WESTERN_AREA', db_index=True)
+    mcc = models.CharField(max_length=5, default='619')
+    mnc = models.CharField(max_length=5, default='01')
+    lac_tac = models.CharField(max_length=20, blank=True, help_text='Location Area Code / Tracking Area Code')
+    cgi_ecgi = models.CharField(max_length=40, blank=True, db_index=True, help_text='Cell Global Identity e.g. 619012011810011')
+    bsc_rnc_name = models.CharField(max_length=100, blank=True, help_text='BSC / RNC / MME Name e.g. HW_FTBSC02')
+
+    technology = models.CharField(max_length=30, default='4G', db_index=True, help_text='2G, 3G, 4G, 5G, 2G3G4G, 2G_HUAWEI, etc.')
+    classification = models.CharField(max_length=50, blank=True, help_text='Platinum, Gold, Silver')
+    natca_classification = models.CharField(max_length=50, blank=True, db_index=True, help_text='Urban Area, Rural Area')
+    site_owner = models.CharField(max_length=120, blank=True, help_text='Owner / Towerco info')
+
+    region = models.CharField(max_length=80, default='Western Area', db_index=True)
     district = models.CharField(max_length=80, blank=True, db_index=True)
-    chiefdom_town = models.CharField(max_length=100, blank=True, help_text='Chiefdom / City / Town')
+    chiefdom = models.CharField(max_length=100, blank=True)
+    location = models.CharField(max_length=100, blank=True)
+    chiefdom_town = models.CharField(max_length=100, blank=True, help_text='Legacy town/city field')
 
     latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     height_m = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text='Tower height in meters')
     azimuth = models.IntegerField(null=True, blank=True, help_text='Antenna direction 0-360 degrees')
+
+    on_air_date = models.DateField(null=True, blank=True)
+    site_type = models.CharField(max_length=50, blank=True, help_text='Greenfield, Rooftop')
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE, db_index=True)
     notes = models.TextField(blank=True)

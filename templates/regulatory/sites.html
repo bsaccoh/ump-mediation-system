@@ -11,6 +11,7 @@
 .badge-op-qcell { background-color: #0056b3; color: white; }
 .badge-op-sierratel { background-color: #008080; color: white; }
 .badge-op-onemobile { background-color: #6f42c1; color: white; }
+.btn-group-mode .btn.active { background-color: #0d6efd; color: white; }
 </style>
 {% endblock %}
 
@@ -19,8 +20,16 @@
 <div class="card mb-3">
     <div class="card-body py-2">
         <div class="row g-2 align-items-end">
-            <div class="col-md-3">
-                <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search site ID, name, cell ID, town..." onkeyup="loadSites()">
+            <div class="col-md-2">
+                <label class="form-label small mb-1">View Mode</label>
+                <select id="filterMode" class="form-select form-select-sm" onchange="loadSites()">
+                    <option value="physical" selected>Physical Sites (650 Towers)</option>
+                    <option value="sectors">Sector Cells (14,517 Cells)</option>
+                    <option value="">All Inventory Records</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search site ID, cell ID, CGI, town..." onkeyup="loadSites()">
             </div>
             <div class="col-md-2">
                 <select id="filterOperator" class="form-select form-select-sm" onchange="loadSites()">
@@ -35,11 +44,11 @@
             <div class="col-md-2">
                 <select id="filterRegion" class="form-select form-select-sm" onchange="onRegionChange()">
                     <option value="">All Regions</option>
-                    <option value="WESTERN_AREA">Western Area</option>
-                    <option value="NORTHERN">Northern Province</option>
-                    <option value="SOUTHERN">Southern Province</option>
-                    <option value="EASTERN">Eastern Province</option>
-                    <option value="NORTH_WESTERN">North-Western Province</option>
+                    <option value="Western Area">Western Area</option>
+                    <option value="Northern">Northern Province</option>
+                    <option value="Southern">Southern Province</option>
+                    <option value="Eastern">Eastern Province</option>
+                    <option value="North Western">North-Western Province</option>
                 </select>
             </div>
             <div class="col-md-2">
@@ -49,10 +58,10 @@
             </div>
             <div class="col-auto ms-auto">
                 <a href="{% url 'regulatory:site_download_template' %}" class="btn btn-outline-secondary btn-sm me-1" title="Download sample CSV format">
-                    <i class="bi bi-download"></i> Download CSV Template
+                    <i class="bi bi-download"></i> CSV Template
                 </a>
                 <button class="btn btn-outline-success btn-sm me-1" data-bs-toggle="modal" data-bs-target="#importModal">
-                    <i class="bi bi-file-earmark-arrow-up"></i> Bulk Import CSV
+                    <i class="bi bi-file-earmark-arrow-up"></i> Bulk Import
                 </button>
                 <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#siteModal" onclick="openNewSite()">
                     <i class="bi bi-plus-lg"></i> Add Cell Site
@@ -84,8 +93,8 @@
 <!-- Cell Site Inventory Table -->
 <div class="card">
     <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
-        <span class="fw-semibold"><i class="bi bi-building"></i> Cell Site Inventory Reference</span>
-        <span class="badge bg-secondary" id="totalCount">0 Sites</span>
+        <span class="fw-semibold"><i class="bi bi-building"></i> Geo-Dimension Site & Cell Inventory Reference</span>
+        <span class="badge bg-secondary" id="totalCount">0 Records</span>
     </div>
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
@@ -93,17 +102,18 @@
                 <tr>
                     <th>Operator</th>
                     <th>Site ID</th>
-                    <th>Site Name</th>
-                    <th>Cell ID</th>
+                    <th>Site / NE Name</th>
+                    <th>Cell ID / Name</th>
                     <th>Tech</th>
+                    <th>NatCA Classification</th>
                     <th>Region / District</th>
-                    <th>Coordinates</th>
+                    <th>BSC / CGI Info</th>
                     <th>Status</th>
                     <th class="text-end">Actions</th>
                 </tr>
             </thead>
             <tbody id="siteTableBody">
-                <tr><td colspan="9" class="text-center text-muted py-4">Loading cell sites...</td></tr>
+                <tr><td colspan="10" class="text-center text-muted py-4">Loading cell sites...</td></tr>
             </tbody>
         </table>
     </div>
@@ -133,32 +143,46 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Technology</label>
-                            <select id="siteTech" class="form-select">
-                                <option value="4G" selected>4G (LTE)</option>
-                                <option value="3G">3G (UMTS)</option>
-                                <option value="2G">2G (GSM)</option>
-                                <option value="5G">5G (NR)</option>
-                            </select>
+                            <input type="text" id="siteTech" class="form-control" placeholder="e.g. 2G3G4G, 4G_HUAWEI" required>
                         </div>
                     </div>
 
                     <div class="row g-2 mb-3">
                         <div class="col-md-6">
                             <label class="form-label">Site ID</label>
-                            <input type="text" id="siteId" class="form-control" placeholder="e.g. FTW001" required>
+                            <input type="text" id="siteId" class="form-control" placeholder="e.g. SL0001" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Site Name</label>
-                            <input type="text" id="siteName" class="form-control" placeholder="e.g. Lumley Beach Tower" required>
+                            <input type="text" id="siteName" class="form-control" placeholder="e.g. SL0001_WILBERFORCE" required>
                         </div>
                     </div>
 
                     <div class="row g-2 mb-3">
                         <div class="col-md-6">
-                            <label class="form-label">Cell ID (Optional)</label>
-                            <input type="text" id="cellId" class="form-control" placeholder="e.g. FTW001_1">
+                            <label class="form-label">Cell ID</label>
+                            <input type="text" id="cellId" class="form-control" placeholder="e.g. 10011">
                         </div>
                         <div class="col-md-6">
+                            <label class="form-label">Cell Name</label>
+                            <input type="text" id="cellName" class="form-control" placeholder="e.g. 2G_WILBERFORCE-11">
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">NatCA Classification</label>
+                            <select id="siteNatcaClass" class="form-select">
+                                <option value="Urban Area">Urban Area</option>
+                                <option value="Rural Area">Rural Area</option>
+                                <option value="Semi-Urban">Semi-Urban</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Site Classification</label>
+                            <input type="text" id="siteClassif" class="form-control" placeholder="e.g. Platinum, Gold, Silver">
+                        </div>
+                        <div class="col-md-4">
                             <label class="form-label">Status</label>
                             <select id="siteStatus" class="form-select">
                                 <option value="ACTIVE" selected>Active</option>
@@ -172,11 +196,11 @@
                         <div class="col-md-4">
                             <label class="form-label">Region</label>
                             <select id="siteRegion" class="form-select">
-                                <option value="WESTERN_AREA" selected>Western Area</option>
-                                <option value="NORTHERN">Northern Province</option>
-                                <option value="SOUTHERN">Southern Province</option>
-                                <option value="EASTERN">Eastern Province</option>
-                                <option value="NORTH_WESTERN">North-Western Province</option>
+                                <option value="Western Area" selected>Western Area</option>
+                                <option value="Northern">Northern Province</option>
+                                <option value="Southern">Southern Province</option>
+                                <option value="Eastern">Eastern Province</option>
+                                <option value="North Western">North-Western Province</option>
                             </select>
                         </div>
                         <div class="col-md-4">
@@ -185,22 +209,22 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Chiefdom / Town</label>
-                            <input type="text" id="siteTown" class="form-control" placeholder="e.g. Lumley / Freetown">
+                            <input type="text" id="siteTown" class="form-control" placeholder="e.g. West III / Freetown">
                         </div>
                     </div>
 
                     <div class="row g-2 mb-3">
                         <div class="col-md-4">
                             <label class="form-label">Latitude</label>
-                            <input type="number" step="0.0000001" id="siteLat" class="form-control" placeholder="e.g. 8.484">
+                            <input type="number" step="0.0000001" id="siteLat" class="form-control" placeholder="e.g. 8.46567">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Longitude</label>
-                            <input type="number" step="0.0000001" id="siteLng" class="form-control" placeholder="e.g. -13.230">
+                            <input type="number" step="0.0000001" id="siteLng" class="form-control" placeholder="e.g. -13.2624">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Tower Height (m)</label>
-                            <input type="number" step="0.1" id="siteHeight" class="form-control" placeholder="e.g. 45.0">
+                            <input type="number" step="0.1" id="siteHeight" class="form-control" placeholder="e.g. 50.0">
                         </div>
                     </div>
 
@@ -223,18 +247,18 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-file-earmark-arrow-up"></i> Bulk Import Site Inventory</h5>
+                <h5 class="modal-title"><i class="bi bi-file-earmark-arrow-up"></i> Bulk Import Site Inventory (Excel / CSV)</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form id="importForm" onsubmit="submitImport(event)">
                 <div class="modal-body">
-                    <p class="small text-muted mb-2">Upload CSV file containing site inventory.</p>
+                    <p class="small text-muted mb-2">Upload Excel (`.xlsx`) or CSV (`.csv`) file matching Geo-Dimension 2026 format.</p>
                     <div class="mb-3">
-                        <label class="form-label">Select CSV File</label>
-                        <input type="file" id="importFile" class="form-control" accept=".csv" required>
+                        <label class="form-label">Select File (.xlsx, .csv)</label>
+                        <input type="file" id="importFile" class="form-control" accept=".xlsx,.csv" required>
                     </div>
                     <div class="small bg-light p-2 rounded border">
-                        <strong>Expected Columns:</strong> <code>operator_code</code>, <code>site_id</code>, <code>site_name</code>, <code>cell_id</code>, <code>technology</code>, <code>region</code>, <code>district</code>, <code>latitude</code>, <code>longitude</code>
+                        <strong>Supports Official Sheets:</strong> <code>OSL_Physical Sites</code> and <code>GEO-DIM 2G_3G_4G_5G</code>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -253,11 +277,11 @@
 let map, markers = [];
 
 const DISTRICTS_BY_REGION = {
-    'WESTERN_AREA': ['Western Area Urban', 'Western Area Rural'],
-    'NORTHERN': ['Bombali', 'Falaba', 'Koinadugu', 'Tonkolili'],
-    'SOUTHERN': ['Bo', 'Bonthe', 'Moyamba', 'Pujehun'],
-    'EASTERN': ['Kailahun', 'Kenema', 'Kono'],
-    'NORTH_WESTERN': ['Kambia', 'Karene', 'Port Loko'],
+    'Western Area': ['Western Area Urban', 'Western Area Rural'],
+    'Northern': ['Bombali', 'Falaba', 'Koinadugu', 'Tonkolili'],
+    'Southern': ['Bo', 'Bonthe', 'Moyamba', 'Pujehun'],
+    'Eastern': ['Kailahun', 'Kenema', 'Kono'],
+    'North Western': ['Kambia', 'Karene', 'Port Loko'],
 };
 
 function getCSRF() { return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''; }
@@ -293,17 +317,19 @@ function updateMap(records) {
     markers = [];
 
     const bounds = [];
-    records.forEach(r => {
+    records.slice(0, 1500).forEach(r => {
         if (r.latitude && r.longitude) {
             bounds.push([r.latitude, r.longitude]);
             const marker = L.circleMarker([r.latitude, r.longitude], {
-                radius: 7, fillColor: getOpColor(r.operator_code), color: '#fff', weight: 1.5, fillOpacity: 0.9
+                radius: 6, fillColor: getOpColor(r.operator_code), color: '#fff', weight: 1, fillOpacity: 0.85
             }).addTo(map);
 
             marker.bindPopup(`
                 <strong>[${r.operator_code.toUpperCase()}] ${r.site_id}</strong><br>
                 ${r.site_name}<br>
-                <small>${r.district || r.region} | ${r.technology}</small>
+                ${r.cell_name ? `<strong>Cell:</strong> ${r.cell_name}<br>` : ''}
+                ${r.cgi_ecgi ? `<strong>CGI:</strong> <code>${r.cgi_ecgi}</code><br>` : ''}
+                <small>${r.district || r.region} | ${r.natca_classification || r.technology}</small>
             `);
             markers.push(marker);
         }
@@ -313,12 +339,13 @@ function updateMap(records) {
 }
 
 function loadSites() {
+    const mode = document.getElementById('filterMode').value;
     const q = document.getElementById('searchInput').value;
     const operator = document.getElementById('filterOperator').value;
     const region = document.getElementById('filterRegion').value;
     const district = document.getElementById('filterDistrict').value;
 
-    fetch(`{% url 'regulatory:site_api' %}?q=${q}&operator=${operator}&region=${region}&district=${district}`)
+    fetch(`{% url 'regulatory:site_api' %}?mode=${mode}&q=${q}&operator=${operator}&region=${region}&district=${district}`)
         .then(r => r.json()).then(d => {
             renderTable(d.records || []);
             updateMap(d.records || []);
@@ -326,9 +353,9 @@ function loadSites() {
 }
 
 function renderTable(records) {
-    document.getElementById('totalCount').textContent = `${records.length} Sites`;
+    document.getElementById('totalCount').textContent = `${records.length} Records`;
     if (!records.length) {
-        document.getElementById('siteTableBody').innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">No cell sites configured. Click "Add Cell Site" to add reference sites.</td></tr>`;
+        document.getElementById('siteTableBody').innerHTML = `<tr><td colspan="10" class="text-center text-muted py-4">No site inventory records found.</td></tr>`;
         return;
     }
 
@@ -342,13 +369,23 @@ function renderTable(records) {
             <td>${opBadge(r.operator_code)}</td>
             <td class="fw-bold"><code>${r.site_id}</code></td>
             <td>${r.site_name}</td>
-            <td><code>${r.cell_id || '-'}</code></td>
+            <td>
+                ${r.cell_name ? `<div>${r.cell_name}</div>` : ''}
+                ${r.cell_id ? `<code>${r.cell_id}</code>` : '<span class="text-muted small">Physical Site</span>'}
+            </td>
             <td><span class="badge bg-primary">${r.technology}</span></td>
+            <td>
+                ${r.natca_classification ? `<span class="badge bg-info text-dark">${r.natca_classification}</span>` : ''}
+                ${r.classification ? `<span class="badge bg-warning text-dark ms-1">${r.classification}</span>` : ''}
+            </td>
             <td>
                 <span class="badge bg-light text-dark border">${r.region}</span>
                 ${r.district ? `<span class="badge bg-secondary ms-1">${r.district}</span>` : ''}
             </td>
-            <td class="small text-muted">${r.latitude && r.longitude ? `${r.latitude}, ${r.longitude}` : 'No coords'}</td>
+            <td class="small text-muted">
+                ${r.cgi_ecgi ? `CGI: <code>${r.cgi_ecgi}</code><br>` : ''}
+                ${r.bsc_rnc_name ? `BSC: ${r.bsc_rnc_name}` : ''}
+            </td>
             <td>
                 ${r.status === 'ACTIVE' 
                     ? '<span class="badge bg-success">ACTIVE</span>' 
@@ -375,7 +412,10 @@ function submitSite(e) {
         site_id: document.getElementById('siteId').value,
         site_name: document.getElementById('siteName').value,
         cell_id: document.getElementById('cellId').value,
+        cell_name: document.getElementById('cellName').value,
         technology: document.getElementById('siteTech').value,
+        natca_classification: document.getElementById('siteNatcaClass').value,
+        classification: document.getElementById('siteClassif').value,
         region: document.getElementById('siteRegion').value,
         district: document.getElementById('siteDistrict').value,
         chiefdom_town: document.getElementById('siteTown').value,
@@ -405,7 +445,7 @@ function submitImport(e) {
         method: 'POST', body: formData, headers: {'X-CSRFToken': getCSRF()}
     }).then(r => r.json()).then(d => {
         if (d.success) {
-            showAlert(`Imported ${d.count} cell sites into inventory.`);
+            showAlert(`Imported ${d.count} inventory records.`);
             bootstrap.Modal.getInstance(document.getElementById('importModal')).hide();
             loadSites();
         } else showAlert(d.error || 'Import failed', 'danger');
@@ -416,7 +456,7 @@ function deleteSite(id) {
     if (!confirm('Delete this cell site entry?')) return;
     fetch(`/regulatory/sites/${id}/delete/`, { method: 'POST', headers: {'X-CSRFToken': getCSRF()} })
         .then(r => r.json()).then(d => {
-            if (d.success) { showAlert('Cell site deleted.'); loadSites(); }
+            if (d.success) { showAlert('Record deleted.'); loadSites(); }
             else showAlert(d.error || 'Delete failed', 'danger');
         });
 }

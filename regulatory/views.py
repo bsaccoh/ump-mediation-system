@@ -898,10 +898,16 @@ def site_api(request):
     district = request.GET.get('district', '').strip()
     tech = request.GET.get('technology', '').strip()
     status = request.GET.get('status', '').strip()
+    mode = request.GET.get('mode', '').strip().lower()  # 'physical' or 'sectors'
     q = request.GET.get('q', '').strip()
     page = request.GET.get('page', 1)
 
     qs = NetworkCellSite.objects.all()
+    if mode == 'physical':
+        qs = qs.filter(cell_id='')
+    elif mode == 'sectors':
+        qs = qs.exclude(cell_id='')
+
     if operator:
         qs = qs.filter(operator_code=operator)
     if region:
@@ -909,13 +915,15 @@ def site_api(request):
     if district:
         qs = qs.filter(district__icontains=district)
     if tech:
-        qs = qs.filter(technology=tech)
+        qs = qs.filter(technology__icontains=tech)
     if status:
         qs = qs.filter(status=status)
     if q:
         qs = qs.filter(
             Q(site_id__icontains=q) | Q(site_name__icontains=q) |
-            Q(cell_id__icontains=q) | Q(chiefdom_town__icontains=q)
+            Q(cell_id__icontains=q) | Q(cell_name__icontains=q) |
+            Q(cgi_ecgi__icontains=q) | Q(bsc_rnc_name__icontains=q) |
+            Q(location__icontains=q) | Q(chiefdom__icontains=q)
         )
 
     rows, total, page, pages = _paginate(qs, page)
@@ -925,14 +933,28 @@ def site_api(request):
         'site_id': r.site_id,
         'site_name': r.site_name,
         'cell_id': r.cell_id,
+        'cell_name': r.cell_name,
+        'ne_name': r.ne_name,
+        'bts_enodeb_id': r.bts_enodeb_id,
+        'mcc': r.mcc,
+        'mnc': r.mnc,
+        'lac_tac': r.lac_tac,
+        'cgi_ecgi': r.cgi_ecgi,
+        'bsc_rnc_name': r.bsc_rnc_name,
         'technology': r.technology,
+        'classification': r.classification,
+        'natca_classification': r.natca_classification,
+        'site_owner': r.site_owner,
         'region': r.region,
         'district': r.district,
-        'chiefdom_town': r.chiefdom_town,
+        'chiefdom': r.chiefdom,
+        'location': r.location,
         'latitude': float(r.latitude) if r.latitude is not None else None,
         'longitude': float(r.longitude) if r.longitude is not None else None,
         'height_m': float(r.height_m) if r.height_m is not None else None,
         'azimuth': r.azimuth,
+        'on_air_date': r.on_air_date.isoformat() if r.on_air_date else None,
+        'site_type': r.site_type,
         'status': r.status,
         'notes': r.notes,
     } for r in rows]
@@ -980,47 +1002,93 @@ def site_save(request):
 @login_required
 @require_POST
 def site_import(request):
-    """Handle bulk CSV import of Cell Site Inventory."""
+    """Handle bulk Excel (.xlsx) and CSV (.csv) import of Cell Site & Geo Inventory."""
     import csv, io
     if 'file' not in request.FILES:
         return JsonResponse({'success': False, 'error': 'No file uploaded'})
 
     uploaded_file = request.FILES['file']
+    fn = uploaded_file.name.lower()
+    count = 0
+    errors = []
+
     try:
-        content = uploaded_file.read().decode('utf-8-sig', errors='replace')
-        reader = csv.DictReader(io.StringIO(content))
-        count = 0
-        errors = []
+        if fn.endswith('.xlsx'):
+            import openpyxl
+            wb = openpyxl.load_workbook(uploaded_file, data_only=True)
+            for sheetname in wb.sheetnames:
+                sheet = wb[sheetname]
+                rows = list(sheet.iter_rows(values_only=True))
+                if len(rows) <= 1:
+                    continue
+                headers = [str(h).strip() if h else '' for h in rows[0]]
+                for idx, r in enumerate(rows[1:], start=2):
+                    row_dict = dict(zip(headers, r))
+                    s_id = str(row_dict.get('SITE ID') or row_dict.get('Site ID') or row_dict.get('site_id') or '').strip()
+                    c_id = str(row_dict.get('Cell Id') or row_dict.get('cell_id') or row_dict.get('LocalCellID') or '').strip()
+                    if not s_id:
+                        continue
 
-        for idx, r in enumerate(reader, start=1):
-            op = str(r.get('operator_code') or r.get('operator') or 'orange').strip().lower()
-            s_id = str(r.get('site_id') or r.get('site') or '').strip()
-            s_name = str(r.get('site_name') or r.get('name') or s_id).strip()
-            c_id = str(r.get('cell_id') or r.get('cell') or '').strip()
+                    s_name = str(row_dict.get('SITE NAME') or row_dict.get('NE Name') or row_dict.get('site_name') or s_id).strip()
+                    op = str(row_dict.get('operator_code') or row_dict.get('operator') or 'orange').strip().lower()
 
-            if not s_id:
-                errors.append(f'Row {idx}: Missing site_id')
-                continue
+                    NetworkCellSite.objects.update_or_create(
+                        operator_code=op,
+                        site_id=s_id,
+                        cell_id=c_id,
+                        defaults={
+                            'site_name': s_name,
+                            'cell_name': str(row_dict.get('CellName') or row_dict.get('cell_name') or '').strip(),
+                            'ne_name': str(row_dict.get('NE Name') or row_dict.get('ne_name') or '').strip(),
+                            'bts_enodeb_id': str(row_dict.get('BTS ID/eNodeBID') or row_dict.get('bts_enodeb_id') or '').strip(),
+                            'mcc': str(row_dict.get('MCC') or '619').strip(),
+                            'mnc': str(row_dict.get('MNC') or '01').strip(),
+                            'lac_tac': str(row_dict.get('LAC') or row_dict.get('LAC ') or row_dict.get('lac_tac') or '').strip(),
+                            'cgi_ecgi': str(row_dict.get('CGI') or row_dict.get('cgi_ecgi') or '').strip(),
+                            'bsc_rnc_name': str(row_dict.get('BSC Name') or row_dict.get('bsc_rnc_name') or '').strip(),
+                            'technology': str(row_dict.get('Technology') or row_dict.get('technology') or '4G').strip(),
+                            'classification': str(row_dict.get('Classification') or row_dict.get('classification') or '').strip(),
+                            'natca_classification': str(row_dict.get('NAtCa Sites Classification') or row_dict.get('natca_classification') or '').strip(),
+                            'site_owner': str(row_dict.get('OWNER') or row_dict.get('site_owner') or '').strip(),
+                            'region': str(row_dict.get('Region') or row_dict.get('region') or 'Western Area').strip(),
+                            'district': str(row_dict.get('District') or row_dict.get('district') or '').strip(),
+                            'chiefdom': str(row_dict.get('Chiefdom') or row_dict.get('chiefdom') or '').strip(),
+                            'location': str(row_dict.get('Location') or row_dict.get('location') or '').strip(),
+                            'latitude': _decimal(row_dict.get('LATITUDE') or row_dict.get('Latitude') or row_dict.get('latitude'), None),
+                            'longitude': _decimal(row_dict.get('LONGITUDE') or row_dict.get('Longitude') or row_dict.get('longitude'), None),
+                            'height_m': _decimal(row_dict.get('Tower Height') or row_dict.get('height_m'), None),
+                            'site_type': str(row_dict.get('Site Type') or row_dict.get('site_type') or '').strip(),
+                            'status': NetworkCellSite.Status.ACTIVE,
+                        }
+                    )
+                    count += 1
+        else:
+            # CSV file
+            content = uploaded_file.read().decode('utf-8-sig', errors='replace')
+            reader = csv.DictReader(io.StringIO(content))
+            for idx, r in enumerate(reader, start=1):
+                s_id = str(r.get('site_id') or r.get('SITE ID') or r.get('Site ID') or '').strip()
+                c_id = str(r.get('cell_id') or r.get('Cell Id') or '').strip()
+                if not s_id:
+                    continue
 
-            lat = _decimal(r.get('latitude') or r.get('lat'), None)
-            lng = _decimal(r.get('longitude') or r.get('lng') or r.get('lon'), None)
-
-            NetworkCellSite.objects.update_or_create(
-                operator_code=op,
-                site_id=s_id,
-                cell_id=c_id,
-                defaults={
-                    'site_name': s_name,
-                    'technology': str(r.get('technology') or r.get('tech') or '4G').strip(),
-                    'region': str(r.get('region') or 'WESTERN_AREA').strip(),
-                    'district': str(r.get('district') or '').strip(),
-                    'chiefdom_town': str(r.get('chiefdom_town') or r.get('town') or '').strip(),
-                    'latitude': lat,
-                    'longitude': lng,
-                    'status': NetworkCellSite.Status.ACTIVE,
-                }
-            )
-            count += 1
+                op = str(r.get('operator_code') or r.get('operator') or 'orange').strip().lower()
+                NetworkCellSite.objects.update_or_create(
+                    operator_code=op,
+                    site_id=s_id,
+                    cell_id=c_id,
+                    defaults={
+                        'site_name': str(r.get('site_name') or r.get('SITE NAME') or s_id).strip(),
+                        'cell_name': str(r.get('cell_name') or r.get('CellName') or '').strip(),
+                        'technology': str(r.get('technology') or r.get('Technology') or '4G').strip(),
+                        'region': str(r.get('region') or r.get('Region') or 'Western Area').strip(),
+                        'district': str(r.get('district') or r.get('District') or '').strip(),
+                        'latitude': _decimal(r.get('latitude') or r.get('LATITUDE') or r.get('Latitude'), None),
+                        'longitude': _decimal(r.get('longitude') or r.get('LONGITUDE') or r.get('Longitude'), None),
+                        'status': NetworkCellSite.Status.ACTIVE,
+                    }
+                )
+                count += 1
 
         return JsonResponse({'success': True, 'count': count, 'error_count': len(errors)})
     except Exception as e:
