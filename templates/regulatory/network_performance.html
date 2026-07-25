@@ -100,16 +100,16 @@
     </div>
     <div class="table-responsive">
         <table class="table table-bordered table-hover align-middle mb-0 text-center">
-            <thead class="table-dark">
+            <thead class="table-light">
                 <tr>
-                    <th class="text-start">NatCA Metric</th>
-                    <th>NatCA Target</th>
-                    <th><span class="badge badge-op-orange">Orange</span></th>
-                    <th><span class="badge badge-op-africell">Africell</span></th>
-                    <th><span class="badge badge-op-qcell">QCell</span></th>
-                    <th><span class="badge badge-op-sierratel">Sierra Tel</span></th>
-                    <th><span class="badge badge-op-onemobile">One-Mobile</span></th>
-                    <th><span class="badge badge-op-national">National Avg</span></th>
+                    <th class="text-start text-dark fw-bold">NatCA Metric</th>
+                    <th class="text-dark fw-bold">NatCA Target</th>
+                    <th><span style="color:#ff6600; font-weight:700;">Orange</span></th>
+                    <th><span style="color:#e2001a; font-weight:700;">Africell</span></th>
+                    <th><span style="color:#0056b3; font-weight:700;">QCell</span></th>
+                    <th><span style="color:#008080; font-weight:700;">Sierra Tel</span></th>
+                    <th><span style="color:#6f42c1; font-weight:700;">One-Mobile</span></th>
+                    <th><span style="color:#343a40; font-weight:700;">National Avg</span></th>
                 </tr>
             </thead>
             <tbody id="matrixTableBody">
@@ -402,9 +402,8 @@ function renderMatrix(matrix) {
 
         const cell = (opKey) => {
             const item = m.operators[opKey] || {};
-            if (item.value === 'N/A') return `<span class="text-muted">N/A</span>`;
-            const badgeClass = item.is_compliant ? 'bg-success' : 'bg-danger';
-            return `<span class="badge ${badgeClass}">${item.value} ${m.unit}</span>`;
+            if (!item || item.value === 'N/A') return `<span class="text-muted">N/A</span>`;
+            return `<span class="fw-semibold text-dark">${item.value} ${m.unit}</span>`;
         };
 
         return `
