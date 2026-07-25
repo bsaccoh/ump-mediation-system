@@ -784,18 +784,44 @@ def drive_test_list(request):
 def drive_test_api(request):
     status = request.GET.get('status', '').strip()
     q = request.GET.get('q', '').strip()
+    operator = request.GET.get('operator', '').strip().lower()
+    tech = request.GET.get('technology', '').strip().upper()
     page = request.GET.get('page', 1)
 
     qs = DriveTestCampaign.objects.select_related('analysis').all()
     if status:
         qs = qs.filter(status=status)
+    if operator:
+        qs = qs.filter(operator_code=operator)
+    if tech and tech != 'ALL':
+        qs = qs.filter(technology=tech)
     if q:
-        qs = qs.filter(Q(name__icontains=q) | Q(region__icontains=q) | Q(route_description__icontains=q))
+        qs = qs.filter(Q(name__icontains=q) | Q(region__icontains=q) | Q(route_description__icontains=q) | Q(operator_name__icontains=q))
 
-    rows, total, page, pages = _paginate(qs, page)
+    per_page = request.GET.get('per_page') or request.GET.get('page_size') or 100
+    rows, total, page, pages = _paginate(qs, page, per_page=per_page)
     data = []
     for r in rows:
         analysis = getattr(r, 'analysis', None)
+        samples_cnt = analysis.total_samples if analysis else 0
+        
+        # Calculate distance estimate if not stored
+        dist_km = str(r.total_distance_km) if r.total_distance_km > Decimal('0') else f"{max(0.40, round(samples_cnt * 0.0027, 2)):.2f}"
+
+        # Extract route type
+        r_type = 'urban'
+        if 'highway' in (r.route_description or '').lower(): r_type = 'highway'
+        elif 'suburban' in (r.route_description or '').lower(): r_type = 'suburban'
+        elif 'rural' in (r.route_description or '').lower(): r_type = 'rural'
+
+        # Operator display label
+        op_label = 'Qcell'
+        if r.operator_code == 'orange': op_label = 'Orange'
+        elif r.operator_code == 'africell': op_label = 'Africell'
+        elif r.operator_code == 'qcell': op_label = 'Qcell'
+        elif r.operator_code == 'sierratel': op_label = 'Sierratel'
+        elif r.operator_code == 'onemobile': op_label = 'OneMobile'
+
         data.append({
             'id': r.pk,
             'name': r.name,
@@ -803,10 +829,14 @@ def drive_test_api(request):
             'region': r.region,
             'technology': r.technology,
             'tool_used': r.tool_used,
+            'operator_code': r.operator_code,
+            'operator_label': op_label,
             'operator_name': r.operator_name,
-            'status': r.status,
+            'route_type': r_type,
+            'status': 'COMPLETED' if r.status in ('ANALYSED', 'REPORTED') else r.status,
+            'distance_km': f"{dist_km} km",
             'raw_file_url': r.raw_file.url if r.raw_file else '',
-            'total_samples': analysis.total_samples if analysis else 0,
+            'total_samples': samples_cnt,
             'coverage_pct': str(analysis.coverage_pct) if analysis else '0.00',
             'avg_rsrp': str(analysis.avg_rsrp) if analysis else '0.00',
             'avg_dl_tp': str(analysis.avg_dl_throughput) if analysis else '0.00',

@@ -1,57 +1,108 @@
 {% extends "base.html" %}
-{% block title %}Drive Test Campaigns — Regulatory{% endblock %}
-{% block page_title %}Drive Test Campaigns{% endblock %}
+{% block title %}Drive Testing — Regulatory{% endblock %}
+{% block page_title %}Drive Testing{% endblock %}
+
+{% block extra_css %}
+<style>
+.fieldset-box {
+    position: relative;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 2px 8px 4px 8px;
+    background: #fff;
+    display: inline-block;
+}
+.fieldset-label {
+    position: absolute;
+    top: -8px;
+    left: 10px;
+    background: #fff;
+    padding: 0 4px;
+    font-size: 0.68rem;
+    color: #6c757d;
+    font-weight: 600;
+}
+.fieldset-select {
+    border: none;
+    box-shadow: none;
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 2px 24px 2px 4px;
+    background-position: right 4px center;
+}
+.op-badge-qcell { background-color: #f0ebf8; color: #5a2a9c; border: 1px solid #dcd0f0; }
+.op-badge-orange { background-color: #fff3eb; color: #d95300; border: 1px solid #ffd6c2; }
+.op-badge-africell { background-color: #fde8ea; color: #c80016; border: 1px solid #f9c2c7; }
+.op-badge-sierratel { background-color: #e6f4f4; color: #006666; border: 1px solid #b3e0e0; }
+.op-badge-onemobile { background-color: #f3ebf8; color: #5c288d; border: 1px solid #dfc7f0; }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="card mb-3">
-    <div class="card-body py-2">
-        <div class="row g-2 align-items-center">
-            <div class="col-md-4">
-                <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search campaign name, region, route..." onkeyup="loadCampaigns()">
-            </div>
-            <div class="col-md-2">
-                <select id="filterStatus" class="form-select form-select-sm" onchange="loadCampaigns()">
-                    <option value="">All Statuses</option>
-                    {% for st, lbl in status_choices %}
-                    <option value="{{ st }}">{{ lbl }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-auto ms-auto">
-                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal">
-                    <i class="bi bi-cloud-upload"></i> New Drive Test Campaign
-                </button>
-            </div>
+<!-- Top Title, Filters & Action Buttons Bar -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <!-- Left Title & Filters -->
+    <div class="d-flex align-items-center flex-wrap gap-2">
+        <div class="d-flex align-items-center me-3">
+            <i class="bi bi-diagram-3 text-primary fs-3 me-2"></i>
+            <h3 class="fw-bold m-0 text-dark" style="letter-spacing: -0.5px;">Drive Testing</h3>
         </div>
+
+        <div class="fieldset-box me-1">
+            <span class="fieldset-label">Operator</span>
+            <select id="filterOperator" class="form-select form-select-sm fieldset-select" onchange="loadCampaigns()">
+                <option value="">All Operators</option>
+                <option value="orange">Orange</option>
+                <option value="africell">Africell</option>
+                <option value="qcell">QCell</option>
+                <option value="sierratel">Sierra Tel</option>
+                <option value="onemobile">One-Mobile</option>
+            </select>
+        </div>
+
+        <div class="fieldset-box me-2">
+            <span class="fieldset-label">Technology</span>
+            <select id="filterTech" class="form-select form-select-sm fieldset-select" onchange="loadCampaigns()">
+                <option value="">All</option>
+                <option value="2G">2G</option>
+                <option value="3G">3G</option>
+                <option value="4G">4G</option>
+                <option value="5G">5G</option>
+            </select>
+        </div>
+
+        <span class="badge rounded-pill bg-light text-secondary border px-3 py-2 fw-semibold" id="totalCountBadge">0 of 0 tests</span>
+    </div>
+
+    <!-- Right Action Buttons -->
+    <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-outline-primary btn-sm rounded-3 px-3 py-2 fw-semibold" onclick="downloadAuditReport('excel')"><i class="bi bi-download me-1"></i> Tests</button>
+        <button class="btn btn-outline-primary btn-sm rounded-3 px-3 py-2 fw-semibold" onclick="downloadAuditReport('excel')"><i class="bi bi-download me-1"></i> Samples</button>
+        <button class="btn btn-primary btn-sm rounded-3 px-3 py-2 fw-semibold shadow-sm" data-bs-toggle="modal" data-bs-target="#uploadModal"><i class="bi bi-cloud-upload me-1"></i> Upload Drive Test</button>
     </div>
 </div>
 
-<div id="alertBox" class="alert" style="display:none;"></div>
+<div id="alertBox" class="alert mb-3" style="display:none;"></div>
 
-<div class="card">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
-        <span class="fw-semibold"><i class="bi bi-geo-alt"></i> Drive Test Registry</span>
-        <span class="badge bg-secondary" id="totalCount">0 Campaigns</span>
-    </div>
+<!-- Main Table Card -->
+<div class="card border-0 shadow-sm rounded-3 overflow-hidden">
     <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
+        <table class="table table-hover align-middle mb-0 text-nowrap">
             <thead class="table-light">
-                <tr>
-                    <th>Campaign Name</th>
-                    <th>Survey Date</th>
-                    <th>Region</th>
-                    <th>Technology</th>
-                    <th>Tool</th>
-                    <th>Samples</th>
-                    <th>Coverage %</th>
-                    <th>Avg RSRP</th>
-                    <th>DL Throughput</th>
-                    <th>NatCA Status</th>
-                    <th class="text-end">Actions</th>
+                <tr class="small text-muted fw-bold text-uppercase" style="letter-spacing: 0.5px;">
+                    <th style="padding-left: 1.25rem;">TEST NAME</th>
+                    <th>OPERATOR</th>
+                    <th>DATE</th>
+                    <th>TYPE</th>
+                    <th>TECH</th>
+                    <th>SAMPLES</th>
+                    <th>DISTANCE</th>
+                    <th>STATUS</th>
+                    <th class="text-end" style="padding-right: 1.25rem;">ACTIONS</th>
                 </tr>
             </thead>
             <tbody id="campaignTableBody">
-                <tr><td colspan="11" class="text-center text-muted py-4">Loading drive test campaigns...</td></tr>
+                <tr><td colspan="9" class="text-center text-muted py-4">Loading drive test campaigns...</td></tr>
             </tbody>
         </table>
     </div>
@@ -239,44 +290,52 @@ function handleFileSelection(files) {
 }
 
 function loadCampaigns() {
-    const q = document.getElementById('searchInput').value;
-    const status = document.getElementById('filterStatus').value;
+    const operator = document.getElementById('filterOperator').value;
+    const tech = document.getElementById('filterTech').value;
 
-    fetch(`{% url 'regulatory:drive_test_api' %}?q=${q}&status=${status}`)
+    fetch(`{% url 'regulatory:drive_test_api' %}?operator=${operator}&technology=${tech}`)
         .then(r => r.json()).then(d => {
             renderTable(d.records || []);
         });
 }
 
 function renderTable(records) {
-    document.getElementById('totalCount').textContent = `${records.length} Campaigns`;
+    document.getElementById('totalCountBadge').textContent = `${records.length} of ${records.length} tests`;
     if (!records.length) {
-        document.getElementById('campaignTableBody').innerHTML = `<tr><td colspan="11" class="text-center text-muted py-4">No drive test campaigns registered yet.</td></tr>`;
+        document.getElementById('campaignTableBody').innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">No drive test campaigns registered yet.</td></tr>`;
         return;
     }
 
-    document.getElementById('campaignTableBody').innerHTML = records.map(r => `
+    document.getElementById('campaignTableBody').innerHTML = records.map(r => {
+        let opClass = 'op-badge-qcell';
+        if (r.operator_code === 'orange') opClass = 'op-badge-orange';
+        else if (r.operator_code === 'africell') opClass = 'op-badge-africell';
+        else if (r.operator_code === 'sierratel') opClass = 'op-badge-sierratel';
+        else if (r.operator_code === 'onemobile') opClass = 'op-badge-onemobile';
+
+        const truncateName = r.name.length > 32 ? r.name.substring(0, 30) + '...' : r.name;
+
+        return `
         <tr>
-            <td class="fw-bold"><a href="/regulatory/drive-test/${r.id}/">${r.name}</a></td>
-            <td>${r.test_date}</td>
-            <td><span class="badge bg-light text-dark border">${r.region}</span></td>
-            <td><span class="badge bg-primary">${r.technology}</span></td>
-            <td><span class="badge bg-secondary">${r.tool_used}</span></td>
-            <td class="fw-semibold">${r.total_samples.toLocaleString()}</td>
-            <td>${r.coverage_pct}%</td>
-            <td>${r.avg_rsrp} dBm</td>
-            <td>${r.avg_dl_tp} Mbps</td>
-            <td>
-                ${r.natca_compliant 
-                    ? '<span class="badge bg-success"><i class="bi bi-patch-check me-1"></i>COMPLIANT</span>' 
-                    : '<span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>NON-COMPLIANT</span>'}
+            <td style="padding-left: 1.25rem;" class="fw-bold">
+                <a href="/regulatory/drive-test/${r.id}/" class="text-dark text-decoration-none" title="${r.name}">${truncateName}</a>
             </td>
-            <td class="text-end">
-                <a href="/regulatory/drive-test/${r.id}/" class="btn btn-sm btn-outline-primary me-1"><i class="bi bi-eye"></i> Map View</a>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteCampaign(${r.id})"><i class="bi bi-trash"></i></button>
+            <td><span class="badge rounded-pill px-3 py-1 ${opClass}">${r.operator_label || 'Qcell'}</span></td>
+            <td class="text-secondary">${r.test_date}</td>
+            <td><span class="badge rounded-pill bg-light text-secondary border px-2 py-1">${r.route_type || 'urban'}</span></td>
+            <td class="fw-semibold text-dark">${r.technology || '2G'}</td>
+            <td class="text-secondary">${(r.total_samples || 0).toLocaleString()}</td>
+            <td class="text-secondary fw-semibold">${r.distance_km || '1.18 km'}</td>
+            <td>
+                <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle px-2 py-1 fw-semibold">COMPLETED</span>
+            </td>
+            <td class="text-end" style="padding-right: 1.25rem;">
+                <a href="/regulatory/drive-test/${r.id}/" class="btn btn-link text-secondary p-1 me-2" title="View Map"><i class="bi bi-map fs-5"></i></a>
+                <button class="btn btn-link text-danger p-1" onclick="deleteCampaign(${r.id})" title="Delete"><i class="bi bi-trash fs-5"></i></button>
             </td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function submitUpload(e) {
