@@ -97,8 +97,8 @@
     </div>
     <div class="col-md-3 col-sm-6">
         <div class="stat-card p-3 shadow-sm">
-            <div class="text-muted small">Assessed SLA Penalties</div>
-            <div class="fs-4 fw-bold text-dark mt-1" id="statPenaltiesAssessed">$0.00</div>
+            <div class="text-muted small">Monitored KPI Metrics</div>
+            <div class="fs-4 fw-bold text-primary mt-1" id="statMonitoredKPIs">12 Regulatory Metrics</div>
         </div>
     </div>
 </div>
@@ -106,7 +106,7 @@
 <!-- Multi-Operator SLA Compliance Matrix Table -->
 <div class="card mb-4 border-0 shadow-sm">
     <div class="card-header bg-white py-2 fw-semibold d-flex justify-content-between align-items-center border-bottom-0">
-        <span><i class="bi bi-shield-check text-primary me-1"></i> NatCA Multi-Operator Regulatory SLA Compliance Matrix</span>
+        <span class="fw-bold text-dark"><i class="bi bi-shield-check text-primary me-1"></i> NatCA Multi-Operator Regulatory SLA Compliance Matrix</span>
         <span class="badge bg-primary px-3">5 Operators SLA Pass / Fail Audit Matrix</span>
     </div>
     <div class="table-responsive">
@@ -127,6 +127,30 @@
                 <tr><td colspan="8" class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Loading Compliance Matrix...</td></tr>
             </tbody>
         </table>
+    </div>
+</div>
+
+<!-- Interactive Compliance Analytics Visualizations Section -->
+<div class="row g-3 mb-4">
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white py-2 fw-semibold border-bottom-0">
+                <i class="bi bi-bar-chart-line text-primary me-1"></i> Operator SLA Compliance Rate Comparison (%)
+            </div>
+            <div class="card-body" style="height: 300px;">
+                <canvas id="chartOperatorCompliance"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white py-2 fw-semibold border-bottom-0">
+                <i class="bi bi-geo-fill text-success me-1"></i> District Quality &amp; SLA Compliance Index (%)
+            </div>
+            <div class="card-body" style="height: 300px;">
+                <canvas id="chartDistrictCompliance"></canvas>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -154,38 +178,12 @@
         </table>
     </div>
 </div>
-
-<!-- Detailed SLA Violations & Penalty Breakdown -->
-<div class="card border-0 shadow-sm">
-    <div class="card-header bg-white py-2 fw-semibold d-flex justify-content-between align-items-center border-bottom-0">
-        <span><i class="bi bi-exclamation-triangle text-danger me-1"></i> SLA Breach &amp; Regulatory Penalty Event Log</span>
-        <span class="badge bg-danger" id="violationCountBadge">0 Breaches Logged</span>
-    </div>
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>Event ID</th>
-                    <th>Operator</th>
-                    <th>KPI Code</th>
-                    <th>Period Date</th>
-                    <th>Region / District</th>
-                    <th>Measured Value</th>
-                    <th>NatCA Target</th>
-                    <th>Penalty Fee ($)</th>
-                    <th>Severity</th>
-                </tr>
-            </thead>
-            <tbody id="violationLogBody">
-                <tr><td colspan="9" class="text-center text-muted py-3">No SLA breach events recorded.</td></tr>
-            </tbody>
-        </table>
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
+let charts = {};
 const DISTRICTS_BY_REGION = {
     'Western Area': ['Western Area Urban', 'Western Area Rural'],
     'Northern': ['Bombali', 'Falaba', 'Koinadugu', 'Tonkolili'],
@@ -227,7 +225,8 @@ function loadComplianceAudit() {
         .then(r => r.json()).then(d => {
             renderStats(d.audit_metadata || {});
             renderDistrictRankings(d.district_rankings || []);
-            renderViolationLog(d.kpi_violations || []);
+            renderOperatorChart(d.operator_summaries || []);
+            renderDistrictChart(d.district_rankings || []);
         });
 
     fetch(`{% url 'regulatory:network_performance_comparison_api' %}?start=${start}&end=${end}&region=${region}&district=${district}`)
@@ -239,8 +238,6 @@ function loadComplianceAudit() {
 function renderStats(meta) {
     document.getElementById('statAuditedEntries').textContent = (meta.total_system_entries || 0).toLocaleString();
     document.getElementById('statBreachCount').textContent = (meta.total_system_breaches || 0).toLocaleString();
-    const penalties = parseFloat(meta.total_penalties_assessed || '0');
-    document.getElementById('statPenaltiesAssessed').textContent = `$${penalties.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
 
     const total = meta.total_system_entries || 0;
     const breaches = meta.total_system_breaches || 0;
@@ -311,31 +308,75 @@ function renderDistrictRankings(rankings) {
     `).join('');
 }
 
-function renderViolationLog(violations) {
-    document.getElementById('violationCountBadge').textContent = `${violations.length} Breaches Logged`;
-    if (!violations.length) {
-        document.getElementById('violationLogBody').innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">No SLA breach events recorded. Network is 100% compliant.</td></tr>`;
-        return;
-    }
+function renderOperatorChart(summaries) {
+    const ctx = document.getElementById('chartOperatorCompliance').getContext('2d');
+    const labels = summaries.map(s => s.operator_code.toUpperCase());
+    const scores = summaries.map(s => parseFloat(s.compliance_score));
 
-    const opBadge = (op) => {
-        const cls = { orange: 'badge-op-orange', africell: 'badge-op-africell', qcell: 'badge-op-qcell', sierratel: 'badge-op-sierratel', onemobile: 'badge-op-onemobile' }[op] || 'badge-op-national';
-        return `<span class="badge ${cls}">${op.toUpperCase()}</span>`;
+    const colorMap = {
+        'ORANGE': '#ff6600',
+        'AFRICELL': '#e2001a',
+        'QCELL': '#0056b3',
+        'SIERRATEL': '#008080',
+        'ONEMOBILE': '#6f42c1'
     };
+    const bgColors = labels.map(l => colorMap[l] || '#343a40');
 
-    document.getElementById('violationLogBody').innerHTML = violations.map(v => `
-        <tr>
-            <td><code>#${v.id}</code></td>
-            <td>${opBadge(v.operator_code)}</td>
-            <td class="fw-bold"><code>${v.kpi_code}</code></td>
-            <td class="text-muted small">${v.period_date}</td>
-            <td>${v.region} / ${v.district}</td>
-            <td class="text-danger fw-bold">${v.measured_value}</td>
-            <td class="text-muted small">${v.target_threshold}</td>
-            <td class="fw-bold text-dark">$${parseFloat(v.penalty_fee).toFixed(2)}</td>
-            <td><span class="badge bg-danger">${v.severity}</span></td>
-        </tr>
-    `).join('');
+    if (charts.opChart) charts.opChart.destroy();
+    charts.opChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Compliance Index (%)',
+                data: scores,
+                backgroundColor: bgColors,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { min: 0, max: 100, ticks: { callback: v => v + '%' } }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+}
+
+function renderDistrictChart(rankings) {
+    const ctx = document.getElementById('chartDistrictCompliance').getContext('2d');
+    const topRanked = rankings.slice(0, 8);
+    const labels = topRanked.map(r => r.district);
+    const rates = topRanked.map(r => parseFloat(r.compliance_rate));
+
+    if (charts.distChart) charts.distChart.destroy();
+    charts.distChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'District Compliance Rate (%)',
+                data: rates,
+                backgroundColor: '#0d6efd',
+                borderRadius: 4
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { min: 0, max: 100, ticks: { callback: v => v + '%' } }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
 }
 
 function downloadAuditReport(fmt) {
