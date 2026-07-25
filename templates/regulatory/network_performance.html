@@ -92,10 +92,10 @@
     <div class="col-12 text-center text-muted py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Loading NatCA PM KPIs...</div>
 </div>
 
-<!-- 5-Operator Comparative Analysis Table -->
+<!-- 5-Operator Performance & National Market Benchmark Table -->
 <div class="card mb-3">
     <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
-        <span class="fw-bold text-dark"><i class="bi bi-bar-chart-steps text-primary"></i> 5-Operator Performance & National Market Benchmark</span>
+        <span class="fw-bold text-dark"><i class="bi bi-bar-chart-steps text-primary"></i> 5-Operator Performance &amp; National Market Benchmark</span>
         <span class="small text-muted">Comparative Audit (Orange | Africell | QCell | Sierra Tel | One-Mobile)</span>
     </div>
     <div class="table-responsive">
@@ -114,6 +114,33 @@
             </thead>
             <tbody id="matrixTableBody">
                 <tr><td colspan="8" class="text-center text-muted py-3">Loading multi-operator benchmarking grid...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- NatCA Multi-Operator Regulatory SLA Compliance Matrix Table -->
+<div class="card mb-3 border-0 shadow-sm">
+    <div class="card-header bg-white py-2 fw-semibold d-flex justify-content-between align-items-center border-bottom-0">
+        <span class="fw-bold text-dark"><i class="bi bi-shield-check text-primary me-1"></i> NatCA Multi-Operator Regulatory SLA Compliance Matrix</span>
+        <span class="badge bg-primary px-3">5 Operators SLA Pass / Fail Audit Matrix</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover align-middle text-center mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th class="text-start">NatCA Regulatory KPI Metric</th>
+                    <th>Target Rule</th>
+                    <th style="background-color:#ff6600; color:#fff; width:13%;">Orange</th>
+                    <th style="background-color:#e2001a; color:#fff; width:13%;">Africell</th>
+                    <th style="background-color:#0056b3; color:#fff; width:13%;">QCell</th>
+                    <th style="background-color:#008080; color:#fff; width:13%;">Sierra Tel</th>
+                    <th style="background-color:#6f42c1; color:#fff; width:13%;">One-Mobile</th>
+                    <th style="background-color:#343a40; color:#fff; width:14%;">National Compliance</th>
+                </tr>
+            </thead>
+            <tbody id="complianceMatrixTableBody">
+                <tr><td colspan="8" class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Loading Compliance Matrix...</td></tr>
             </tbody>
         </table>
     </div>
@@ -340,9 +367,49 @@ function loadPerformanceData() {
         .then(r => r.json()).then(d => {
             const matrix = d.matrix || [];
             renderMatrix(matrix);
+            renderComplianceMatrix(matrix);
             renderComparativeCharts(matrix);
             renderKPICards(matrix);
         });
+}
+
+function renderComplianceMatrix(matrix) {
+    if (!matrix || !matrix.length) {
+        document.getElementById('complianceMatrixTableBody').innerHTML = `<tr><td colspan="8" class="text-center text-muted py-3">No compliance data available.</td></tr>`;
+        return;
+    }
+
+    const html = matrix.map(m => {
+        const dirStr = m.direction === 'ABOVE' ? '>=' : '<=';
+        const targetStr = `${dirStr} ${m.natca_threshold} ${m.unit}`;
+
+        const compCell = (opKey) => {
+            const item = m.operators[opKey] || {};
+            if (!item || item.value === 'N/A') {
+                return `<span class="badge bg-light text-muted border">NO DATA</span>`;
+            }
+            if (item.is_compliant) {
+                return `<span class="badge bg-success py-1 px-2"><i class="bi bi-check-circle me-1"></i>PASS (${item.value} ${m.unit})</span>`;
+            } else {
+                return `<span class="badge bg-danger py-1 px-2"><i class="bi bi-x-circle me-1"></i>FAIL (${item.value} ${m.unit})</span>`;
+            }
+        };
+
+        return `
+            <tr>
+                <td class="text-start fw-bold">${m.name} <code>(${m.code})</code></td>
+                <td class="text-muted small fw-semibold">${targetStr}</td>
+                <td>${compCell('orange')}</td>
+                <td>${compCell('africell')}</td>
+                <td>${compCell('qcell')}</td>
+                <td>${compCell('sierratel')}</td>
+                <td>${compCell('onemobile')}</td>
+                <td class="bg-light fw-bold">${compCell('national_avg')}</td>
+            </tr>
+        `;
+    }).join('');
+
+    document.getElementById('complianceMatrixTableBody').innerHTML = html;
 }
 
 function renderKPICards(matrix) {
