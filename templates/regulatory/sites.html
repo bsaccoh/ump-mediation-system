@@ -5,11 +5,16 @@
 {% block extra_css %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
-#siteMap { height: 350px; width: 100%; border-radius: 4px; }
+#siteMap { height: 360px; width: 100%; border-radius: 4px; }
 .nav-tabs .nav-link { color: #495057; font-weight: 500; }
 .nav-tabs .nav-link.active { font-weight: 600; color: #0d6efd; border-bottom: 2px solid #0d6efd; }
 .badge-clean { background-color: #f8f9fa; color: #212529; border: 1px solid #dee2e6; font-weight: 500; }
-.badge-op { background-color: #343a40; color: #ffffff; font-weight: 500; }
+/* Operator Official Brand Color Badges */
+.badge-op-orange { background-color: #ff6600; color: #ffffff; font-weight: 600; }
+.badge-op-africell { background-color: #e2001a; color: #ffffff; font-weight: 600; }
+.badge-op-qcell { background-color: #0056b3; color: #ffffff; font-weight: 600; }
+.badge-op-sierratel { background-color: #008080; color: #ffffff; font-weight: 600; }
+.badge-op-onemobile { background-color: #6f42c1; color: #ffffff; font-weight: 600; }
 </style>
 {% endblock %}
 
@@ -70,8 +75,14 @@
 <!-- Interactive Geographic Tower Map -->
 <div class="card mb-3 border-0 shadow-sm">
     <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center py-2 border-bottom-0">
-        <span><i class="bi bi-geo-alt text-dark me-1"></i> Geographic Cell Tower Locations</span>
-        <span class="small text-muted">Orange, Africell, QCell, Sierra Tel, One-Mobile</span>
+        <span><i class="bi bi-geo-alt text-danger me-1"></i> Geographic Cell Tower Map</span>
+        <span class="small">
+            <span style="color:#ff6600; font-weight:600;">■ Orange</span> &nbsp;
+            <span style="color:#e2001a; font-weight:600;">■ Africell</span> &nbsp;
+            <span style="color:#0056b3; font-weight:600;">■ QCell</span> &nbsp;
+            <span style="color:#008080; font-weight:600;">■ Sierra Tel</span> &nbsp;
+            <span style="color:#6f42c1; font-weight:600;">■ One-Mobile</span>
+        </span>
     </div>
     <div class="card-body p-1">
         <div id="siteMap"></div>
@@ -87,7 +98,7 @@
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="sectors-tab" data-bs-toggle="tab" data-bs-target="#sectors-panel" type="button" role="tab" onclick="switchTab('sectors')">
-            <i class="bi bi-broadcast"></i> Sector Cells &amp; Geo-Dimension <span class="badge bg-secondary ms-1" id="sectorsBadge">14,517</span>
+            <i class="bi bi-broadcast"></i> Sector Cells &amp; Geo-Dimension <span class="badge bg-secondary ms-1" id="sectorsBadge">14,514</span>
         </button>
     </li>
 </ul>
@@ -344,6 +355,29 @@ function showAlert(msg, type='success') {
     setTimeout(() => b.style.display = 'none', 4000);
 }
 
+function getOpColor(op) {
+    const colors = {
+        orange: '#ff6600',
+        africell: '#e2001a',
+        qcell: '#0056b3',
+        sierratel: '#008080',
+        onemobile: '#6f42c1'
+    };
+    return colors[(op || '').toLowerCase()] || '#343a40';
+}
+
+function getOpBadge(op) {
+    const opCode = (op || '').toLowerCase();
+    const cls = {
+        orange: 'badge-op-orange',
+        africell: 'badge-op-africell',
+        qcell: 'badge-op-qcell',
+        sierratel: 'badge-op-sierratel',
+        onemobile: 'badge-op-onemobile'
+    }[opCode] || 'bg-secondary';
+    return `<span class="badge ${cls}">${(op || '').toUpperCase()}</span>`;
+}
+
 function onRegionChange() {
     const reg = document.getElementById('filterRegion').value;
     const distSel = document.getElementById('filterDistrict');
@@ -386,7 +420,7 @@ function updateMap(records) {
         if (r.latitude && r.longitude) {
             bounds.push([r.latitude, r.longitude]);
             const marker = L.circleMarker([r.latitude, r.longitude], {
-                radius: 5, fillColor: '#212529', color: '#fff', weight: 1, fillOpacity: 0.8
+                radius: 6, fillColor: getOpColor(r.operator_code), color: '#ffffff', weight: 1.5, fillOpacity: 0.85
             }).addTo(map);
 
             marker.bindPopup(`
@@ -463,7 +497,7 @@ function renderPhysicalTable(records) {
 
     document.getElementById('physicalTableBody').innerHTML = records.map(r => `
         <tr>
-            <td><span class="badge badge-op">${r.operator_code.toUpperCase()}</span></td>
+            <td>${getOpBadge(r.operator_code)}</td>
             <td class="fw-bold"><code>${r.site_id}</code></td>
             <td>${r.site_name}</td>
             <td>${r.height_m ? `${r.height_m}m` : '-'}</td>
@@ -493,7 +527,7 @@ function renderSectorsTable(records) {
 
     document.getElementById('sectorsTableBody').innerHTML = records.map(r => `
         <tr>
-            <td><span class="badge badge-op">${r.operator_code.toUpperCase()}</span></td>
+            <td>${getOpBadge(r.operator_code)}</td>
             <td class="fw-bold"><code>${r.site_id}</code></td>
             <td>${r.ne_name || r.bts_name}</td>
             <td class="fw-semibold">${r.cell_name}</td>
