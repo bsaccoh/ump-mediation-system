@@ -306,10 +306,10 @@ function onRegionChange() {
     loadPerformanceData();
 }
 
-// Default to last 30 days
+// Default to last 90 days to include all PM extract batches
 (function(){
     const today = new Date();
-    const ago = new Date(today.getTime() - 30*86400*1000);
+    const ago = new Date(today.getTime() - 90*86400*1000);
     document.getElementById('dateFrom').value = ago.toISOString().slice(0,10);
     document.getElementById('dateTo').value = today.toISOString().slice(0,10);
     onRegionChange();
@@ -325,17 +325,18 @@ function loadPerformanceData() {
     fetch(`{% url 'regulatory:network_performance_api' %}?start=${start}&end=${end}&operator=${operator}&region=${region}&district=${district}`)
         .then(r => r.json()).then(d => {
             renderTable(d.records || []);
-            renderKPICards(d.records || []);
         });
 
     fetch(`{% url 'regulatory:network_performance_comparison_api' %}?start=${start}&end=${end}&region=${region}&district=${district}`)
         .then(r => r.json()).then(d => {
-            renderMatrix(d.matrix || []);
-            renderComparativeCharts(d.matrix || []);
+            const matrix = d.matrix || [];
+            renderMatrix(matrix);
+            renderComparativeCharts(matrix);
+            renderKPICards(matrix);
         });
 }
 
-function renderKPICards(records) {
+function renderKPICards(matrix) {
     const kpis = [
         { code: 'NET_AVAIL', name: 'Network Avail.', target: '>=99.5%' },
         { code: 'CELL_AVAIL', name: 'Cell Avail.', target: '>=99.0%' },
@@ -351,14 +352,18 @@ function renderKPICards(records) {
         { code: 'QOS_SCORE', name: 'QoS Score', target: '>=90.0%' },
     ];
 
+    const currentOp = document.getElementById('filterOperator').value || 'orange';
+
     const cardHtml = kpis.map(k => {
-        const matches = records.filter(r => r.kpi_code === k.code);
+        const item = matrix.find(m => m.code === k.code);
         let valStr = 'N/A';
         let passClass = '';
-        if (matches.length > 0) {
-            const latest = matches[0];
-            valStr = `${parseFloat(latest.value).toFixed(2)} ${latest.unit}`;
-            passClass = latest.is_compliant ? 'pass' : 'fail';
+        if (item && item.operators && item.operators[currentOp]) {
+            const opInfo = item.operators[currentOp];
+            if (opInfo.value !== 'N/A') {
+                valStr = `${opInfo.value} ${item.unit}`;
+                passClass = opInfo.is_compliant ? 'pass' : 'fail';
+            }
         }
         return `
             <div class="col-md-3 col-sm-6">
