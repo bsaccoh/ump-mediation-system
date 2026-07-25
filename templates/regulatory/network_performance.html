@@ -178,13 +178,27 @@
                         <div class="form-text small">Select an entire local folder containing multiple `.csv.gz` files.</div>
                     </div>
 
-                    <div class="small bg-light p-2 rounded border">
+                    <div class="small bg-light p-2 rounded border mb-3">
                         <strong>Supported Formats:</strong> Raw Huawei M2000/U2020 extracts (`.csv.gz`), zipped archives (`.zip`), and CSV KPI files.
+                    </div>
+
+                    <!-- Live Batch Progress Bar -->
+                    <div id="importProgressContainer" class="mt-3 p-2 bg-light rounded border" style="display: none;">
+                        <div class="d-flex justify-content-between mb-1 small fw-bold">
+                            <span id="importProgressLabel">Processing Batch...</span>
+                            <span id="importProgressPercent">0%</span>
+                        </div>
+                        <div class="progress mb-2" style="height: 18px;">
+                            <div id="importProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%;">0%</div>
+                        </div>
+                        <div class="small text-muted text-center">
+                            Processed <strong id="processedFileCount" class="text-dark">0</strong> of <strong id="totalFileCount" class="text-dark">0</strong> files &bull; <strong id="importedRecordCount" class="text-dark">0</strong> PM KPI entries created
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary btn-sm">Upload &amp; Process</button>
+                    <button type="submit" id="btnSubmitImport" class="btn btn-primary btn-sm">Upload &amp; Process</button>
                 </div>
             </form>
         </div>
@@ -490,37 +504,86 @@ function submitEntry(e) {
         });
 }
 
-function submitImport(e) {
+async function submitImport(e) {
     e.preventDefault();
     const fileInput = document.getElementById('importFile');
     const folderInput = document.getElementById('importFolder');
-    const files = fileInput.files.length ? fileInput.files : folderInput.files;
+    const fileList = fileInput.files.length ? fileInput.files : folderInput.files;
 
-    if (!files || !files.length) {
+    if (!fileList || !fileList.length) {
         showAlert('Please select file(s) or a folder to import.', 'warning');
         return;
     }
 
-    const formData = new FormData();
-    for (let i = 0; i < files.length; i++) {
-        formData.append('files', files[i]);
+    const files = Array.from(fileList);
+    const totalFiles = files.length;
+
+    const container = document.getElementById('importProgressContainer');
+    const bar = document.getElementById('importProgressBar');
+    const label = document.getElementById('importProgressLabel');
+    const percentSpan = document.getElementById('importProgressPercent');
+    const processedSpan = document.getElementById('processedFileCount');
+    const totalSpan = document.getElementById('totalFileCount');
+    const recordsSpan = document.getElementById('importedRecordCount');
+    const btnSubmit = document.getElementById('btnSubmitImport');
+
+    container.style.display = 'block';
+    bar.className = 'progress-bar progress-bar-striped progress-bar-animated bg-primary';
+    bar.style.width = '0%';
+    bar.textContent = '0%';
+    percentSpan.textContent = '0%';
+    label.textContent = 'Processing Files...';
+    processedSpan.textContent = '0';
+    totalSpan.textContent = totalFiles.toLocaleString();
+    recordsSpan.textContent = '0';
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Processing...';
+
+    let processedCount = 0;
+    let totalRecords = 0;
+    let totalErrors = 0;
+    const chunkSize = 5; // Send 5 files per HTTP request chunk
+
+    for (let i = 0; i < totalFiles; i += chunkSize) {
+        const chunk = files.slice(i, i + chunkSize);
+        const formData = new FormData();
+        chunk.forEach(f => formData.append('files', f));
+
+        try {
+            const resp = await fetch("{% url 'regulatory:network_performance_import' %}", {
+                method: 'POST', body: formData, headers: {'X-CSRFToken': getCSRF()}
+            });
+            const d = await resp.json();
+            if (d.success) {
+                processedCount += chunk.length;
+                totalRecords += (d.record_count || 0);
+                totalErrors += (d.error_count || 0);
+            } else {
+                totalErrors += chunk.length;
+            }
+        } catch (err) {
+            totalErrors += chunk.length;
+        }
+
+        const pct = Math.min(100, Math.round((processedCount / totalFiles) * 100));
+        bar.style.width = pct + '%';
+        bar.textContent = pct + '%';
+        percentSpan.textContent = pct + '%';
+        processedSpan.textContent = processedCount.toLocaleString();
+        recordsSpan.textContent = totalRecords.toLocaleString();
     }
 
-    showAlert(`Uploading ${files.length} file(s)... Please wait.`, 'info');
+    bar.className = 'progress-bar bg-success';
+    label.textContent = 'Import Complete!';
+    btnSubmit.disabled = false;
+    btnSubmit.innerHTML = 'Upload &amp; Process';
 
-    fetch("{% url 'regulatory:network_performance_import' %}", {
-        method: 'POST', body: formData, headers: {'X-CSRFToken': getCSRF()}
-    }).then(r => r.json()).then(d => {
-        if (d.success) {
-            showAlert(`Successfully processed ${d.file_count || files.length} file(s) with ${(d.record_count || 0).toLocaleString()} PM KPI measurements.`);
-            bootstrap.Modal.getInstance(document.getElementById('importModal')).hide();
-            loadPerformanceData();
-        } else {
-            showAlert(d.error || 'Import failed', 'danger');
-        }
-    }).catch(err => {
-        showAlert(`Import error: ${err.message}`, 'danger');
-    });
+    setTimeout(() => {
+        showAlert(`Successfully processed ${processedCount.toLocaleString()} file(s) with ${totalRecords.toLocaleString()} PM KPI measurements.`);
+        bootstrap.Modal.getInstance(document.getElementById('importModal')).hide();
+        container.style.display = 'none';
+        loadPerformanceData();
+    }, 1200);
 }
 
 function deleteEntry(id) {
