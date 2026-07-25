@@ -121,3 +121,28 @@ class DriveTestTests(TestCase):
         self.assertEqual(analysis.total_samples, 2)
         self.assertEqual(analysis.coverage_pct, Decimal('100.00'))
         self.assertTrue(analysis.natca_compliant)
+
+
+class CellSiteTests(TestCase):
+    databases = {'default', 'regulatory'}
+
+    def setUp(self):
+        from regulatory.models import NetworkCellSite
+        self.site = NetworkCellSite.objects.create(
+            operator_code='orange',
+            site_id='FTW001',
+            site_name='Lumley Beach Tower',
+            technology='4G',
+            region='WESTERN_AREA',
+            district='Western Area Urban',
+            latitude=Decimal('8.484'),
+            longitude=Decimal('-13.230'),
+            status='ACTIVE',
+        )
+
+    def test_site_creation(self):
+        from regulatory.models import NetworkCellSite
+        self.assertEqual(NetworkCellSite.objects.count(), 1)
+        self.assertEqual(self.site.site_id, 'FTW001')
+        self.assertEqual(self.site.operator_code, 'orange')
+

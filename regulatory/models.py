@@ -651,3 +651,48 @@ class DriveTestAnalysis(models.Model):
         status = 'COMPLIANT' if self.natca_compliant else 'NON-COMPLIANT'
         return f'Analysis for {self.campaign.name}: Coverage={self.coverage_pct}% [{status}]'
 
+
+# ---------------------------------------------------------------------------
+# 14. NetworkCellSite — Operator Cell Site & Geo Dimension (GeoDim) Inventory
+# ---------------------------------------------------------------------------
+
+class NetworkCellSite(models.Model):
+    """Operator Cell Site & Geo Dimension Reference Data."""
+
+    class Status(models.TextChoices):
+        ACTIVE   = 'ACTIVE',   'Active'
+        INACTIVE = 'INACTIVE', 'Inactive'
+        PLANNED  = 'PLANNED',  'Planned'
+
+    operator_code = models.CharField(max_length=30, default='orange', db_index=True,
+                                      help_text='orange, africell, qcell, sierratel, onemobile')
+    site_id = models.CharField(max_length=80, db_index=True, help_text='Operator Site Identifier e.g. FTW001')
+    site_name = models.CharField(max_length=160, help_text='Site Name e.g. Lumley Beach Tower')
+    cell_id = models.CharField(max_length=80, blank=True, db_index=True, help_text='Specific Sector / Cell Identifier')
+
+    technology = models.CharField(max_length=10, default='4G', help_text='2G/3G/4G/5G')
+    region = models.CharField(max_length=80, default='WESTERN_AREA', db_index=True)
+    district = models.CharField(max_length=80, blank=True, db_index=True)
+    chiefdom_town = models.CharField(max_length=100, blank=True, help_text='Chiefdom / City / Town')
+
+    latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    height_m = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text='Tower height in meters')
+    azimuth = models.IntegerField(null=True, blank=True, help_text='Antenna direction 0-360 degrees')
+
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE, db_index=True)
+    notes = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'reg_cell_sites'
+        ordering = ['operator_code', 'region', 'district', 'site_id']
+        unique_together = [('operator_code', 'site_id', 'cell_id')]
+        verbose_name = 'Cell Site & Geo Inventory'
+        verbose_name_plural = 'Cell Site & Geo Inventories'
+
+    def __str__(self):
+        return f'[{self.operator_code.upper()}] {self.site_id} - {self.site_name} ({self.district})'
+
+

@@ -64,6 +64,13 @@ urlpatterns = [
     path('drive-test/<int:pk>/analyse/', views.drive_test_analyse, name='drive_test_analyse'),
     path('drive-test/<int:pk>/delete/', views.drive_test_delete, name='drive_test_delete'),
 
+    # 8. Cell Site & Geo Dimension (GeoDim) Management
+    path('sites/', views.site_list_view, name='site_list_view'),
+    path('sites/api/', views.site_api, name='site_api'),
+    path('sites/save/', views.site_save, name='site_save'),
+    path('sites/import/', views.site_import, name='site_import'),
+    path('sites/<int:pk>/delete/', views.site_delete, name='site_delete'),
+
     # Regulatory Profile (admin)
     path('profile/save/', views.profile_save, name='profile_save'),
 ]

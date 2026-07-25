@@ -24,6 +24,7 @@ from .models import (
     LeviedPeriod, LEARequest, LEAExtractionLog, QoSMetric,
     NetworkKPIDefinition, NetworkKPIEntry, NetworkKPIImportLog,
     DriveTestCampaign, DriveTestSample, DriveTestAnalysis,
+    NetworkCellSite,
 )
 
 
@@ -875,4 +876,161 @@ def drive_test_analyse(request, pk):
 def drive_test_delete(request, pk):
     get_object_or_404(DriveTestCampaign, pk=pk).delete()
     return JsonResponse({'success': True})
+
+
+# =============================================================================
+# 8. Cell Site & Geo Dimension (GeoDim) Management
+# =============================================================================
+
+@login_required
+def site_list_view(request):
+    return render(request, 'regulatory/sites.html', {
+        'title': 'Cell Site & Geo Inventory',
+        'total': NetworkCellSite.objects.count(),
+        'status_choices': NetworkCellSite.Status.choices,
+    })
+
+
+@login_required
+def site_api(request):
+    operator = request.GET.get('operator', '').strip().lower()
+    region = request.GET.get('region', '').strip()
+    district = request.GET.get('district', '').strip()
+    tech = request.GET.get('technology', '').strip()
+    status = request.GET.get('status', '').strip()
+    q = request.GET.get('q', '').strip()
+    page = request.GET.get('page', 1)
+
+    qs = NetworkCellSite.objects.all()
+    if operator:
+        qs = qs.filter(operator_code=operator)
+    if region:
+        qs = qs.filter(region__icontains=region)
+    if district:
+        qs = qs.filter(district__icontains=district)
+    if tech:
+        qs = qs.filter(technology=tech)
+    if status:
+        qs = qs.filter(status=status)
+    if q:
+        qs = qs.filter(
+            Q(site_id__icontains=q) | Q(site_name__icontains=q) |
+            Q(cell_id__icontains=q) | Q(chiefdom_town__icontains=q)
+        )
+
+    rows, total, page, pages = _paginate(qs, page)
+    data = [{
+        'id': r.pk,
+        'operator_code': r.operator_code,
+        'site_id': r.site_id,
+        'site_name': r.site_name,
+        'cell_id': r.cell_id,
+        'technology': r.technology,
+        'region': r.region,
+        'district': r.district,
+        'chiefdom_town': r.chiefdom_town,
+        'latitude': float(r.latitude) if r.latitude is not None else None,
+        'longitude': float(r.longitude) if r.longitude is not None else None,
+        'height_m': float(r.height_m) if r.height_m is not None else None,
+        'azimuth': r.azimuth,
+        'status': r.status,
+        'notes': r.notes,
+    } for r in rows]
+    return JsonResponse({'records': data, 'total': total, 'page': page, 'pages': pages})
+
+
+@login_required
+@require_POST
+def site_save(request):
+    pk = request.POST.get('id')
+    try:
+        if pk:
+            obj = NetworkCellSite.objects.get(pk=pk)
+        else:
+            obj = NetworkCellSite()
+
+        obj.operator_code = request.POST.get('operator_code', 'orange').strip().lower() or 'orange'
+        obj.site_id = request.POST.get('site_id', '').strip()
+        obj.site_name = request.POST.get('site_name', '').strip()
+        obj.cell_id = request.POST.get('cell_id', '').strip()
+        obj.technology = request.POST.get('technology', '4G').strip()
+        obj.region = request.POST.get('region', 'WESTERN_AREA').strip()
+        obj.district = request.POST.get('district', '').strip()
+        obj.chiefdom_town = request.POST.get('chiefdom_town', '').strip()
+
+        lat = request.POST.get('latitude')
+        lng = request.POST.get('longitude')
+        h = request.POST.get('height_m')
+        az = request.POST.get('azimuth')
+
+        obj.latitude = _decimal(lat, None) if lat else None
+        obj.longitude = _decimal(lng, None) if lng else None
+        obj.height_m = _decimal(h, None) if h else None
+        obj.azimuth = _int(az, None) if az else None
+
+        obj.status = request.POST.get('status', NetworkCellSite.Status.ACTIVE)
+        obj.notes = request.POST.get('notes', '').strip()
+        obj.save()
+
+        return JsonResponse({'success': True, 'id': obj.pk})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@require_POST
+def site_import(request):
+    """Handle bulk CSV import of Cell Site Inventory."""
+    import csv, io
+    if 'file' not in request.FILES:
+        return JsonResponse({'success': False, 'error': 'No file uploaded'})
+
+    uploaded_file = request.FILES['file']
+    try:
+        content = uploaded_file.read().decode('utf-8-sig', errors='replace')
+        reader = csv.DictReader(io.StringIO(content))
+        count = 0
+        errors = []
+
+        for idx, r in enumerate(reader, start=1):
+            op = str(r.get('operator_code') or r.get('operator') or 'orange').strip().lower()
+            s_id = str(r.get('site_id') or r.get('site') or '').strip()
+            s_name = str(r.get('site_name') or r.get('name') or s_id).strip()
+            c_id = str(r.get('cell_id') or r.get('cell') or '').strip()
+
+            if not s_id:
+                errors.append(f'Row {idx}: Missing site_id')
+                continue
+
+            lat = _decimal(r.get('latitude') or r.get('lat'), None)
+            lng = _decimal(r.get('longitude') or r.get('lng') or r.get('lon'), None)
+
+            NetworkCellSite.objects.update_or_create(
+                operator_code=op,
+                site_id=s_id,
+                cell_id=c_id,
+                defaults={
+                    'site_name': s_name,
+                    'technology': str(r.get('technology') or r.get('tech') or '4G').strip(),
+                    'region': str(r.get('region') or 'WESTERN_AREA').strip(),
+                    'district': str(r.get('district') or '').strip(),
+                    'chiefdom_town': str(r.get('chiefdom_town') or r.get('town') or '').strip(),
+                    'latitude': lat,
+                    'longitude': lng,
+                    'status': NetworkCellSite.Status.ACTIVE,
+                }
+            )
+            count += 1
+
+        return JsonResponse({'success': True, 'count': count, 'error_count': len(errors)})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@require_POST
+def site_delete(request, pk):
+    get_object_or_404(NetworkCellSite, pk=pk).delete()
+    return JsonResponse({'success': True})
+
 

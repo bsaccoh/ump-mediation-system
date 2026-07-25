@@ -1,0 +1,426 @@
+{% extends "base.html" %}
+{% block title %}Cell Site & Geo Inventory — Regulatory{% endblock %}
+{% block page_title %}Cell Site & Geo Dimension (GeoDim) Inventory{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+#siteMap { height: 380px; width: 100%; border-radius: 6px; }
+.badge-op-orange { background-color: #ff6600; color: white; }
+.badge-op-africell { background-color: #e2001a; color: white; }
+.badge-op-qcell { background-color: #0056b3; color: white; }
+.badge-op-sierratel { background-color: #008080; color: white; }
+.badge-op-onemobile { background-color: #6f42c1; color: white; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Filter & Action Bar -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search site ID, name, cell ID, town..." onkeyup="loadSites()">
+            </div>
+            <div class="col-md-2">
+                <select id="filterOperator" class="form-select form-select-sm" onchange="loadSites()">
+                    <option value="">All Operators</option>
+                    <option value="orange">Orange Sierra Leone</option>
+                    <option value="africell">Africell Sierra Leone</option>
+                    <option value="qcell">QCell Sierra Leone</option>
+                    <option value="sierratel">Sierra Tel</option>
+                    <option value="onemobile">One-Mobile</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select id="filterRegion" class="form-select form-select-sm" onchange="onRegionChange()">
+                    <option value="">All Regions</option>
+                    <option value="WESTERN_AREA">Western Area</option>
+                    <option value="NORTHERN">Northern Province</option>
+                    <option value="SOUTHERN">Southern Province</option>
+                    <option value="EASTERN">Eastern Province</option>
+                    <option value="NORTH_WESTERN">North-Western Province</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select id="filterDistrict" class="form-select form-select-sm" onchange="loadSites()">
+                    <option value="">All Districts</option>
+                </select>
+            </div>
+            <div class="col-auto ms-auto">
+                <button class="btn btn-outline-success btn-sm me-1" data-bs-toggle="modal" data-bs-target="#importModal">
+                    <i class="bi bi-file-earmark-arrow-up"></i> Bulk Import CSV
+                </button>
+                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#siteModal" onclick="openNewSite()">
+                    <i class="bi bi-plus-lg"></i> Add Cell Site
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="alertBox" class="alert" style="display:none;"></div>
+
+<!-- Interactive Cell Site Map -->
+<div class="card mb-3">
+    <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center py-2">
+        <span><i class="bi bi-geo-alt-fill text-danger"></i> Operator Tower Locations & Geodim Map</span>
+        <span class="small text-muted">
+            <span style="color:#ff6600">■ Orange</span> &nbsp;
+            <span style="color:#e2001a">■ Africell</span> &nbsp;
+            <span style="color:#0056b3">■ QCell</span> &nbsp;
+            <span style="color:#008080">■ Sierra Tel</span> &nbsp;
+            <span style="color:#6f42c1">■ One-Mobile</span>
+        </span>
+    </div>
+    <div class="card-body p-1">
+        <div id="siteMap"></div>
+    </div>
+</div>
+
+<!-- Cell Site Inventory Table -->
+<div class="card">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span class="fw-semibold"><i class="bi bi-building"></i> Cell Site Inventory Reference</span>
+        <span class="badge bg-secondary" id="totalCount">0 Sites</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Operator</th>
+                    <th>Site ID</th>
+                    <th>Site Name</th>
+                    <th>Cell ID</th>
+                    <th>Tech</th>
+                    <th>Region / District</th>
+                    <th>Coordinates</th>
+                    <th>Status</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="siteTableBody">
+                <tr><td colspan="9" class="text-center text-muted py-4">Loading cell sites...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add/Edit Site Modal -->
+<div class="modal fade" id="siteModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="siteModalTitle">Configure Cell Site</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="siteForm" onsubmit="submitSite(event)">
+                <input type="hidden" id="siteRecordId">
+                <div class="modal-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Operator</label>
+                            <select id="siteOperator" class="form-select" required>
+                                <option value="orange">Orange Sierra Leone</option>
+                                <option value="africell">Africell Sierra Leone</option>
+                                <option value="qcell">QCell Sierra Leone</option>
+                                <option value="sierratel">Sierra Tel</option>
+                                <option value="onemobile">One-Mobile</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Technology</label>
+                            <select id="siteTech" class="form-select">
+                                <option value="4G" selected>4G (LTE)</option>
+                                <option value="3G">3G (UMTS)</option>
+                                <option value="2G">2G (GSM)</option>
+                                <option value="5G">5G (NR)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Site ID</label>
+                            <input type="text" id="siteId" class="form-control" placeholder="e.g. FTW001" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Site Name</label>
+                            <input type="text" id="siteName" class="form-control" placeholder="e.g. Lumley Beach Tower" required>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Cell ID (Optional)</label>
+                            <input type="text" id="cellId" class="form-control" placeholder="e.g. FTW001_1">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Status</label>
+                            <select id="siteStatus" class="form-select">
+                                <option value="ACTIVE" selected>Active</option>
+                                <option value="INACTIVE">Inactive</option>
+                                <option value="PLANNED">Planned</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Region</label>
+                            <select id="siteRegion" class="form-select">
+                                <option value="WESTERN_AREA" selected>Western Area</option>
+                                <option value="NORTHERN">Northern Province</option>
+                                <option value="SOUTHERN">Southern Province</option>
+                                <option value="EASTERN">Eastern Province</option>
+                                <option value="NORTH_WESTERN">North-Western Province</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">District</label>
+                            <input type="text" id="siteDistrict" class="form-control" placeholder="e.g. Western Area Urban, Bo">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Chiefdom / Town</label>
+                            <input type="text" id="siteTown" class="form-control" placeholder="e.g. Lumley / Freetown">
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Latitude</label>
+                            <input type="number" step="0.0000001" id="siteLat" class="form-control" placeholder="e.g. 8.484">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Longitude</label>
+                            <input type="number" step="0.0000001" id="siteLng" class="form-control" placeholder="e.g. -13.230">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Tower Height (m)</label>
+                            <input type="number" step="0.1" id="siteHeight" class="form-control" placeholder="e.g. 45.0">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea id="siteNotes" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success btn-sm">Save Cell Site</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Import Modal -->
+<div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-file-earmark-arrow-up"></i> Bulk Import Site Inventory</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="importForm" onsubmit="submitImport(event)">
+                <div class="modal-body">
+                    <p class="small text-muted mb-2">Upload CSV file containing site inventory.</p>
+                    <div class="mb-3">
+                        <label class="form-label">Select CSV File</label>
+                        <input type="file" id="importFile" class="form-control" accept=".csv" required>
+                    </div>
+                    <div class="small bg-light p-2 rounded border">
+                        <strong>Expected Columns:</strong> <code>operator_code</code>, <code>site_id</code>, <code>site_name</code>, <code>cell_id</code>, <code>technology</code>, <code>region</code>, <code>district</code>, <code>latitude</code>, <code>longitude</code>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Upload & Import</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+let map, markers = [];
+
+const DISTRICTS_BY_REGION = {
+    'WESTERN_AREA': ['Western Area Urban', 'Western Area Rural'],
+    'NORTHERN': ['Bombali', 'Falaba', 'Koinadugu', 'Tonkolili'],
+    'SOUTHERN': ['Bo', 'Bonthe', 'Moyamba', 'Pujehun'],
+    'EASTERN': ['Kailahun', 'Kenema', 'Kono'],
+    'NORTH_WESTERN': ['Kambia', 'Karene', 'Port Loko'],
+};
+
+function getCSRF() { return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''; }
+function showAlert(msg, type='success') {
+    const b = document.getElementById('alertBox'); b.className = `alert alert-${type}`; b.textContent = msg; b.style.display = 'block';
+    setTimeout(() => b.style.display = 'none', 4000);
+}
+
+function onRegionChange() {
+    const reg = document.getElementById('filterRegion').value;
+    const distSel = document.getElementById('filterDistrict');
+    distSel.innerHTML = '<option value="">All Districts</option>';
+    if (reg && DISTRICTS_BY_REGION[reg]) {
+        DISTRICTS_BY_REGION[reg].forEach(d => distSel.innerHTML += `<option value="${d}">${d}</option>`);
+    }
+    loadSites();
+}
+
+function getOpColor(op) {
+    const colors = { orange: '#ff6600', africell: '#e2001a', qcell: '#0056b3', sierratel: '#008080', onemobile: '#6f42c1' };
+    return colors[op] || '#343a40';
+}
+
+function initMap() {
+    map = L.map('siteMap').setView([8.484, -13.230], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+}
+
+function updateMap(records) {
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+
+    const bounds = [];
+    records.forEach(r => {
+        if (r.latitude && r.longitude) {
+            bounds.push([r.latitude, r.longitude]);
+            const marker = L.circleMarker([r.latitude, r.longitude], {
+                radius: 7, fillColor: getOpColor(r.operator_code), color: '#fff', weight: 1.5, fillOpacity: 0.9
+            }).addTo(map);
+
+            marker.bindPopup(`
+                <strong>[${r.operator_code.toUpperCase()}] ${r.site_id}</strong><br>
+                ${r.site_name}<br>
+                <small>${r.district || r.region} | ${r.technology}</small>
+            `);
+            markers.push(marker);
+        }
+    });
+
+    if (bounds.length) map.fitBounds(bounds);
+}
+
+function loadSites() {
+    const q = document.getElementById('searchInput').value;
+    const operator = document.getElementById('filterOperator').value;
+    const region = document.getElementById('filterRegion').value;
+    const district = document.getElementById('filterDistrict').value;
+
+    fetch(`{% url 'regulatory:site_api' %}?q=${q}&operator=${operator}&region=${region}&district=${district}`)
+        .then(r => r.json()).then(d => {
+            renderTable(d.records || []);
+            updateMap(d.records || []);
+        });
+}
+
+function renderTable(records) {
+    document.getElementById('totalCount').textContent = `${records.length} Sites`;
+    if (!records.length) {
+        document.getElementById('siteTableBody').innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">No cell sites configured. Click "Add Cell Site" to add reference sites.</td></tr>`;
+        return;
+    }
+
+    const opBadge = (op) => {
+        const cls = { orange: 'badge-op-orange', africell: 'badge-op-africell', qcell: 'badge-op-qcell', sierratel: 'badge-op-sierratel', onemobile: 'badge-op-onemobile' }[op] || 'bg-secondary';
+        return `<span class="badge ${cls}">${op.toUpperCase()}</span>`;
+    };
+
+    document.getElementById('siteTableBody').innerHTML = records.map(r => `
+        <tr>
+            <td>${opBadge(r.operator_code)}</td>
+            <td class="fw-bold"><code>${r.site_id}</code></td>
+            <td>${r.site_name}</td>
+            <td><code>${r.cell_id || '-'}</code></td>
+            <td><span class="badge bg-primary">${r.technology}</span></td>
+            <td>
+                <span class="badge bg-light text-dark border">${r.region}</span>
+                ${r.district ? `<span class="badge bg-secondary ms-1">${r.district}</span>` : ''}
+            </td>
+            <td class="small text-muted">${r.latitude && r.longitude ? `${r.latitude}, ${r.longitude}` : 'No coords'}</td>
+            <td>
+                ${r.status === 'ACTIVE' 
+                    ? '<span class="badge bg-success">ACTIVE</span>' 
+                    : '<span class="badge bg-warning text-dark">' + r.status + '</span>'}
+            </td>
+            <td class="text-end">
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteSite(${r.id})"><i class="bi bi-trash"></i></button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openNewSite() {
+    document.getElementById('siteForm').reset();
+    document.getElementById('siteRecordId').value = '';
+}
+
+function submitSite(e) {
+    e.preventDefault();
+    const params = new URLSearchParams({
+        csrfmiddlewaretoken: getCSRF(),
+        id: document.getElementById('siteRecordId').value,
+        operator_code: document.getElementById('siteOperator').value,
+        site_id: document.getElementById('siteId').value,
+        site_name: document.getElementById('siteName').value,
+        cell_id: document.getElementById('cellId').value,
+        technology: document.getElementById('siteTech').value,
+        region: document.getElementById('siteRegion').value,
+        district: document.getElementById('siteDistrict').value,
+        chiefdom_town: document.getElementById('siteTown').value,
+        latitude: document.getElementById('siteLat').value,
+        longitude: document.getElementById('siteLng').value,
+        height_m: document.getElementById('siteHeight').value,
+        status: document.getElementById('siteStatus').value,
+        notes: document.getElementById('siteNotes').value,
+    });
+
+    fetch("{% url 'regulatory:site_save' %}", { method: 'POST', body: params, headers: {'X-CSRFToken': getCSRF()} })
+        .then(r => r.json()).then(d => {
+            if (d.success) {
+                showAlert('Cell site saved successfully.');
+                bootstrap.Modal.getInstance(document.getElementById('siteModal')).hide();
+                loadSites();
+            } else showAlert(d.error || 'Save failed', 'danger');
+        });
+}
+
+function submitImport(e) {
+    e.preventDefault();
+    const formData = new FormData();
+    formData.append('file', document.getElementById('importFile').files[0]);
+
+    fetch("{% url 'regulatory:site_import' %}", {
+        method: 'POST', body: formData, headers: {'X-CSRFToken': getCSRF()}
+    }).then(r => r.json()).then(d => {
+        if (d.success) {
+            showAlert(`Imported ${d.count} cell sites into inventory.`);
+            bootstrap.Modal.getInstance(document.getElementById('importModal')).hide();
+            loadSites();
+        } else showAlert(d.error || 'Import failed', 'danger');
+    });
+}
+
+function deleteSite(id) {
+    if (!confirm('Delete this cell site entry?')) return;
+    fetch(`/regulatory/sites/${id}/delete/`, { method: 'POST', headers: {'X-CSRFToken': getCSRF()} })
+        .then(r => r.json()).then(d => {
+            if (d.success) { showAlert('Cell site deleted.'); loadSites(); }
+            else showAlert(d.error || 'Delete failed', 'danger');
+        });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    initMap();
+    loadSites();
+});
+</script>
+{% endblock %}

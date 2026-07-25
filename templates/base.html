@@ -303,6 +303,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if '/regulatory/sites' in request.path %}active{% endif %}" href="{% url 'regulatory:site_list_view' %}" title="Cell Site & Geo Inventory">
+                            <i class="bi bi-broadcast-pin"></i><span class="nav-link-text"> Cell Site Inventory</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {% if '/regulatory/drive-test' in request.path %}active{% endif %}" href="{% url 'regulatory:drive_test_list' %}" title="Drive Test">
                             <i class="bi bi-geo-alt"></i><span class="nav-link-text"> Drive Test</span>
                         </a>
