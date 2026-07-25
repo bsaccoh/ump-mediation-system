@@ -17,6 +17,7 @@ from django.http import JsonResponse, HttpResponse, Http404
 from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
 
 from .decorators import lawful_intercept_required
 from .models import (
@@ -902,6 +903,136 @@ def drive_test_analyse(request, pk):
 def drive_test_delete(request, pk):
     get_object_or_404(DriveTestCampaign, pk=pk).delete()
     return JsonResponse({'success': True})
+
+
+# ---------------------------------------------------------------------------
+# Live Telemetry & Export View Extensions for Drive Test
+# ---------------------------------------------------------------------------
+
+@csrf_exempt
+@require_POST
+def drive_test_live_start(request):
+    """API endpoint for initializing live mobile field recording session."""
+    import json
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+        campaign = DriveTestCampaign.objects.create(
+            name=data.get('name', f"Live_Survey_{datetime.now():%Y%m%d_%H%M%S}"),
+            test_date=date.today(),
+            operator_code=data.get('operator_code', 'orange').strip().lower(),
+            operator_name=data.get('operator_name', 'Orange SL').strip(),
+            region=data.get('region', 'WESTERN_AREA').strip(),
+            district=data.get('district', '').strip(),
+            technology=data.get('technology', '4G').strip(),
+            tool_used=data.get('tool_used', 'Mobile App Telemetry').strip(),
+            source_type='LIVE_STREAMING',
+            status=DriveTestCampaign.Status.UPLOADED,
+        )
+        return JsonResponse({'success': True, 'campaign_id': campaign.pk})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+@require_POST
+def drive_test_live_samples(request, pk):
+    """API endpoint for streaming GPS & signal telemetry from mobile field units."""
+    campaign = get_object_or_404(DriveTestCampaign, pk=pk)
+    import json
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+        samples_list = data if isinstance(data, list) else data.get('samples', [])
+        
+        objs = []
+        for s in samples_list:
+            lat = _decimal(s.get('latitude') or s.get('lat'))
+            lon = _decimal(s.get('longitude') or s.get('lon') or s.get('lng'))
+            if lat is None or lon is None:
+                continue
+            
+            rsrp_val = _decimal(s.get('rsrp'))
+            sinr_val = _decimal(s.get('sinr'))
+            is_black = (rsrp_val is not None and rsrp_val < Decimal('-110.00')) or (sinr_val is not None and sinr_val < Decimal('-3.00'))
+
+            objs.append(DriveTestSample(
+                campaign=campaign,
+                latitude=lat,
+                longitude=lon,
+                timestamp=timezone.now(),
+                rsrp=rsrp_val,
+                rsrq=_decimal(s.get('rsrq')),
+                sinr=sinr_val,
+                dl_throughput=_decimal(s.get('dl_throughput') or s.get('dl_tp')),
+                ul_throughput=_decimal(s.get('ul_throughput') or s.get('ul_tp')),
+                cssr_status=s.get('cssr_status'),
+                drop_status=s.get('drop_status'),
+                voice_mos=_decimal(s.get('voice_mos')),
+                technology=s.get('technology', campaign.technology),
+                cell_id=str(s.get('cell_id', '')),
+                pci=_int(s.get('pci')),
+                is_blackspot=is_black,
+            ))
+
+        DriveTestSample.objects.bulk_create(objs, batch_size=1000)
+        return JsonResponse({'success': True, 'count': len(objs)})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+@require_POST
+def drive_test_live_end(request, pk):
+    """API endpoint for concluding live mobile field recording session and running analysis."""
+    campaign = get_object_or_404(DriveTestCampaign, pk=pk)
+    from .engines.drive_test import analyse_campaign
+    analysis = analyse_campaign(campaign, user=request.user if request.user.is_authenticated else None)
+    return JsonResponse({'success': True, 'total_samples': analysis.total_samples, 'compliant': analysis.natca_compliant})
+
+
+@login_required
+def download_drive_test_pdf(request, pk):
+    """Download official printable PDF Drive Test Audit Certificate."""
+    campaign = get_object_or_404(DriveTestCampaign.objects.select_related('analysis'), pk=pk)
+    analysis = getattr(campaign, 'analysis', None)
+    if not analysis:
+        from .engines.drive_test import analyse_campaign
+        analysis = analyse_campaign(campaign, user=request.user)
+
+    from .engines.drive_test_reports import generate_drive_test_pdf
+    pdf_bytes = generate_drive_test_pdf(campaign, analysis)
+
+    resp = HttpResponse(pdf_bytes, content_type='application/pdf')
+    resp['Content-Disposition'] = f'attachment; filename="DriveTest_Certificate_{campaign.pk}_{campaign.test_date}.pdf"'
+    return resp
+
+
+@login_required
+def download_drive_test_excel(request, pk):
+    """Download detailed multi-tab Excel Drive Test Audit Workbook."""
+    campaign = get_object_or_404(DriveTestCampaign.objects.select_related('analysis'), pk=pk)
+    analysis = getattr(campaign, 'analysis', None)
+    if not analysis:
+        from .engines.drive_test import analyse_campaign
+        analysis = analyse_campaign(campaign, user=request.user)
+
+    from .engines.drive_test_reports import generate_drive_test_excel
+    xlsx_bytes = generate_drive_test_excel(campaign, analysis)
+
+    resp = HttpResponse(xlsx_bytes, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    resp['Content-Disposition'] = f'attachment; filename="DriveTest_Workbook_{campaign.pk}_{campaign.test_date}.xlsx"'
+    return resp
+
+
+@login_required
+def download_drive_test_csv(request, pk):
+    """Download GIS-ready CSV export for QGIS and ArcGIS."""
+    campaign = get_object_or_404(DriveTestCampaign, pk=pk)
+    from .engines.drive_test_reports import generate_drive_test_csv
+    csv_str = generate_drive_test_csv(campaign)
+
+    resp = HttpResponse(csv_str, content_type='text/csv')
+    resp['Content-Disposition'] = f'attachment; filename="DriveTest_GIS_Samples_{campaign.pk}.csv"'
+    return resp
 
 
 # =============================================================================

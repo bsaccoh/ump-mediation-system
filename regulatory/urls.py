@@ -63,6 +63,12 @@ urlpatterns = [
     path('drive-test/<int:pk>/samples/', views.drive_test_samples_api, name='drive_test_samples_api'),
     path('drive-test/<int:pk>/analyse/', views.drive_test_analyse, name='drive_test_analyse'),
     path('drive-test/<int:pk>/delete/', views.drive_test_delete, name='drive_test_delete'),
+    path('drive-test/live/start/', views.drive_test_live_start, name='drive_test_live_start'),
+    path('drive-test/live/<int:pk>/samples/', views.drive_test_live_samples, name='drive_test_live_samples'),
+    path('drive-test/live/<int:pk>/end/', views.drive_test_live_end, name='drive_test_live_end'),
+    path('drive-test/<int:pk>/pdf/', views.download_drive_test_pdf, name='download_drive_test_pdf'),
+    path('drive-test/<int:pk>/excel/', views.download_drive_test_excel, name='download_drive_test_excel'),
+    path('drive-test/<int:pk>/csv/', views.download_drive_test_csv, name='download_drive_test_csv'),
 
     # 8. Cell Site & Geo Dimension (GeoDim) Management
     path('sites/', views.site_list_view, name='site_list_view'),

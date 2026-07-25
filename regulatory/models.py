@@ -541,6 +541,11 @@ class DriveTestCampaign(models.Model):
 
     raw_file = models.FileField(upload_to='regulatory/drivetest/', blank=True, null=True)
     file_format = models.CharField(max_length=20, default='csv', help_text='csv, trp, lpg, nmf, zip, tar.gz')
+    sha256_hash = models.CharField(max_length=64, blank=True, null=True, db_index=True, help_text='SHA-256 hash to prevent duplicate file uploads')
+    source_type = models.CharField(max_length=20, default='FILE_UPLOAD', db_index=True, help_text='FILE_UPLOAD or LIVE_STREAMING')
+    file_size_bytes = models.BigIntegerField(default=0)
+    total_distance_km = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal('0'))
+    cluster_id = models.CharField(max_length=80, blank=True, db_index=True, help_text='Spatial Cluster Identifier e.g. CL01_FREETOWN')
     notes = models.TextField(blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -578,6 +583,7 @@ class DriveTestSample(models.Model):
     rsrp = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True, help_text='RSRP in dBm')
     rsrq = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True, help_text='RSRQ in dB')
     sinr = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True, help_text='SINR in dB')
+    rssi = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True, help_text='RSSI in dBm')
 
     dl_throughput = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, help_text='DL Throughput (Mbps)')
     ul_throughput = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, help_text='UL Throughput (Mbps)')
@@ -587,13 +593,18 @@ class DriveTestSample(models.Model):
     handover_status = models.BooleanField(null=True, blank=True, help_text='True=Handover Success, False=Failure')
 
     ping_rtt = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, help_text='Ping RTT in ms')
+    jitter_ms = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, help_text='Packet Jitter in ms')
+    packet_loss_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text='Packet Loss %')
     voice_mos = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True, help_text='Voice MOS score 1.0-5.0')
 
     # Network identifiers
     technology = models.CharField(max_length=10, default='4G')
     cell_id = models.CharField(max_length=40, blank=True)
     pci = models.IntegerField(null=True, blank=True)
+    serving_pci = models.IntegerField(null=True, blank=True)
+    neighbor_pci_list = models.JSONField(default=list, blank=True)
     earfcn = models.IntegerField(null=True, blank=True)
+    is_blackspot = models.BooleanField(default=False, db_index=True, help_text='Flagged coverage blackspot (RSRP < -110 dBm)')
 
     class Meta:
         db_table = 'reg_drive_samples'
@@ -631,6 +642,12 @@ class DriveTestAnalysis(models.Model):
 
     avg_ping_rtt = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal('0'))
     avg_voice_mos = models.DecimalField(max_digits=4, decimal_places=2, default=Decimal('0'))
+
+    rsrp_percentiles = models.JSONField(default=dict, blank=True, help_text='p5, p25, p50, p90, p95 percentiles for RSRP')
+    sinr_percentiles = models.JSONField(default=dict, blank=True, help_text='p5, p25, p50, p90, p95 percentiles for SINR')
+    tp_percentiles = models.JSONField(default=dict, blank=True, help_text='p5, p25, p50, p90, p95 percentiles for Throughput')
+    corridor_segments = models.JSONField(default=list, blank=True, help_text='Equidistant corridor segment analysis')
+    pci_pollution_json = models.JSONField(default=dict, blank=True, help_text='PCI pollution and handover stability metrics')
 
     natca_compliant = models.BooleanField(default=False)
     analysis_json = models.JSONField(default=dict, blank=True)
