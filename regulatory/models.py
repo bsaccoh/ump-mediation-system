@@ -460,7 +460,7 @@ class NetworkKPIEntry(models.Model):
     district = models.CharField(max_length=80, blank=True, db_index=True)
     cell_id = models.CharField(max_length=80, blank=True, help_text='Optional specific cell/node ID')
 
-    value = models.DecimalField(max_digits=12, decimal_places=4)
+    value = models.DecimalField(max_digits=20, decimal_places=4)
     is_compliant = models.BooleanField(default=True, db_index=True)
 
     source = models.CharField(max_length=12, choices=Source.choices,

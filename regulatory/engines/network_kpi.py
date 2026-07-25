@@ -154,39 +154,120 @@ def process_kpi_rows(rows: list[dict], filename: str, channel: str = 'MANUAL', u
     }
 
 
+def parse_huawei_omc_pm_content(content_bytes_or_str, operator_code='orange') -> list[dict]:
+    """Parse raw Huawei M2000/U2020 OMC PM export content (.csv / .csv.gz)."""
+    import csv, io, re, gzip
+    from ..models import NetworkCellSite, NetworkCounterDefinition
+
+    if isinstance(content_bytes_or_str, bytes):
+        if content_bytes_or_str[:2] == b'\x1f\x8b':  # gzip magic header
+            content_str = gzip.decompress(content_bytes_or_str).decode('utf-8-sig', errors='replace')
+        else:
+            content_str = content_bytes_or_str.decode('utf-8-sig', errors='replace')
+    else:
+        content_str = str(content_bytes_or_str)
+
+    lines = io.StringIO(content_str)
+    reader = csv.reader(lines)
+
+    try:
+        header0 = next(reader)
+    except StopIteration:
+        return []
+
+    if len(header0) < 4 or header0[0].strip().lower() not in ('result time', 'time'):
+        lines.seek(0)
+        return list(csv.DictReader(lines))
+
+    # Skip header 1 (granularity label line)
+    try:
+        next(reader)
+    except StopIteration:
+        pass
+
+    # Site map lookup
+    site_map = {
+        s.site_id.upper(): (s.region, s.district)
+        for s in NetworkCellSite.objects.all()
+    }
+
+    # Counter catalog map
+    counter_kpi_map = {
+        c.counter_id.upper(): c.kpi_code
+        for c in NetworkCounterDefinition.objects.filter(is_active=True) if c.kpi_code
+    }
+
+    parsed_rows = []
+    for row in reader:
+        if len(row) < 4:
+            continue
+        res_time, gran, obj_name, reliability = row[0], row[1], row[2], row[3]
+        if reliability and reliability.strip().lower() == 'unreliable':
+            continue
+
+        p_date = res_time.strip()[:10]
+        site_match = re.search(r'([A-Z]{2}\d{4})', obj_name)
+        site_id = site_match.group(1).upper() if site_match else ''
+
+        region, district = 'Western Area', 'Western Area Urban'
+        if site_id in site_map:
+            region, district = site_map[site_id]
+
+        for idx in range(4, len(row)):
+            if idx >= len(header0):
+                break
+            c_id = header0[idx].strip()
+            val_str = row[idx].strip()
+            if not c_id or val_str in ('', 'N/A', 'None'):
+                continue
+
+            kpi_code = counter_kpi_map.get(c_id.upper(), 'CSSR')
+            parsed_rows.append({
+                'kpi_code': kpi_code,
+                'period_date': p_date,
+                'value': val_str,
+                'operator_code': operator_code,
+                'region': region,
+                'district': district,
+                'granularity': 'HOURLY' if gran == '60' else 'DAILY',
+                'cell_id': site_id,
+            })
+
+    return parsed_rows
+
+
 def import_kpi_file(file_obj, filename: str, channel: str = 'CSV_IMPORT', user=None) -> dict:
-    """Parse CSV, ZIP, or TAR archive containing KPI data files."""
+    """Parse CSV, .CSV.GZ, ZIP, or TAR archive containing KPI data files."""
+    import gzip
     fn_lower = filename.lower()
     all_rows = []
 
     if fn_lower.endswith('.zip'):
         with zipfile.ZipFile(file_obj, 'r') as zf:
             for zip_info in zf.infolist():
-                if not zip_info.is_dir() and zip_info.filename.lower().endswith('.csv'):
-                    content = zf.read(zip_info).decode('utf-8-sig', errors='replace')
-                    reader = csv.DictReader(io.StringIO(content))
-                    all_rows.extend(list(reader))
+                if not zip_info.is_dir() and zip_info.filename.lower().endswith(('.csv', '.csv.gz', '.gz')):
+                    raw_bytes = zf.read(zip_info)
+                    rows = parse_huawei_omc_pm_content(raw_bytes, operator_code='orange')
+                    all_rows.extend(rows)
 
     elif fn_lower.endswith(('.tar', '.tar.gz', '.tgz')):
         with tarfile.open(fileobj=file_obj, mode='r:*') as tf:
             for member in tf.getmembers():
-                if member.isfile() and member.name.lower().endswith('.csv'):
+                if member.isfile() and member.name.lower().endswith(('.csv', '.csv.gz', '.gz')):
                     f = tf.extractfile(member)
                     if f:
-                        content = f.read().decode('utf-8-sig', errors='replace')
-                        reader = csv.DictReader(io.StringIO(content))
-                        all_rows.extend(list(reader))
+                        raw_bytes = f.read()
+                        rows = parse_huawei_omc_pm_content(raw_bytes, operator_code='orange')
+                        all_rows.extend(rows)
 
     else:
         if hasattr(file_obj, 'read'):
-            content = file_obj.read()
-            if isinstance(content, bytes):
-                content = content.decode('utf-8-sig', errors='replace')
+            raw_bytes = file_obj.read()
         else:
-            content = str(file_obj)
+            raw_bytes = str(file_obj).encode('utf-8')
 
-        reader = csv.DictReader(io.StringIO(content))
-        all_rows.extend(list(reader))
+        rows = parse_huawei_omc_pm_content(raw_bytes, operator_code='orange')
+        all_rows.extend(rows)
 
     return process_kpi_rows(all_rows, filename=filename, channel=channel, user=user)
 
