@@ -799,7 +799,7 @@ def drive_test_api(request):
     if q:
         qs = qs.filter(Q(name__icontains=q) | Q(region__icontains=q) | Q(route_description__icontains=q) | Q(operator_name__icontains=q))
 
-    per_page = request.GET.get('per_page') or request.GET.get('page_size') or 100
+    per_page = int(request.GET.get('per_page') or request.GET.get('page_size') or 10)
     rows, total, page, pages = _paginate(qs, page, per_page=per_page)
     data = []
     for r in rows:
