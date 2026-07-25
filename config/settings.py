@@ -260,5 +260,7 @@ CDR_PERSIST_RECORDS = os.environ.get('CDR_PERSIST_RECORDS', 'True').lower() in (
 # File upload
 FILE_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024  # 100MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024
+DATA_UPLOAD_MAX_NUMBER_FILES = 1000  # Support bulk drive test folder uploads (up to 1000 files)
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000  # 1000 files × 2 fields (file + relative_path) + form fields
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
