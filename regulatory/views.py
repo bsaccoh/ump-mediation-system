@@ -991,7 +991,7 @@ def drive_test_detail(request, pk):
 @login_required
 def drive_test_samples_api(request, pk):
     campaign = get_object_or_404(DriveTestCampaign, pk=pk)
-    samples = DriveTestSample.objects.filter(campaign=campaign)[:2000]
+    samples = DriveTestSample.objects.filter(campaign=campaign)[:5000]
     data = [{
         'id': s.pk,
         'lat': float(s.latitude),
@@ -1003,8 +1003,20 @@ def drive_test_samples_api(request, pk):
         'ul_tp': float(s.ul_throughput) if s.ul_throughput is not None else None,
         'mos': float(s.voice_mos) if s.voice_mos is not None else None,
         'cell_id': s.cell_id,
+        'pci': s.serving_pci,
     } for s in samples]
-    return JsonResponse({'success': True, 'samples': data})
+
+    sites = NetworkCellSite.objects.filter(is_active=True)[:50]
+    towers = [{
+        'id': st.pk,
+        'site_id': st.site_id,
+        'name': st.site_name,
+        'operator': st.operator_code,
+        'lat': float(st.latitude),
+        'lng': float(st.longitude),
+    } for st in sites if st.latitude and st.longitude]
+
+    return JsonResponse({'success': True, 'samples': data, 'towers': towers})
 
 
 @login_required

@@ -119,34 +119,81 @@
     </div>
 </div>
 
+<!-- Top Route Playback & Metric Control Bar (Matching User Screenshot) -->
+<div class="card border-0 shadow-sm rounded-3 mb-3 bg-white p-2">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <!-- Left: Metric Selectors -->
+        <div class="d-flex align-items-center gap-2">
+            <span class="small text-muted fw-bold">Map Color:</span>
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-secondary active fw-semibold" id="btnMetricRSRP" onclick="setMetric('RSRP')">RSRP</button>
+                <button type="button" class="btn btn-outline-secondary fw-semibold" id="btnMetricRSRQ" onclick="setMetric('RSRQ')">RSRQ</button>
+                <button type="button" class="btn btn-outline-secondary fw-semibold" id="btnMetricSINR" onclick="setMetric('SINR')">SINR</button>
+                <button type="button" class="btn btn-outline-secondary fw-semibold" id="btnMetricDL" onclick="setMetric('DL')">DL</button>
+            </div>
+        </div>
+
+        <!-- Center: Playback Controls & Slider -->
+        <div class="d-flex align-items-center gap-2 flex-grow-1 justify-content-center" style="max-width: 600px;">
+            <button class="btn btn-sm btn-light border rounded-circle" id="btnRewind" onclick="rewindPlayback()" title="Rewind to Start"><i class="bi bi-arrow-counterclockwise fs-6"></i></button>
+            <button class="btn btn-sm btn-primary rounded-circle" id="btnPlayPause" onclick="togglePlayPause()" title="Play / Pause"><i class="bi bi-play-fill fs-5" id="playIcon"></i></button>
+            <input type="range" class="form-range flex-grow-1" id="playbackSlider" min="0" max="100" value="0" oninput="seekPlayback(this.value)">
+            <span class="small fw-semibold text-muted text-nowrap ms-1" id="playbackCounter">0 / 0</span>
+            <select class="form-select form-select-sm border rounded-3 ms-1" id="playbackSpeed" style="width:75px;" onchange="setSpeed(this.value)">
+                <option value="1">1x</option>
+                <option value="2">2x</option>
+                <option value="3" selected>3x</option>
+                <option value="5">5x</option>
+                <option value="10">10x</option>
+            </select>
+        </div>
+
+        <!-- Right: Live Metric Values Badge -->
+        <div class="d-flex align-items-center">
+            <span class="badge bg-light text-dark border px-3 py-2 fw-semibold fs-6" id="liveMetricBadge">RSRP: -- dBm | SINR: -- dB</span>
+        </div>
+    </div>
+</div>
+
 <!-- Interactive Map & Signal Distribution -->
 <div class="row g-3">
     <div class="col-lg-8">
-        <div class="card">
-            <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-map"></i> Geolocation Signal Map (RSRP Color Legend)</span>
-                <span class="small text-muted">
-                    <span style="color:#198754">■ Excellent (>-85)</span> &nbsp;
-                    <span style="color:#0d6efd">■ Good (-85..-100)</span> &nbsp;
-                    <span style="color:#fd7e14">■ Fair (-100..-110)</span> &nbsp;
-                    <span style="color:#dc3545">■ Poor (<-110)</span>
-                </span>
-            </div>
-            <div class="card-body p-1">
-                <div id="driveMap"></div>
+        <div class="card border-0 shadow-sm rounded-3 overflow-hidden position-relative">
+            <div id="driveMap" style="height: 440px; width: 100%;"></div>
+
+            <!-- Threshold Color Legend Overlay (Bottom-Left Corner) -->
+            <div id="mapLegendOverlay" class="bg-white p-3 rounded-3 shadow border" style="position: absolute; bottom: 20px; left: 20px; z-index: 1000; min-width: 175px; background: rgba(255,255,255,0.95);">
+                <div class="fw-bold small text-dark mb-2" id="legendTitle">RSRP (dBm)</div>
+                <div class="d-flex align-items-center mb-1 small" style="font-size: 0.78rem;"><span style="width: 12px; height: 12px; border-radius: 50%; background: #198754; display: inline-block;" class="me-2"></span> <span id="leg1">Excellent (≥ -80)</span></div>
+                <div class="d-flex align-items-center mb-1 small" style="font-size: 0.78rem;"><span style="width: 12px; height: 12px; border-radius: 50%; background: #70e000; display: inline-block;" class="me-2"></span> <span id="leg2">Good (-90 to -80)</span></div>
+                <div class="d-flex align-items-center mb-1 small" style="font-size: 0.78rem;"><span style="width: 12px; height: 12px; border-radius: 50%; background: #ffc107; display: inline-block;" class="me-2"></span> <span id="leg3">Fair (-100 to -90)</span></div>
+                <div class="d-flex align-items-center mb-1 small" style="font-size: 0.78rem;"><span style="width: 12px; height: 12px; border-radius: 50%; background: #fd7e14; display: inline-block;" class="me-2"></span> <span id="leg4">Poor (-110 to -100)</span></div>
+                <div class="d-flex align-items-center mb-1 small" style="font-size: 0.78rem;"><span style="width: 12px; height: 12px; border-radius: 50%; background: #dc3545; display: inline-block;" class="me-2"></span> <span id="leg5">No Signal (< -110)</span></div>
+                <div class="d-flex align-items-center small mt-1" style="font-size: 0.78rem;"><span style="width: 12px; height: 12px; border-radius: 50%; background: #0d6efd; display: inline-block;" class="me-2"></span> Cell Tower</div>
             </div>
         </div>
     </div>
 
     <div class="col-lg-4">
-        <div class="card mb-3">
+        <div class="card border-0 shadow-sm rounded-3 mb-3">
             <div class="card-header bg-white fw-semibold"><i class="bi bi-bar-chart"></i> RSRP Distribution</div>
-            <div class="card-body" style="height:190px;"><canvas id="rsrpChart"></canvas></div>
+            <div class="card-body" style="height:195px;"><canvas id="rsrpChart"></canvas></div>
         </div>
-        <div class="card">
+        <div class="card border-0 shadow-sm rounded-3">
             <div class="card-header bg-white fw-semibold"><i class="bi bi-speedometer2"></i> DL Throughput Distribution</div>
-            <div class="card-body" style="height:190px;"><canvas id="tpChart"></canvas></div>
+            <div class="card-body" style="height:195px;"><canvas id="tpChart"></canvas></div>
         </div>
+    </div>
+</div>
+
+<!-- Signal Profile Along Route Line Chart (Matching User Screenshot) -->
+<div class="card border-0 shadow-sm rounded-3 mt-3">
+    <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-graph-up text-primary me-1"></i> Signal Profile Along Route — <span id="profileChartTitle">RSRP (dBm)</span></span>
+        <span class="small text-muted" id="profileChartSubtitle">Continuous signal curve along survey track</span>
+    </div>
+    <div class="card-body" style="height: 220px;">
+        <canvas id="routeProfileChart"></canvas>
     </div>
 </div>
 
@@ -260,68 +307,251 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-function getColor(rsrp) {
-    if (rsrp === null || rsrp === undefined) return '#6c757d';
-    if (rsrp >= -85) return '#198754';  // Excellent - Green
-    if (rsrp >= -100) return '#0d6efd'; // Good - Blue
-    if (rsrp >= -110) return '#fd7e14'; // Fair - Orange
-    return '#dc3545';                   // Poor - Red
+let allSamples = [];
+let activeMetric = 'RSRP';
+let isPlaying = false;
+let playTimer = null;
+let currentIndex = 0;
+let playbackSpeed = 3;
+let vehicleMarker = null;
+let mapMarkersGroup = L.layerGroup().addTo(map);
+let towersGroup = L.layerGroup().addTo(map);
+let routeProfileChart = null;
+
+// Exact Threshold Color Scale matching User Requirement & Screenshot
+function getMetricColor(val, metric = activeMetric) {
+    if (val === null || val === undefined) return '#6c757d';
+
+    if (metric === 'RSRP') {
+        if (val >= -80) return '#198754';  // Excellent (>= -80) Green
+        if (val >= -90) return '#70e000';  // Good (-90 to -80) Lime
+        if (val >= -100) return '#ffc107'; // Fair (-100 to -90) Yellow
+        if (val >= -110) return '#fd7e14'; // Poor (-110 to -100) Orange
+        return '#dc3545';                  // No Signal (< -110) Red
+    } else if (metric === 'RSRQ') {
+        if (val >= -10) return '#198754';
+        if (val >= -14) return '#70e000';
+        if (val >= -18) return '#ffc107';
+        return '#dc3545';
+    } else if (metric === 'SINR') {
+        if (val >= 20) return '#198754';
+        if (val >= 10) return '#70e000';
+        if (val >= 0) return '#ffc107';
+        return '#dc3545';
+    } else if (metric === 'DL') {
+        if (val >= 15) return '#198754';
+        if (val >= 5) return '#70e000';
+        if (val >= 2) return '#ffc107';
+        return '#dc3545';
+    }
+    return '#6c757d';
+}
+
+function updateLegendUI(metric) {
+    const title = document.getElementById('legendTitle');
+    const leg1 = document.getElementById('leg1');
+    const leg2 = document.getElementById('leg2');
+    const leg3 = document.getElementById('leg3');
+    const leg4 = document.getElementById('leg4');
+    const leg5 = document.getElementById('leg5');
+
+    if (metric === 'RSRP') {
+        title.textContent = 'RSRP (dBm)';
+        leg1.textContent = 'Excellent (≥ -80)';
+        leg2.textContent = 'Good (-90 to -80)';
+        leg3.textContent = 'Fair (-100 to -90)';
+        leg4.textContent = 'Poor (-110 to -100)';
+        leg5.textContent = 'No Signal (< -110)';
+    } else if (metric === 'RSRQ') {
+        title.textContent = 'RSRQ (dB)';
+        leg1.textContent = 'Excellent (≥ -10 dB)';
+        leg2.textContent = 'Good (-14 to -10 dB)';
+        leg3.textContent = 'Fair (-18 to -14 dB)';
+        leg4.textContent = 'Poor (< -18 dB)';
+        leg5.textContent = 'Critical';
+    } else if (metric === 'SINR') {
+        title.textContent = 'SINR (dB)';
+        leg1.textContent = 'Excellent (≥ 20 dB)';
+        leg2.textContent = 'Good (10 to 20 dB)';
+        leg3.textContent = 'Fair (0 to 10 dB)';
+        leg4.textContent = 'Poor (< 0 dB)';
+        leg5.textContent = 'Interference';
+    } else if (metric === 'DL') {
+        title.textContent = 'DL Throughput (Mbps)';
+        leg1.textContent = 'High Speed (≥ 15M)';
+        leg2.textContent = 'Good Speed (5 to 15M)';
+        leg3.textContent = 'Fair Speed (2 to 5M)';
+        leg4.textContent = 'Low Speed (< 2M)';
+        leg5.textContent = 'Stalled';
+    }
 }
 
 function loadMapSamples() {
     fetch("{% url 'regulatory:drive_test_samples_api' campaign.pk %}")
         .then(r => r.json()).then(d => {
-            const samples = d.samples || [];
-            if (!samples.length) return;
+            allSamples = d.samples || [];
+            const towers = d.towers || [];
 
-            const bounds = [];
+            // Render Cell Towers
+            towersGroup.clearLayers();
+            towers.forEach(t => {
+                L.circleMarker([t.lat, t.lng], {
+                    radius: 7,
+                    fillColor: '#0d6efd',
+                    color: '#ffffff',
+                    weight: 2,
+                    fillOpacity: 0.9
+                }).bindPopup(`<strong>Cell Tower:</strong> ${t.name}<br><strong>ID:</strong> ${t.site_id}`).addTo(towersGroup);
+            });
+
+            if (!allSamples.length) return;
+
+            const slider = document.getElementById('playbackSlider');
+            slider.max = allSamples.length - 1;
+            slider.value = 0;
+            currentIndex = 0;
+
+            const bounds = allSamples.map(s => [s.lat, s.lng]);
+            if (bounds.length) map.fitBounds(bounds);
+
+            // Tally buckets for doughnut/bar charts
             const rsrpBuckets = { excellent: 0, good: 0, fair: 0, poor: 0 };
             const tpBuckets = { high: 0, med: 0, low: 0 };
 
-            samples.forEach(s => {
-                const lat = s.lat; const lng = s.lng;
-                bounds.push([lat, lng]);
-
-                const marker = L.circleMarker([lat, lng], {
-                    radius: 5,
-                    fillColor: getColor(s.rsrp),
-                    color: '#fff',
-                    weight: 1,
-                    opacity: 1,
-                    fillOpacity: 0.8
-                }).addTo(map);
-
-                marker.bindPopup(`
-                    <strong>Cell ID:</strong> ${s.cell_id || 'N/A'}<br>
-                    <strong>RSRP:</strong> ${s.rsrp !== null ? s.rsrp + ' dBm' : 'N/A'}<br>
-                    <strong>RSRQ:</strong> ${s.rsrq !== null ? s.rsrq + ' dB' : 'N/A'}<br>
-                    <strong>SINR:</strong> ${s.sinr !== null ? s.sinr + ' dB' : 'N/A'}<br>
-                    <strong>DL Throughput:</strong> ${s.dl_tp !== null ? s.dl_tp + ' Mbps' : 'N/A'}
-                `);
-
-                // Tally buckets
-                if (s.rsrp >= -85) rsrpBuckets.excellent++;
-                else if (s.rsrp >= -100) rsrpBuckets.good++;
-                else if (s.rsrp >= -110) rsrpBuckets.fair++;
+            allSamples.forEach(s => {
+                if (s.rsrp >= -80) rsrpBuckets.excellent++;
+                else if (s.rsrp >= -90) rsrpBuckets.good++;
+                else if (s.rsrp >= -100) rsrpBuckets.fair++;
                 else rsrpBuckets.poor++;
 
-                if (s.dl_tp >= 10) tpBuckets.high++;
+                if (s.dl_tp >= 15) tpBuckets.high++;
                 else if (s.dl_tp >= 5) tpBuckets.med++;
                 else tpBuckets.low++;
             });
 
-            if (bounds.length) map.fitBounds(bounds);
-
             renderDistCharts(rsrpBuckets, tpBuckets);
+            renderRouteProfileChart();
+            renderMapToCurrentIndex();
         });
+}
+
+function setMetric(metric) {
+    activeMetric = metric;
+    ['RSRP', 'RSRQ', 'SINR', 'DL'].forEach(m => {
+        const btn = document.getElementById(`btnMetric${m}`);
+        if (m === metric) btn.classList.add('active', 'btn-primary'), btn.classList.remove('btn-outline-secondary');
+        else btn.classList.remove('active', 'btn-primary'), btn.classList.add('btn-outline-secondary');
+    });
+
+    document.getElementById('profileChartTitle').textContent = `${metric} (${metric === 'DL' ? 'Mbps' : 'dBm'})`;
+    updateLegendUI(metric);
+    renderMapToCurrentIndex();
+    renderRouteProfileChart();
+}
+
+function renderMapToCurrentIndex() {
+    if (!allSamples.length) return;
+
+    mapMarkersGroup.clearLayers();
+
+    // Render traversed sample markers up to currentIndex
+    for (let i = 0; i <= currentIndex; i++) {
+        const s = allSamples[i];
+        let val = s.rsrp;
+        if (activeMetric === 'RSRQ') val = s.rsrq;
+        else if (activeMetric === 'SINR') val = s.sinr;
+        else if (activeMetric === 'DL') val = s.dl_tp;
+
+        L.circleMarker([s.lat, s.lng], {
+            radius: 5,
+            fillColor: getMetricColor(val, activeMetric),
+            color: '#fff',
+            weight: 1,
+            fillOpacity: 0.85
+        }).bindPopup(`
+            <strong>Point #${i + 1}</strong><br>
+            <strong>RSRP:</strong> ${s.rsrp !== null ? s.rsrp + ' dBm' : 'N/A'}<br>
+            <strong>SINR:</strong> ${s.sinr !== null ? s.sinr + ' dB' : 'N/A'}<br>
+            <strong>DL Throughput:</strong> ${s.dl_tp !== null ? s.dl_tp + ' Mbps' : 'N/A'}
+        `).addTo(mapMarkersGroup);
+    }
+
+    // Vehicle Marker (Pulsing glowing position cursor)
+    const curSample = allSamples[currentIndex];
+    if (curSample) {
+        if (!vehicleMarker) {
+            vehicleMarker = L.circleMarker([curSample.lat, curSample.lng], {
+                radius: 9,
+                fillColor: '#dc3545',
+                color: '#ffffff',
+                weight: 3,
+                fillOpacity: 1
+            }).addTo(map);
+        } else {
+            vehicleMarker.setLatLng([curSample.lat, curSample.lng]);
+        }
+
+        document.getElementById('liveMetricBadge').textContent = `RSRP: ${curSample.rsrp !== null ? curSample.rsrp : '--'} dBm | SINR: ${curSample.sinr !== null ? curSample.sinr : '--'} dB`;
+    }
+
+    document.getElementById('playbackCounter').textContent = `${currentIndex + 1} / ${allSamples.length}`;
+    document.getElementById('playbackSlider').value = currentIndex;
+
+    if (routeProfileChart) {
+        routeProfileChart.update();
+    }
+}
+
+function togglePlayPause() {
+    isPlaying = !isPlaying;
+    const playIcon = document.getElementById('playIcon');
+
+    if (isPlaying) {
+        playIcon.className = 'bi bi-pause-fill fs-5';
+        startPlaybackLoop();
+    } else {
+        playIcon.className = 'bi bi-play-fill fs-5';
+        if (playTimer) clearInterval(playTimer);
+    }
+}
+
+function startPlaybackLoop() {
+    if (playTimer) clearInterval(playTimer);
+    const intervalMs = Math.max(50, Math.floor(400 / playbackSpeed));
+
+    playTimer = setInterval(() => {
+        if (currentIndex < allSamples.length - 1) {
+            currentIndex++;
+            renderMapToCurrentIndex();
+        } else {
+            togglePlayPause();
+            currentIndex = 0;
+        }
+    }, intervalMs);
+}
+
+function rewindPlayback() {
+    if (isPlaying) togglePlayPause();
+    currentIndex = 0;
+    renderMapToCurrentIndex();
+}
+
+function seekPlayback(val) {
+    currentIndex = parseInt(val, 10);
+    renderMapToCurrentIndex();
+}
+
+function setSpeed(val) {
+    playbackSpeed = parseInt(val, 10);
+    if (isPlaying) startPlaybackLoop();
 }
 
 function renderDistCharts(rsrp, tp) {
     new Chart(document.getElementById('rsrpChart').getContext('2d'), {
         type: 'doughnut',
         data: {
-            labels: ['Excellent (>-85)', 'Good (-85..-100)', 'Fair (-100..-110)', 'Poor (<-110)'],
-            datasets: [{ data: [rsrp.excellent, rsrp.good, rsrp.fair, rsrp.poor], backgroundColor: ['#198754', '#0d6efd', '#fd7e14', '#dc3545'] }]
+            labels: ['Excellent (>= -80)', 'Good (-90..-80)', 'Fair (-100..-90)', 'Poor (< -100)'],
+            datasets: [{ data: [rsrp.excellent, rsrp.good, rsrp.fair, rsrp.poor], backgroundColor: ['#198754', '#70e000', '#ffc107', '#dc3545'] }]
         },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10 } } } }
     });
@@ -329,10 +559,51 @@ function renderDistCharts(rsrp, tp) {
     new Chart(document.getElementById('tpChart').getContext('2d'), {
         type: 'bar',
         data: {
-            labels: ['High (>=10M)', 'Med (5..10M)', 'Low (<5M)'],
-            datasets: [{ label: 'Samples', data: [tp.high, tp.med, tp.low], backgroundColor: ['#198754', '#0d6efd', '#dc3545'] }]
+            labels: ['High (>=15M)', 'Med (5..15M)', 'Low (<5M)'],
+            datasets: [{ label: 'Samples', data: [tp.high, tp.med, tp.low], backgroundColor: ['#198754', '#70e000', '#dc3545'] }]
         },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+}
+
+function renderRouteProfileChart() {
+    if (!allSamples.length) return;
+    const ctx = document.getElementById('routeProfileChart').getContext('2d');
+    if (routeProfileChart) routeProfileChart.destroy();
+
+    const labels = allSamples.map((_, i) => i + 1);
+    const dataVals = allSamples.map(s => {
+        if (activeMetric === 'RSRQ') return s.rsrq;
+        if (activeMetric === 'SINR') return s.sinr;
+        if (activeMetric === 'DL') return s.dl_tp;
+        return s.rsrp;
+    });
+
+    routeProfileChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: `${activeMetric} Profile`,
+                data: dataVals,
+                borderColor: '#0d6efd',
+                borderWidth: 2,
+                pointRadius: 0,
+                fill: true,
+                backgroundColor: 'rgba(13, 110, 253, 0.08)',
+                tension: 0.2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
+            scales: {
+                x: { display: true, grid: { display: false }, title: { display: true, text: 'Sample Index' } },
+                y: { display: true, grid: { color: '#f0f0f0' } }
+            },
+            plugins: { legend: { display: false } }
+        }
     });
 }
 
