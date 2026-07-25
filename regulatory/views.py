@@ -32,7 +32,12 @@ from .models import (
 # Helpers
 # =============================================================================
 
-def _paginate(qs, page, per_page=25):
+def _paginate(qs, page, per_page=15):
+    try:
+        per_page = int(per_page)
+    except (ValueError, TypeError):
+        per_page = 15
+    per_page = max(1, min(per_page, 500))
     total = qs.count()
     pages = max(1, (total + per_page - 1) // per_page)
     page = max(1, min(int(page or 1), pages))
@@ -926,7 +931,8 @@ def site_api(request):
             Q(location__icontains=q) | Q(chiefdom__icontains=q)
         )
 
-    rows, total, page, pages = _paginate(qs, page)
+    per_page = request.GET.get('per_page') or request.GET.get('page_size') or 15
+    rows, total, page, pages = _paginate(qs, page, per_page=per_page)
     data = [{
         'id': r.pk,
         'operator_code': r.operator_code,
@@ -1166,7 +1172,8 @@ def counter_api(request):
             Q(counter_id__icontains=q) | Q(counter_name__icontains=q) | Q(description__icontains=q)
         )
 
-    rows, total, page, pages = _paginate(qs, page)
+    per_page = request.GET.get('per_page') or request.GET.get('page_size') or 15
+    rows, total, page, pages = _paginate(qs, page, per_page=per_page)
     data = [{
         'id': r.pk,
         'counter_id': r.counter_id,

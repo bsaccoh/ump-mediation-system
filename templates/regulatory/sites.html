@@ -117,6 +117,21 @@
             </tbody>
         </table>
     </div>
+    <div class="card-footer bg-white py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <span class="small text-muted" id="paginationInfo">Showing 0-0 of 0</span>
+            <select id="perPageSelect" class="form-select form-select-sm" style="width: auto;" onchange="currentPage=1; loadSites();">
+                <option value="15" selected>15 per page</option>
+                <option value="25">25 per page</option>
+                <option value="50">50 per page</option>
+                <option value="100">100 per page</option>
+                <option value="250">250 per page</option>
+            </select>
+        </div>
+        <nav>
+            <ul class="pagination pagination-sm mb-0" id="paginationNav"></ul>
+        </nav>
+    </div>
 </div>
 
 <!-- Add/Edit Site Modal -->
@@ -338,18 +353,48 @@ function updateMap(records) {
     if (bounds.length) map.fitBounds(bounds);
 }
 
-function loadSites() {
+let currentPage = 1;
+
+function loadSites(page = currentPage) {
+    currentPage = page;
     const mode = document.getElementById('filterMode').value;
     const q = document.getElementById('searchInput').value;
     const operator = document.getElementById('filterOperator').value;
     const region = document.getElementById('filterRegion').value;
     const district = document.getElementById('filterDistrict').value;
+    const perPage = parseInt(document.getElementById('perPageSelect').value || '15');
 
-    fetch(`{% url 'regulatory:site_api' %}?mode=${mode}&q=${q}&operator=${operator}&region=${region}&district=${district}`)
+    fetch(`{% url 'regulatory:site_api' %}?mode=${mode}&q=${q}&operator=${operator}&region=${region}&district=${district}&page=${page}&per_page=${perPage}`)
         .then(r => r.json()).then(d => {
             renderTable(d.records || []);
             updateMap(d.records || []);
+            renderPaginationNav(d.total || 0, d.page || 1, d.pages || 1, perPage, 'loadSites');
         });
+}
+
+function renderPaginationNav(total, page, pages, perPage, clickFuncName) {
+    document.getElementById('totalCount').textContent = `${total.toLocaleString()} Records`;
+    const start = total ? (page - 1) * perPage + 1 : 0;
+    const end = Math.min(total, page * perPage);
+    document.getElementById('paginationInfo').textContent = `Showing ${start.toLocaleString()} - ${end.toLocaleString()} of ${total.toLocaleString()} records`;
+
+    const nav = document.getElementById('paginationNav');
+    if (!nav) return;
+    if (pages <= 1) { nav.innerHTML = ''; return; }
+
+    let html = '';
+    html += `<li class="page-item ${page === 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="event.preventDefault(); ${clickFuncName}(1)">First</a></li>`;
+    html += `<li class="page-item ${page === 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="event.preventDefault(); ${clickFuncName}(${page - 1})">&laquo; Prev</a></li>`;
+
+    const startP = Math.max(1, page - 2);
+    const endP = Math.min(pages, page + 2);
+    for (let p = startP; p <= endP; p++) {
+        html += `<li class="page-item ${p === page ? 'active' : ''}"><a class="page-link" href="#" onclick="event.preventDefault(); ${clickFuncName}(${p})">${p}</a></li>`;
+    }
+
+    html += `<li class="page-item ${page === pages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="event.preventDefault(); ${clickFuncName}(${page + 1})">Next &raquo;</a></li>`;
+    html += `<li class="page-item ${page === pages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="event.preventDefault(); ${clickFuncName}(${pages})">Last (${pages})</a></li>`;
+    nav.innerHTML = html;
 }
 
 function renderTable(records) {
