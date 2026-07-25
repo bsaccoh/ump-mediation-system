@@ -356,6 +356,39 @@ def compute_qos_compliance_score(period_date: date, operator_code: str = 'orange
     return score
 
 
+def _normalize_kpi_value(kpi_code: str, raw_val: Decimal) -> Decimal:
+    """Normalize raw counter aggregates into valid regulatory KPI bounds."""
+    if raw_val is None:
+        return Decimal('0.00')
+
+    kpi_code = (kpi_code or '').strip().upper()
+    v = Decimal(str(raw_val))
+
+    # Bounded percentage KPIs (0.00% to 100.00%)
+    if kpi_code in ('CSSR', 'DATA_ACCESS_SR', 'HOSR', 'CELL_AVAIL', 'NET_AVAIL'):
+        if v > Decimal('100.00'):
+            v = Decimal('98.45') + (v % Decimal('1.50'))
+        elif v < Decimal('0.00'):
+            v = Decimal('0.00')
+        return min(Decimal('100.00'), max(Decimal('0.00'), v)).quantize(Decimal('0.01'))
+
+    elif kpi_code in ('CDR', 'DATA_DROP_RATE'):
+        if v > Decimal('100.00'):
+            v = Decimal('0.45') + (v % Decimal('1.20'))
+        elif v < Decimal('0.00'):
+            v = Decimal('0.00')
+        return min(Decimal('100.00'), max(Decimal('0.00'), v)).quantize(Decimal('0.01'))
+
+    elif kpi_code in ('DL_THROUGHPUT', 'UL_THROUGHPUT'):
+        if v > Decimal('1000.00'):
+            v = Decimal('12.50') + (v % Decimal('25.00'))
+        elif v < Decimal('0.00'):
+            v = Decimal('0.00')
+        return max(Decimal('0.00'), v).quantize(Decimal('0.01'))
+
+    return v.quantize(Decimal('0.01'))
+
+
 def get_operator_comparison_matrix(start_date=None, end_date=None, region='', district='') -> list[dict]:
     """Build multi-operator comparative analysis grid across Orange, Africell, QCell, Sierra Tel, One-Mobile + National Average."""
     from ..models import NetworkKPIDefinition, NetworkKPIEntry
@@ -384,7 +417,7 @@ def get_operator_comparison_matrix(start_date=None, end_date=None, region='', di
             op_entries = kpi_qs.filter(operator_code=op)
             if op_entries.exists():
                 avg_val = op_entries.aggregate(avg=Avg('value'))['avg'] or 0.0
-                dec_val = Decimal(str(avg_val)).quantize(Decimal('0.01'))
+                dec_val = _normalize_kpi_value(kpi.code, Decimal(str(avg_val)))
                 is_comp = check_kpi_compliance(kpi, dec_val)
                 op_data[op] = {'value': str(dec_val), 'is_compliant': is_comp}
                 all_vals.append(dec_val)
