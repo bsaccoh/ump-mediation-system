@@ -160,23 +160,31 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-file-earmark-arrow-up"></i> Bulk Import PM KPIs</h5>
+                <h5 class="modal-title"><i class="bi bi-file-earmark-arrow-up"></i> Bulk Import PM KPIs &amp; Extract Files</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form id="importForm" onsubmit="submitImport(event)">
                 <div class="modal-body">
-                    <p class="small text-muted mb-2">Upload `.csv`, `.zip`, or `.tar.gz` containing PM KPI records.</p>
+                    <p class="small text-muted mb-3">Upload individual files, select multiple files, or pick an entire directory folder of PM extract files (`.csv`, `.csv.gz`, `.zip`, `.tar.gz`).</p>
+                    
                     <div class="mb-3">
-                        <label class="form-label">Select File</label>
-                        <input type="file" id="importFile" class="form-control" accept=".csv,.zip,.tar,.gz,.tgz" required>
+                        <label class="form-label font-semibold">Option A: Select File(s)</label>
+                        <input type="file" id="importFile" class="form-control" accept=".csv,.csv.gz,.gz,.zip,.tar,.tgz" multiple>
                     </div>
+
+                    <div class="mb-3">
+                        <label class="form-label font-semibold">Option B: Select Entire Folder</label>
+                        <input type="file" id="importFolder" class="form-control" webkitdirectory directory multiple>
+                        <div class="form-text small">Select an entire local folder containing multiple `.csv.gz` files.</div>
+                    </div>
+
                     <div class="small bg-light p-2 rounded border">
-                        <strong>Expected Columns:</strong> <code>kpi_code</code>, <code>period_date</code>, <code>value</code>, <code>operator_code</code>, <code>region</code>, <code>district</code>
+                        <strong>Supported Formats:</strong> Raw Huawei M2000/U2020 extracts (`.csv.gz`), zipped archives (`.zip`), and CSV KPI files.
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary btn-sm">Upload & Process</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Upload &amp; Process</button>
                 </div>
             </form>
         </div>
@@ -484,19 +492,34 @@ function submitEntry(e) {
 
 function submitImport(e) {
     e.preventDefault();
+    const fileInput = document.getElementById('importFile');
+    const folderInput = document.getElementById('importFolder');
+    const files = fileInput.files.length ? fileInput.files : folderInput.files;
+
+    if (!files || !files.length) {
+        showAlert('Please select file(s) or a folder to import.', 'warning');
+        return;
+    }
+
     const formData = new FormData();
-    formData.append('file', document.getElementById('importFile').files[0]);
+    for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+    }
+
+    showAlert(`Uploading ${files.length} file(s)... Please wait.`, 'info');
 
     fetch("{% url 'regulatory:network_performance_import' %}", {
         method: 'POST', body: formData, headers: {'X-CSRFToken': getCSRF()}
     }).then(r => r.json()).then(d => {
         if (d.success) {
-            showAlert(`Imported ${d.record_count} PM KPI measurements.`);
+            showAlert(`Successfully processed ${d.file_count || files.length} file(s) with ${(d.record_count || 0).toLocaleString()} PM KPI measurements.`);
             bootstrap.Modal.getInstance(document.getElementById('importModal')).hide();
             loadPerformanceData();
         } else {
             showAlert(d.error || 'Import failed', 'danger');
         }
+    }).catch(err => {
+        showAlert(`Import error: ${err.message}`, 'danger');
     });
 }
 

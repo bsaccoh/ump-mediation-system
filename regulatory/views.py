@@ -667,21 +667,37 @@ def network_performance_comparison_api(request):
 @login_required
 @require_POST
 def network_performance_import(request):
-    """Handle bulk file import (CSV, ZIP, TAR.GZ)."""
-    if 'file' not in request.FILES:
+    """Handle bulk file or multi-file folder import (CSV, .CSV.GZ, ZIP, TAR.GZ)."""
+    files = request.FILES.getlist('files') or request.FILES.getlist('file')
+    if not files:
         return JsonResponse({'success': False, 'error': 'No file uploaded'})
-    uploaded_file = request.FILES['file']
-    try:
-        from .engines.network_kpi import import_kpi_file
-        res = import_kpi_file(
-            file_obj=uploaded_file,
-            filename=uploaded_file.name,
-            channel='CSV_IMPORT',
-            user=request.user,
-        )
-        return JsonResponse(res)
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+
+    from .engines.network_kpi import import_kpi_file
+    total_records = 0
+    total_errors = 0
+    file_count = 0
+
+    for uploaded_file in files:
+        try:
+            res = import_kpi_file(
+                file_obj=uploaded_file,
+                filename=uploaded_file.name,
+                channel='CSV_IMPORT',
+                user=request.user,
+            )
+            if res.get('success'):
+                file_count += 1
+                total_records += res.get('record_count', 0)
+                total_errors += res.get('error_count', 0)
+        except Exception:
+            total_errors += 1
+
+    return JsonResponse({
+        'success': True,
+        'file_count': file_count,
+        'record_count': total_records,
+        'error_count': total_errors,
+    })
 
 
 @require_POST

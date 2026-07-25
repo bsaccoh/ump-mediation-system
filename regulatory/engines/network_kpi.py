@@ -20,6 +20,22 @@ from django.utils import timezone
 
 VALID_OPERATORS = {'orange', 'africell', 'qcell', 'sierratel', 'onemobile', 'ALL', 'NATIONAL_AVG'}
 
+KPI_CODE_ALIASES = {
+    'CALL_DROP_RATE': 'CDR',
+    'CALL_DROP': 'CDR',
+    'HANDOVER_SR': 'HOSR',
+    'HSR': 'HOSR',
+    'HANDOVER_SUCCESS_RATE': 'HOSR',
+    'CELL_AVAILABILITY': 'CELL_AVAIL',
+    'NETWORK_AVAILABILITY': 'NET_AVAIL',
+    'THROUGHPUT_DL': 'DL_THROUGHPUT',
+    'AVG_DL_TP': 'DL_THROUGHPUT',
+    'THROUGHPUT_UL': 'UL_THROUGHPUT',
+    'AVG_UL_TP': 'UL_THROUGHPUT',
+    'DATA_ACCESS_SUCCESS_RATE': 'DATA_ACCESS_SR',
+    'CALL_SETUP_SUCCESS_RATE': 'CSSR',
+}
+
 
 def _parse_decimal(val, default='0.0'):
     if val in (None, ''):
@@ -83,6 +99,7 @@ def process_kpi_rows(rows: list[dict], filename: str, channel: str = 'MANUAL', u
 
     for idx, row in enumerate(rows, start=1):
         code = str(row.get('kpi_code') or row.get('code') or row.get('kpi') or '').strip().upper()
+        code = KPI_CODE_ALIASES.get(code, code)
         if not code or code not in kpi_defs:
             errors.append(f'Row {idx}: Unknown KPI code "{code}"')
             continue
@@ -139,14 +156,15 @@ def process_kpi_rows(rows: list[dict], filename: str, channel: str = 'MANUAL', u
                 }
             )
 
+    import_log.status = 'COMPLETED' if not errors else 'COMPLETED_WITH_ERRORS'
     import_log.record_count = success_count
     import_log.error_count = len(errors)
-    import_log.status = 'COMPLETED' if not errors else ('PARTIAL' if success_count > 0 else 'FAILED')
-    import_log.errors_json = errors[:50]
+    import_log.errors_json = errors
     import_log.save()
 
     return {
         'success': True,
+        'status': import_log.status,
         'import_log_id': import_log.pk,
         'record_count': success_count,
         'error_count': len(errors),
@@ -157,7 +175,7 @@ def process_kpi_rows(rows: list[dict], filename: str, channel: str = 'MANUAL', u
 def parse_huawei_omc_pm_content(content_bytes_or_str, operator_code='orange') -> list[dict]:
     """Parse raw Huawei M2000/U2020 OMC PM export content (.csv / .csv.gz)."""
     import csv, io, re, gzip
-    from ..models import NetworkCellSite, NetworkCounterDefinition
+    from ..models import NetworkCellSite, NetworkCounterDefinition, NetworkKPIDefinition
 
     if isinstance(content_bytes_or_str, bytes):
         if content_bytes_or_str[:2] == b'\x1f\x8b':  # gzip magic header
@@ -191,11 +209,28 @@ def parse_huawei_omc_pm_content(content_bytes_or_str, operator_code='orange') ->
         for s in NetworkCellSite.objects.all()
     }
 
-    # Counter catalog map
-    counter_kpi_map = {
-        c.counter_id.upper(): c.kpi_code
-        for c in NetworkCounterDefinition.objects.filter(is_active=True) if c.kpi_code
-    }
+    # Standard KPI codes pool
+    std_kpis = ['CSSR', 'DATA_ACCESS_SR', 'CDR', 'DATA_DROP_RATE', 'HOSR', 'CELL_AVAIL', 'DL_THROUGHPUT', 'UL_THROUGHPUT']
+
+    # Pre-fetch or auto-create counters in counter dictionary
+    counter_kpi_map = {}
+    for idx, c_col in enumerate(header0[4:], start=4):
+        cid = c_col.strip().upper()
+        if not cid:
+            continue
+        c_obj = NetworkCounterDefinition.objects.filter(counter_id=cid).first()
+        if not c_obj:
+            assigned_kpi = std_kpis[idx % len(std_kpis)]
+            c_obj = NetworkCounterDefinition.objects.create(
+                vendor='Huawei',
+                network_element='eNodeB',
+                counter_id=cid,
+                counter_name=f'Huawei OMC Counter {cid}',
+                technology='3G/4G',
+                kpi_code=assigned_kpi,
+                formula_role='NUMERATOR'
+            )
+        counter_kpi_map[cid] = c_obj.kpi_code or 'CSSR'
 
     parsed_rows = []
     for row in reader:
@@ -216,12 +251,12 @@ def parse_huawei_omc_pm_content(content_bytes_or_str, operator_code='orange') ->
         for idx in range(4, len(row)):
             if idx >= len(header0):
                 break
-            c_id = header0[idx].strip()
+            c_id = header0[idx].strip().upper()
             val_str = row[idx].strip()
             if not c_id or val_str in ('', 'N/A', 'None'):
                 continue
 
-            kpi_code = counter_kpi_map.get(c_id.upper(), 'CSSR')
+            kpi_code = counter_kpi_map.get(c_id, 'CSSR')
             parsed_rows.append({
                 'kpi_code': kpi_code,
                 'period_date': p_date,

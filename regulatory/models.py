@@ -500,7 +500,7 @@ class NetworkKPIImportLog(models.Model):
     channel = models.CharField(max_length=20, default='MANUAL')
     record_count = models.IntegerField(default=0)
     error_count = models.IntegerField(default=0)
-    status = models.CharField(max_length=20, default='COMPLETED')
+    status = models.CharField(max_length=40, default='COMPLETED')
     errors_json = models.JSONField(default=list, blank=True)
 
     class Meta:
