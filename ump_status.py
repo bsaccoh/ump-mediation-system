@@ -56,6 +56,23 @@ MEDIATION_SERVICES = [
     'mediation-distributor',
 ]
 
+# Short aliases → full service name
+SERVICE_ALIASES = {
+    'api':          'mediation-api',
+    'collector':    'mediation-collector',
+    'decoder':      'mediation-decoder',
+    'distributor':  'mediation-distributor',
+    'mediation-api':         'mediation-api',
+    'mediation-collector':   'mediation-collector',
+    'mediation-decoder':     'mediation-decoder',
+    'mediation-distributor': 'mediation-distributor',
+}
+
+
+def resolve_service(name: str) -> str | None:
+    """Return the full systemd service name or None if unknown."""
+    return SERVICE_ALIASES.get(name.lower())
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -368,20 +385,25 @@ def _systemctl(action: str, services: list[str]) -> None:
 
 def restart_services(target: list[str] | None = None) -> None:
     svcs = target or MEDIATION_SERVICES
-    print(f'\n{W}Restarting services...{N}')
+    label = svcs[0] if len(svcs) == 1 else 'all mediation services'
+    print(f'\n{W}Restarting {label}...{N}')
     _systemctl('restart', svcs)
     print()
 
 
-def stop_services() -> None:
-    print(f'\n{W}Stopping services...{N}')
-    _systemctl('stop', list(reversed(MEDIATION_SERVICES)))
+def stop_services(target: list[str] | None = None) -> None:
+    svcs = list(reversed(target or MEDIATION_SERVICES))
+    label = svcs[0] if len(svcs) == 1 else 'all mediation services'
+    print(f'\n{W}Stopping {label}...{N}')
+    _systemctl('stop', svcs)
     print()
 
 
-def start_services() -> None:
-    print(f'\n{W}Starting services...{N}')
-    _systemctl('start', MEDIATION_SERVICES)
+def start_services(target: list[str] | None = None) -> None:
+    svcs = target or MEDIATION_SERVICES
+    label = svcs[0] if len(svcs) == 1 else 'all mediation services'
+    print(f'\n{W}Starting {label}...{N}')
+    _systemctl('start', svcs)
     print()
 
 
@@ -389,23 +411,37 @@ def start_services() -> None:
 
 def usage() -> None:
     print(f"""
-  {W}Usage:{N}  ump_status [command]
+  {W}Usage:{N}  ump_status [command] [service]
 
-  {W}Commands:{N}
-    {G}all{N}        Show services + health + CDR status  (default)
-    {G}services{N}   Show service status table only
-    {G}health{N}     Show system health (CPU / memory / disk) only
-    {G}cdr{N}        Show CDR processing status only
+  {W}Status commands:{N}
+    {G}all{N}          Show services + health + CDR status  (default)
+    {G}services{N}     Show service status table only
+    {G}health{N}       Show system health (CPU / memory / disk) only
+    {G}cdr{N}          Show CDR processing status only
 
-    {Y}restart{N}    Restart all four mediation services
-    {Y}stop{N}       Stop all four mediation services
-    {Y}start{N}      Start all four mediation services
+  {W}Service control:{N}
+    {Y}restart{N}      Restart all four mediation services
+    {Y}stop{N}         Stop all four mediation services
+    {Y}start{N}        Start all four mediation services
+
+    Add a service name to target a single service:
+    {Y}restart api{N}          restart mediation-api only
+    {Y}restart collector{N}    restart mediation-collector only
+    {Y}restart decoder{N}      restart mediation-decoder only
+    {Y}restart distributor{N}  restart mediation-distributor only
+    (same pattern for stop / start)
+
+  {DIM}Service aliases:{N}  api · collector · decoder · distributor
+  {DIM}               or full names:{N}  mediation-api · mediation-collector · …
 
   {DIM}Examples:{N}
-    ump_status                   # full dashboard
-    ump_status services          # just services
-    ump_status cdr               # just CDR stats
-    ump_status restart           # restart mediation services
+    ump_status                        # full dashboard
+    ump_status services               # just services table
+    ump_status cdr                    # just CDR stats
+    ump_status restart                # restart all 4 services
+    ump_status restart api            # restart mediation-api only
+    ump_status stop decoder           # stop mediation-decoder only
+    ump_status start distributor      # start mediation-distributor only
 """)
 
 
@@ -413,6 +449,7 @@ def usage() -> None:
 
 def main() -> None:
     cmd = sys.argv[1].lower() if len(sys.argv) > 1 else 'all'
+    svc_arg = sys.argv[2].lower() if len(sys.argv) > 2 else None
 
     if cmd in ('all', 'services', 'health', 'cdr'):
         header()
@@ -427,12 +464,23 @@ def main() -> None:
         show_health()
     elif cmd == 'cdr':
         show_cdr()
-    elif cmd == 'restart':
-        restart_services()
-    elif cmd == 'stop':
-        stop_services()
-    elif cmd == 'start':
-        start_services()
+    elif cmd in ('restart', 'stop', 'start'):
+        # Resolve optional service argument
+        target = None
+        if svc_arg:
+            full_name = resolve_service(svc_arg)
+            if not full_name:
+                print(f'\n  {R}Unknown service:{N} {svc_arg!r}')
+                print(f'  Valid names: api, collector, decoder, distributor\n')
+                sys.exit(1)
+            target = [full_name]
+
+        if cmd == 'restart':
+            restart_services(target)
+        elif cmd == 'stop':
+            stop_services(target)
+        else:
+            start_services(target)
     else:
         usage()
 
