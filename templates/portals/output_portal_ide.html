@@ -229,6 +229,51 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Staging / Publication -->
+                        <h6 class="text-muted mt-4 mb-3 border-bottom pb-2"><i class="bi bi-folder-symlink me-1"></i>Staging &amp; Publication</h6>
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <div class="form-check form-switch d-flex align-items-center gap-2">
+                                    {{ form.enable_staging }}
+                                    <label class="form-check-label fw-bold mb-0" for="{{ form.enable_staging.id_for_label }}">Enable Staging</label>
+                                </div>
+                                <small class="text-muted">Output files land in staging first, then are atomically published to the delivery directory.</small>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-4 form-group">
+                                <label for="{{ form.landing_root.id_for_label }}">Landing Root</label>
+                                {{ form.landing_root }}
+                                <small class="form-text text-muted">Base directory for output staging/publication.</small>
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <label for="{{ form.staging_path.id_for_label }}">Staging Path</label>
+                                {{ form.staging_path }}
+                                <small class="form-text text-muted">Relative to landing root.</small>
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <label for="{{ form.archive_path.id_for_label }}">Archive Path</label>
+                                {{ form.archive_path }}
+                                <small class="form-text text-muted">Relative to landing root.</small>
+                            </div>
+                        </div>
+                        {% if resolved_paths %}
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <div class="card border-secondary">
+                                    <div class="card-header bg-light py-1 px-2">
+                                        <small class="fw-bold text-secondary"><i class="bi bi-folder2-open me-1"></i>Resolved Path Preview (PathBuilder)</small>
+                                    </div>
+                                    <div class="card-body py-2 px-3" style="font-family: monospace; font-size: 0.8rem; background: #f8f9fa;">
+                                        <div class="mb-1"><span class="text-muted">Published:</span> <span class="text-dark">{{ resolved_paths.published }}</span></div>
+                                        <div class="mb-1"><span class="text-muted">Staging:</span> <span class="text-dark">{{ resolved_paths.staging }}</span></div>
+                                        <div><span class="text-muted">Archive:</span> <span class="text-dark">{{ resolved_paths.archive }}</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
                     </div>
 
                     <!-- Tab 2: Routing -->
@@ -443,7 +488,6 @@
                             </thead>
                             <tbody>
                                 {% for rule in rules %}
-                                {% if rule.output_portal == active_portal %}
                                 <tr>
                                     <td>{{ rule.name }}</td>
                                     <td><span class="badge bg-info text-dark">{{ rule.stream_type }}</span></td>
@@ -465,7 +509,6 @@
                                         </form>
                                     </td>
                                 </tr>
-                                {% endif %}
                                 {% empty %}
                                 <tr><td colspan="7" class="text-center text-muted py-3">No rules configured yet.</td></tr>
                                 {% endfor %}
@@ -509,6 +552,7 @@
                                 {% endfor %}
                             </tbody>
                         </table>
+
                     </div>
 
                     <!-- Tab 5: Dispatch -->

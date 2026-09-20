@@ -39,12 +39,13 @@ class SGSNProcessor(BaseProcessor):
             self._decoded_records = records or []
             count = len(self._decoded_records)
 
-            logger.info(f"SGSN decoded {count} records from {file_path}")
-            print(f"[SGSN PROCESSOR] Decoded {count} records from {file_path}. "
-                  f"Decoder errors: {len(decoder.errors)}")
+            logger.info(
+                f"SGSN decoded {count} records from {file_path}. "
+                f"Decoder errors: {len(decoder.errors)}"
+            )
             if decoder.errors:
                 for err in decoder.errors[:5]:
-                    print(f"[SGSN DECODER ERROR] {err}")
+                    logger.warning(f"[SGSN DECODER ERROR] {err}")
 
             # Write decoded CSV output (mirrors MSC behaviour)
             self._write_decoded_csv(self._decoded_records, file_path, 'sgsn')
@@ -287,6 +288,5 @@ class SGSNProcessor(BaseProcessor):
                     writer.writerow(row)
 
             logger.info(f'[SGSN] Decoded CSV written: {csv_path} ({len(records)} rows)')
-            print(f'[SGSN PROCESSOR] Decoded CSV: {csv_path}')
         except Exception as e:
             logger.warning(f'[SGSN] Could not write decoded CSV: {e}')

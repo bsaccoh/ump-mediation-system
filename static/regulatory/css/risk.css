@@ -1,0 +1,46 @@
+.risk-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.risk-kpi-grid-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.risk-status-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .6rem; margin-bottom: .7rem; }
+.risk-filter-bar { grid-template-columns: repeat(4, minmax(110px, 1fr)) minmax(125px, 1fr) minmax(125px, 1fr) minmax(170px, 1.4fr) auto auto; }
+.risk-table td { font-size: .74rem; }
+.risk-table th, .risk-table td { white-space: nowrap; }
+
+.risk-severity-low { background: #e3f6ea; color: #1a8a4c; }
+.risk-severity-medium { background: #fff1cc; color: #a5680a; }
+.risk-severity-high { background: #ffe3d6; color: #c8531a; }
+.risk-severity-critical { background: #ffd9dd; color: #c31432; }
+
+.risk-status-open { background: #ffe1e1; color: #c92a2a; }
+.risk-status-assigned { background: #dbeafe; color: #1d4ed8; }
+.risk-status-investigating { background: #ffedd5; color: #c2660a; }
+.risk-status-under_review { background: #fff0cf; color: #a85d00; }
+.risk-status-awaiting_operator { background: #f1e4ff; color: #6d28d9; }
+.risk-status-resolved { background: #d9f7e5; color: #087b43; }
+.risk-status-dismissed { background: #e9edf3; color: #556678; }
+.risk-status-closed { background: #e6ece9; color: #4b6353; }
+
+.risk-detail-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .6rem; margin-bottom: .7rem; }
+.risk-detail-value { background: #f8fbfe; border: 1px solid #e2ebf3; border-radius: .25rem; padding: .55rem .7rem; }
+.risk-detail-value small { color: #6d8199; display: block; font-size: .66rem; margin-bottom: .15rem; }
+.risk-detail-value strong { color: #1c3b68; display: block; font-size: .82rem; }
+.risk-section-card { background: #fff; border: 1px solid #e1eaf5; border-radius: .35rem; box-shadow: 0 2px 7px rgba(28, 69, 118, .06); margin-bottom: .65rem; padding: .8rem .9rem; }
+.risk-section-card h2 { color: #17315b; font-size: .82rem; font-weight: 700; margin: 0 0 .6rem; }
+.risk-evidence-chain { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; }
+.risk-evidence-chain .node { background: #f2f7fd; border: 1px solid #dbe7f3; border-radius: .25rem; padding: .35rem .55rem; }
+.risk-evidence-chain .node small { color: #6d8199; display: block; font-size: .63rem; }
+.risk-evidence-chain .node strong { color: #1c3b68; font-size: .74rem; }
+.risk-evidence-chain i { color: #9ab3d1; }
+.risk-comment { border-bottom: 1px solid #edf2f8; padding: .5rem 0; }
+.risk-comment:last-child { border-bottom: none; }
+.risk-comment small { color: #6d8199; }
+.risk-action-bar { display: flex; flex-wrap: wrap; gap: .4rem; }
+.risk-action-bar .btn { font-size: .72rem; padding: .3rem .6rem; }
+
+@media (max-width: 1100px) {
+    .risk-kpi-grid, .risk-kpi-grid-6, .risk-status-strip { grid-template-columns: repeat(2, 1fr); }
+    .risk-filter-bar { grid-template-columns: repeat(3, minmax(140px, 1fr)); }
+    .risk-detail-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 700px) {
+    .risk-kpi-grid, .risk-kpi-grid-6, .risk-status-strip, .risk-filter-bar, .risk-detail-grid { grid-template-columns: 1fr; }
+}

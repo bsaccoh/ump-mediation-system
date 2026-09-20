@@ -11,6 +11,7 @@ class DecoderType:
     CBS = 'CBS'
     AUTO = 'AUTO'
     CSV = 'CSV'
+    PASSTHROUGH = 'FORWARD'
 
     CHOICES = [
         (MSC,  'MSC (Huawei ASN.1/BER)'),
@@ -22,6 +23,7 @@ class DecoderType:
         (CBS,  'CBS Output'),
         (AUTO, 'Auto-detect'),
         (CSV,  'Pre-decoded CSV'),
+        (PASSTHROUGH, 'Pass-through (forward without decoding)'),
     ]
 
 

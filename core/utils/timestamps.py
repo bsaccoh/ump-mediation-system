@@ -1,16 +1,14 @@
 """Timestamp parsing utilities for CDR processing."""
-from datetime import datetime, timezone
+from datetime import datetime
+from functools import lru_cache
 from typing import Optional
 
 
+@lru_cache(maxsize=4096)
 def parse_mediation_timestamp(ts_str: str) -> Optional[datetime]:
     """Parse mediation format timestamp (YYYYMMDDHHMMSS).
 
-    Args:
-        ts_str: Timestamp string in YYYYMMDDHHMMSS format.
-
-    Returns:
-        datetime or None if parsing fails.
+    Returns naive datetime (USE_TZ=False in this project).
     """
     if not ts_str:
         return None
@@ -19,18 +17,18 @@ def parse_mediation_timestamp(ts_str: str) -> Optional[datetime]:
     if not ts_str or ts_str.lower() in ('none', 'null', ''):
         return None
 
+    # Fast path: 14-digit numeric (YYYYMMDDHHMMSS) — avoids strptime overhead
     if len(ts_str) >= 14 and ts_str[:14].isdigit():
+        s = ts_str[:14]
         try:
-            dt = datetime.strptime(ts_str[:14], '%Y%m%d%H%M%S')
-            return dt.replace(tzinfo=timezone.utc)
+            return datetime(int(s[:4]), int(s[4:6]), int(s[6:8]),
+                            int(s[8:10]), int(s[10:12]), int(s[12:14]))
         except (ValueError, OverflowError):
             pass
 
-    # Fallback: common formats
     for fmt in ('%Y-%m-%d %H:%M:%S', '%Y/%m/%d %H:%M:%S', '%d/%m/%Y %H:%M:%S'):
         try:
-            dt = datetime.strptime(ts_str, fmt)
-            return dt.replace(tzinfo=timezone.utc)
+            return datetime.strptime(ts_str, fmt)
         except (ValueError, OverflowError):
             continue
 

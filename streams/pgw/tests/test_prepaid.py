@@ -10,7 +10,7 @@ from core.utils.prepaid import derive_prepaid_from_cc, derive_pgw_prepaid_flag
 
 
 class DerivePgwPrepaidFlagTests(TestCase):
-    databases = {"default", "interconnect", "regulatory", "roaming"}
+    databases = {"default"}
 
     # --- POSTPAID outcomes -------------------------------------------------
 

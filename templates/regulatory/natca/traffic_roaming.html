@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}UMP | Roaming Traffic{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/natca-dashboard.css' %}">
+{% endblock %}
+
+{% block topbar %}
+<div class="topbar">
+    <div class="topbar-left">
+        <h5 class="topbar-title">Roaming Traffic</h5>
+        <span class="topbar-subtitle">Inbound &amp; Outbound Roaming by Country and Operator</span>
+    </div>
+    <div class="topbar-right">
+        <button class="btn btn-outline-light btn-sm"><i class="bi bi-download"></i> Export</button>
+        <button class="btn btn-outline-light btn-sm"><i class="bi bi-printer"></i> Print</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+
+    <!-- Filters -->
+    <form method="get" class="row g-2 mb-3">
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" name="period">
+                <option value="7"   {% if period == '7'   %}selected{% endif %}>Last 7 days</option>
+                <option value="30"  {% if period == '30'  %}selected{% endif %}>Last 30 days</option>
+                <option value="90"  {% if period == '90'  %}selected{% endif %}>Last 90 days</option>
+                <option value="365" {% if period == '365' %}selected{% endif %}>Last year</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" name="operator">
+                <option value="">All Operators</option>
+                <option value="orange"    {% if operator == 'orange'    %}selected{% endif %}>Orange</option>
+                <option value="africell"  {% if operator == 'africell'  %}selected{% endif %}>Africell</option>
+                <option value="qcell"     {% if operator == 'qcell'     %}selected{% endif %}>Qcell</option>
+                <option value="sierratel" {% if operator == 'sierratel' %}selected{% endif %}>SierraTel</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel"></i> Apply Filters</button>
+        </div>
+    </form>
+
+    <!-- KPI Cards -->
+    <div class="row g-3 mb-3">
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon bg-primary"><i class="bi bi-phone-vibrate"></i></div>
+                <div class="metric-content">
+                    <div class="metric-value">{{ kpis.roaming_subscribers.value|default:"0" }}</div>
+                    <div class="metric-title">Roaming Operators</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon bg-success"><i class="bi bi-arrow-down-circle"></i></div>
+                <div class="metric-content">
+                    <div class="metric-value">{{ kpis.inbound_roaming.value|default:"0" }}</div>
+                    <div class="metric-title">Inbound Roaming Calls</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon bg-warning"><i class="bi bi-arrow-up-circle"></i></div>
+                <div class="metric-content">
+                    <div class="metric-value">{{ kpis.outbound_roaming.value|default:"0" }}</div>
+                    <div class="metric-title">Outbound Roaming Calls</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon bg-info"><i class="bi bi-clock"></i></div>
+                <div class="metric-content">
+                    <div class="metric-value">{{ kpis.roaming_minutes.value|default:"0" }}</div>
+                    <div class="metric-title">Total Roaming Minutes</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="row g-3 mb-3">
+        <div class="col-xl-8">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-graph-up text-primary"></i>
+                        <span>Roaming Trend — Inbound vs Outbound</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <canvas id="roamingTrendChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-4">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-pie-chart text-primary"></i>
+                        <span>Roaming by Operator</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <canvas id="roamingOperatorChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Roaming Countries -->
+    <div class="row g-3 mb-3">
+        <div class="col-xl-6">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-bar-chart-steps text-primary"></i>
+                        <span>Top Inbound Roaming Countries</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <canvas id="inboundCountryChart" height="260"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-6">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-bar-chart-steps text-primary"></i>
+                        <span>Top Outbound Roaming Countries</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <canvas id="outboundCountryChart" height="260"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Roaming Detail Table -->
+    <div class="row g-3">
+        <div class="col-12">
+            <div class="dashboard-card">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-table text-primary"></i>
+                        <span>Roaming Detail by Country &amp; Operator</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Country</th>
+                                    <th>Operator</th>
+                                    <th><span class="badge bg-success">Inbound</span> Calls</th>
+                                    <th><span class="badge bg-success">Inbound</span> Minutes</th>
+                                    <th><span class="badge bg-success">Inbound</span> SMS</th>
+                                    <th><span class="badge bg-warning text-dark">Outbound</span> Calls</th>
+                                    <th><span class="badge bg-warning text-dark">Outbound</span> Minutes</th>
+                                    <th><span class="badge bg-warning text-dark">Outbound</span> SMS</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if roaming_by_country %}
+                                {% for row in roaming_by_country %}
+                                <tr>
+                                    <td>{{ row.country }}</td>
+                                    <td>{{ row.operator }}</td>
+                                    <td class="text-end">{{ row.inbound_calls }}</td>
+                                    <td class="text-end">{{ row.inbound_minutes }}</td>
+                                    <td class="text-end">{{ row.inbound_sms }}</td>
+                                    <td class="text-end">{{ row.outbound_calls }}</td>
+                                    <td class="text-end">{{ row.outbound_minutes }}</td>
+                                    <td class="text-end">{{ row.outbound_sms }}</td>
+                                </tr>
+                                {% endfor %}
+                                {% else %}
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted py-4">
+                                        <i class="bi bi-phone-vibrate" style="font-size:48px;"></i>
+                                        <p class="mb-0 mt-2">No roaming data for selected period</p>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{{ trend|json_script:"rm-trend-data" }}
+{{ operator_labels|json_script:"rm-op-labels" }}
+{{ operator_pcts|json_script:"rm-op-pcts" }}
+{{ inbound_country_labels|json_script:"rm-in-labels" }}
+{{ inbound_country_values|json_script:"rm-in-values" }}
+{{ outbound_country_labels|json_script:"rm-out-labels" }}
+{{ outbound_country_values|json_script:"rm-out-values" }}
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const COLORS = ['#0d6efd','#198754','#ffc107','#dc3545','#6f42c1','#0dcaf0','#fd7e14','#20c997'];
+
+    const trend   = JSON.parse(document.getElementById('rm-trend-data').textContent);
+    const opLbls  = JSON.parse(document.getElementById('rm-op-labels').textContent);
+    const opPcts  = JSON.parse(document.getElementById('rm-op-pcts').textContent);
+    const inLbls  = JSON.parse(document.getElementById('rm-in-labels').textContent);
+    const inVals  = JSON.parse(document.getElementById('rm-in-values').textContent);
+    const outLbls = JSON.parse(document.getElementById('rm-out-labels').textContent);
+    const outVals = JSON.parse(document.getElementById('rm-out-values').textContent);
+
+    new Chart(document.getElementById('roamingTrendChart'), {
+        type: 'line',
+        data: {
+            labels: trend.labels,
+            datasets: [
+                { label: 'Inbound',  data: trend.inbound,  borderColor: '#198754', backgroundColor: 'rgba(25,135,84,0.08)',  fill: true, tension: 0.4 },
+                { label: 'Outbound', data: trend.outbound, borderColor: '#ffc107',  backgroundColor: 'rgba(255,193,7,0.08)', fill: true, tension: 0.4 },
+            ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } }
+    });
+
+    new Chart(document.getElementById('roamingOperatorChart'), {
+        type: 'doughnut',
+        data: {
+            labels: opLbls,
+            datasets: [{ data: opPcts, backgroundColor: COLORS }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+    });
+
+    new Chart(document.getElementById('inboundCountryChart'), {
+        type: 'bar',
+        data: { labels: inLbls, datasets: [{ label: 'Inbound Calls', data: inVals, backgroundColor: '#198754' }] },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+
+    new Chart(document.getElementById('outboundCountryChart'), {
+        type: 'bar',
+        data: { labels: outLbls, datasets: [{ label: 'Outbound Calls', data: outVals, backgroundColor: '#ffc107' }] },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+});
+</script>
+{% endblock %}

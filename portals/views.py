@@ -1,6 +1,7 @@
 """Views for Input Portals, Output Portals, Plugins, and Resources."""
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from core.decorators import staff_required
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -19,13 +20,13 @@ from .models import (
 # Input Portal
 # =============================================================================
 
-@login_required
+@staff_required
 def input_portal_list(request):
     portals = InputPortal.objects.order_by('name')
     return render(request, 'portals/input_portal_list.html', {'portals': portals})
 
 
-@login_required
+@staff_required
 def input_portal_create(request):
     if request.method == 'POST':
         form = InputPortalForm(request.POST)
@@ -41,7 +42,7 @@ def input_portal_create(request):
     })
 
 
-@login_required
+@staff_required
 def input_portal_edit(request, pk):
     portal = get_object_or_404(InputPortal, pk=pk)
     if request.method == 'POST':
@@ -59,7 +60,7 @@ def input_portal_edit(request, pk):
     })
 
 
-@login_required
+@staff_required
 def input_portal_ide(request, pk=None):
     """IDE-like view for configuring Input Portals."""
     portals = InputPortal.objects.order_by('name')
@@ -89,10 +90,25 @@ def input_portal_ide(request, pk=None):
         else:
             form = InputPortalForm()
 
+    resolved_paths = {}
+    if active_portal:
+        try:
+            from collection.services.paths import PathBuilder
+            op = (active_portal.name or 'unknown').split('_')[0].lower()
+            stream = (active_portal.stream_type or 'unknown').lower()
+            resolved_paths = {
+                'published': str(PathBuilder.input_published(op, stream)),
+                'staging': str(PathBuilder.input_staging(op, stream)),
+                'archive': str(PathBuilder.input_archive(op, stream)),
+            }
+        except Exception:
+            pass
+
     return render(request, 'portals/input_portal_ide.html', {
         'portals': portals,
         'active_portal': active_portal,
         'form': form,
+        'resolved_paths': resolved_paths,
     })
 
 
@@ -100,7 +116,7 @@ def input_portal_ide(request, pk=None):
 # Output Portal & Distribution IDE
 # =============================================================================
 
-@login_required
+@staff_required
 def output_portal_ide(request, pk=None):
     """IDE-like view for configuring Output Portals and Distribution Rules."""
     portals = OutputPortal.objects.order_by('name')
@@ -109,10 +125,11 @@ def output_portal_ide(request, pk=None):
     
     # For child models
     schemas = OutputSchema.objects.all()
-    rules = DistributionRule.objects.all()
+    rules = DistributionRule.objects.none()
 
     if pk:
         active_portal = get_object_or_404(OutputPortal, pk=pk)
+        rules = DistributionRule.objects.filter(output_portal=active_portal).order_by('priority', 'name')
 
     if request.method == 'POST':
         if active_portal:
@@ -133,6 +150,26 @@ def output_portal_ide(request, pk=None):
         else:
             form = OutputPortalForm()
 
+    resolved_paths = {}
+    if active_portal:
+        try:
+            op = request.session.get('active_operator', 'orange').lower()
+            ne = (active_portal.stream_type or 'msc').lower()
+            ds = (active_portal.name or 'unknown').split('-')[0].lower()
+            resolved_paths = {
+                'published': str(active_portal.resolve_directory(
+                    operator=op, vendor='huawei', network_element=ne,
+                    downstream=ds, context='published')),
+                'staging': str(active_portal.resolve_directory(
+                    operator=op, vendor='huawei', network_element=ne,
+                    downstream=ds, context='staging')),
+                'archive': str(active_portal.resolve_directory(
+                    operator=op, vendor='huawei', network_element=ne,
+                    downstream=ds, context='archive')),
+            }
+        except Exception:
+            pass
+
     return render(request, 'portals/output_portal_ide.html', {
         'portals': portals,
         'active_portal': active_portal,
@@ -141,10 +178,11 @@ def output_portal_ide(request, pk=None):
         'rules': rules,
         'schema_form': OutputSchemaForm(),
         'rule_form': DistributionRuleForm(),
+        'resolved_paths': resolved_paths,
     })
 
 
-@login_required
+@staff_required
 def stream_fields_api(request):
     """Return list of model field names for a given stream type."""
     from django.http import JsonResponse
@@ -184,7 +222,7 @@ def stream_fields_api(request):
     return JsonResponse({'fields': fields, 'stream': stream})
 
 
-@login_required
+@staff_required
 def output_schema_create(request):
     if request.method == 'POST':
         form = OutputSchemaForm(request.POST)
@@ -196,7 +234,7 @@ def output_schema_create(request):
     return render(request, 'portals/schema_edit.html', {'form': OutputSchemaForm(), 'schema': None})
 
 
-@login_required
+@staff_required
 def distribution_rule_create(request):
     if request.method == 'POST':
         form = DistributionRuleForm(request.POST)
@@ -208,7 +246,7 @@ def distribution_rule_create(request):
     return redirect('portals:output_portal_ide')
 
 
-@login_required
+@staff_required
 def output_schema_edit(request, pk):
     schema = get_object_or_404(OutputSchema, pk=pk)
     if request.method == 'POST':
@@ -222,7 +260,7 @@ def output_schema_edit(request, pk):
     return render(request, 'portals/schema_edit.html', {'form': OutputSchemaForm(instance=schema), 'schema': schema})
 
 
-@login_required
+@staff_required
 @require_POST
 def output_schema_delete(request, pk):
     schema = get_object_or_404(OutputSchema, pk=pk)
@@ -232,7 +270,7 @@ def output_schema_delete(request, pk):
     return redirect(request.META.get('HTTP_REFERER', 'portals:output_portal_ide'))
 
 
-@login_required
+@staff_required
 def distribution_rule_edit(request, pk):
     rule = get_object_or_404(DistributionRule, pk=pk)
     if request.method == 'POST':
@@ -246,7 +284,7 @@ def distribution_rule_edit(request, pk):
     return render(request, 'portals/rule_edit.html', {'form': DistributionRuleForm(instance=rule), 'rule': rule})
 
 
-@login_required
+@staff_required
 @require_POST
 def distribution_rule_delete(request, pk):
     rule = get_object_or_404(DistributionRule, pk=pk)
@@ -256,8 +294,7 @@ def distribution_rule_delete(request, pk):
     return redirect(request.META.get('HTTP_REFERER', 'portals:output_portal_ide'))
 
 
-@login_required
-@login_required
+@staff_required
 @require_POST
 def input_portal_toggle(request, pk):
     portal = get_object_or_404(InputPortal, pk=pk)
@@ -266,7 +303,7 @@ def input_portal_toggle(request, pk):
     return JsonResponse({'is_active': portal.is_active})
 
 
-@login_required
+@staff_required
 def input_portal_delete(request, pk):
     portal = get_object_or_404(InputPortal, pk=pk)
     if request.method == 'POST':
@@ -283,13 +320,13 @@ def input_portal_delete(request, pk):
 # Output Portal
 # =============================================================================
 
-@login_required
+@staff_required
 def output_portal_list(request):
     portals = OutputPortal.objects.order_by('name')
     return render(request, 'portals/output_portal_list.html', {'portals': portals})
 
 
-@login_required
+@staff_required
 def output_portal_create(request):
     if request.method == 'POST':
         form = OutputPortalForm(request.POST)
@@ -305,7 +342,7 @@ def output_portal_create(request):
     })
 
 
-@login_required
+@staff_required
 def output_portal_edit(request, pk):
     portal = get_object_or_404(OutputPortal, pk=pk)
     if request.method == 'POST':
@@ -323,7 +360,7 @@ def output_portal_edit(request, pk):
     })
 
 
-@login_required
+@staff_required
 @require_POST
 def output_portal_toggle(request, pk):
     portal = get_object_or_404(OutputPortal, pk=pk)
@@ -332,7 +369,7 @@ def output_portal_toggle(request, pk):
     return JsonResponse({'is_active': portal.is_active})
 
 
-@login_required
+@staff_required
 def output_portal_delete(request, pk):
     portal = get_object_or_404(OutputPortal, pk=pk)
     if request.method == 'POST':
@@ -346,13 +383,13 @@ def output_portal_delete(request, pk):
 # Plugin
 # =============================================================================
 
-@login_required
+@staff_required
 def plugin_list(request):
     plugins = Plugin.objects.order_by('name')
     return render(request, 'portals/plugin_list.html', {'plugins': plugins})
 
 
-@login_required
+@staff_required
 def plugin_create(request):
     if request.method == 'POST':
         form = PluginForm(request.POST)
@@ -368,7 +405,7 @@ def plugin_create(request):
     })
 
 
-@login_required
+@staff_required
 def plugin_edit(request, pk):
     plugin = get_object_or_404(Plugin, pk=pk)
     if request.method == 'POST':
@@ -386,7 +423,7 @@ def plugin_edit(request, pk):
     })
 
 
-@login_required
+@staff_required
 def plugin_delete(request, pk):
     plugin = get_object_or_404(Plugin, pk=pk)
     if request.method == 'POST':
@@ -400,7 +437,7 @@ def plugin_delete(request, pk):
 # Resource
 # =============================================================================
 
-@login_required
+@staff_required
 def resource_list(request):
     resources = Resource.objects.order_by('name')
     total = resources.count()
@@ -416,7 +453,7 @@ def resource_list(request):
     })
 
 
-@login_required
+@staff_required
 def resource_create(request):
     if request.method == 'POST':
         form = ResourceForm(request.POST)
@@ -432,7 +469,7 @@ def resource_create(request):
     })
 
 
-@login_required
+@staff_required
 def resource_edit(request, pk):
     resource = get_object_or_404(Resource, pk=pk)
     if request.method == 'POST':
@@ -450,7 +487,7 @@ def resource_edit(request, pk):
     })
 
 
-@login_required
+@staff_required
 def resource_delete(request, pk):
     resource = get_object_or_404(Resource, pk=pk)
     if request.method == 'POST':

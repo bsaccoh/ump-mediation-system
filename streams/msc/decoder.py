@@ -885,7 +885,7 @@ def decode_octet_string(data: bytes) -> str:
 def decode_ia5_string(data: bytes) -> str:
     try:
         return data.decode('ascii')
-    except:
+    except Exception:
         return data.decode('latin-1', errors='ignore')
 
 def decode_location(data: bytes) -> Tuple[str, str]:
@@ -942,7 +942,7 @@ def decode_basic_service(data: bytes) -> Tuple[str, str]:
                 return '', BEARER_CODES.get(code, str(code))
         
         return '', ''
-    except:
+    except Exception:
         return '', ''
 
 def decode_trunk_group(data: bytes) -> Tuple[str, str]:
@@ -961,7 +961,7 @@ def decode_trunk_group(data: bytes) -> Tuple[str, str]:
                             route = decoded
                         else:
                             route = val.hex().upper()
-                    except:
+                    except Exception:
                         route = val.hex().upper()
                 elif tn == 1:
                     member = str(decode_unsigned(val))
@@ -971,16 +971,16 @@ def decode_trunk_group(data: bytes) -> Tuple[str, str]:
                         decoded = val.decode('ascii')
                         if decoded.isprintable():
                             route = decoded
-                    except:
+                    except Exception:
                         pass
         
         return route, member
-    except:
+    except Exception:
         try:
             decoded = data.decode('ascii')
             if decoded.isprintable():
                 return decoded, ''
-        except:
+        except Exception:
             pass
         return '', ''
 
@@ -1009,7 +1009,7 @@ def decode_route_name(data: bytes) -> str:
                         name = name_bytes.decode('ascii', errors='ignore')
                         if name and all(c.isprintable() or c.isspace() for c in name):
                             return name.strip()
-                    except:
+                    except Exception:
                         pass
             
             pos += 1
@@ -1018,10 +1018,10 @@ def decode_route_name(data: bytes) -> str:
             decoded = data.decode('ascii', errors='ignore')
             if decoded and len(decoded) > 2 and all(c.isprintable() or c.isspace() for c in decoded):
                 return decoded.strip()
-        except:
+        except Exception:
             pass
         
-    except:
+    except Exception:
         pass
     
     return ''
@@ -1034,40 +1034,39 @@ def decode_route_name(data: bytes) -> str:
 # Call classification helpers
 # ---------------------------------------------------------------------------
 
-# Orange Sierra Leone MSISDN prefixes (international E.164 + local formats)
-_ORANGE_SL_PREFIXES = (
-    '23276', '23275', '23274', '23279', '23278', '23273',
-    '076', '075', '074', '079', '078', '073',
-    '76', '75', '74', '79', '78', '73',
-)
-
-
 def _num_clean(n: str) -> str:
     """Strip all non-digit characters from a number string."""
     return ''.join(c for c in (n or '') if c.isdigit())
 
 
 def _is_special(n: str) -> bool:
-    """Short codes / special service numbers (1–6 digits)."""
-    return 1 <= len(_num_clean(n)) <= 6
+    """Short codes / special service numbers.
+
+    Catches both bare short codes (111, 22117) and CC-prefixed variants
+    (23222117 → strips 232 → 22117) by delegating to classify_operator()
+    after the fast raw-digit-count check.
+    """
+    raw = _num_clean(n)
+    if 1 <= len(raw) <= 6:
+        return True
+    from core.utils.operators import classify_operator
+    return classify_operator(n) == 'Short Code'
 
 
 def _is_international(n: str) -> bool:
-    """Return True if the number is an international destination (not SL)."""
-    n = (n or '').strip()
-    if n.startswith('+'):
-        return not n.startswith('+232')
-    if n.startswith('00'):
-        return not n.startswith('00232')
-    # 11+ digit number not beginning with SL country code
-    d = _num_clean(n)
-    return len(d) >= 11 and not d.startswith('232')
+    """Return True if the number is an international destination (not a SL number).
+    Uses classify_operator() so all number formats (+232, 00232, 232, 076, 76…)
+    are handled consistently for every SL operator."""
+    from core.utils.operators import classify_operator
+    return classify_operator(n) == 'International'
 
 
 def _is_onnet(n: str) -> bool:
-    """Return True if the number belongs to Orange Sierra Leone."""
-    n = (n or '').strip()
-    return any(n.startswith(p) for p in _ORANGE_SL_PREFIXES)
+    """Return True if the number belongs to the same operator as the active CDR source.
+    Reads the active operator from thread-local context, so Orange CDRs check Orange
+    prefixes, Africell CDRs check Africell prefixes, etc."""
+    from core.utils.operators import classify_operator, home_operator_name
+    return classify_operator(n) == home_operator_name()
 
 
 def _classify_call(record: Dict):
@@ -1077,7 +1076,7 @@ def _classify_call(record: Dict):
 
     Categories produced
     -------------------
-    Voice MO    : OUTBOUND_ROAMING | SPECIAL_SERVICE | INTERNATIONAL
+    Voice MO    : OUTBOUND_ROAMING | SPECIAL_NUMBER | INTERNATIONAL
                   | NATIONAL_ONNET | NATIONAL_OFFNET
     Voice MT    : INBOUND_ROAMING | INCOMING_INTERNATIONAL
                   | INCOMING_ONNET | INCOMING_NATIONAL
@@ -1131,7 +1130,7 @@ def _classify_call(record: Dict):
     # ---- MOC: Mobile Originated Call ----------------------------------------
     if call_type == 'MOC':
         if roaming_out:                     cat = 'OUTBOUND_ROAMING'
-        elif _is_special(called):           cat = 'SPECIAL_SERVICE'
+        elif _is_special(called):           cat = 'SPECIAL_NUMBER'
         elif _is_international(called):     cat = 'INTERNATIONAL'
         elif _is_onnet(called):             cat = 'NATIONAL_ONNET'
         else:                               cat = 'NATIONAL_OFFNET'
@@ -2281,7 +2280,7 @@ def parse_location(record: Dict, value: bytes):
                     continue
             
             pos += 1
-    except:
+    except Exception:
         pass
 
 def parse_diagnostics(record: Dict, value: bytes):
@@ -2571,7 +2570,7 @@ def is_binary_cdr(filepath: str) -> bool:
                 return False
             if 'record_type' in text.lower() or 'calling_number' in text.lower():
                 return False
-        except:
+        except Exception:
             pass
         
         # Check for ASN.1/binary indicators
@@ -2585,7 +2584,7 @@ def is_binary_cdr(filepath: str) -> bool:
         
         return False
         
-    except:
+    except Exception:
         return False
 
 def main():

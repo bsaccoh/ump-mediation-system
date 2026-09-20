@@ -8,6 +8,7 @@ import os
 from django.db import models
 from django.conf import settings
 from core.enums import DecoderType
+from core.fields import EncryptedCharField
 
 
 class DataSource(models.Model):
@@ -39,7 +40,7 @@ class DataSource(models.Model):
     sftp_host = models.CharField(max_length=200, blank=True)
     sftp_port = models.IntegerField(default=22, blank=True)
     sftp_username = models.CharField(max_length=100, blank=True)
-    sftp_password = models.CharField(max_length=200, blank=True)
+    sftp_password = EncryptedCharField(max_length=500, blank=True)
     sftp_key_path = models.CharField(max_length=500, blank=True)
     sftp_remote_path = models.CharField(max_length=500, blank=True)
     sftp_file_pattern = models.CharField(
@@ -55,6 +56,10 @@ class DataSource(models.Model):
         default=300, help_text='Seconds between collection polls'
     )
     enabled = models.BooleanField(default=True)
+    min_expected_records = models.IntegerField(
+        default=0,
+        help_text='Minimum records expected per file from this source. 0 = no minimum check.'
+    )
 
     # Stats
     last_poll_time = models.DateTimeField(null=True, blank=True)
@@ -78,11 +83,17 @@ class CDRFile(models.Model):
     """A CDR file being processed through the mediation pipeline."""
 
     class Status(models.TextChoices):
+        COLLECTED = 'COLLECTED', 'Collected'
         PENDING = 'PENDING', 'Pending'
         PROCESSING = 'PROCESSING', 'Processing'
+        DECODED = 'DECODED', 'Decoded'
+        DISPATCHING = 'DISPATCHING', 'Dispatching'
         COMPLETED = 'COMPLETED', 'Completed'
         FAILED = 'FAILED', 'Failed'
+        EMPTY = 'EMPTY', 'Empty (0 records)'
         DUPLICATE = 'DUPLICATE', 'Duplicate'
+        STAGED = 'STAGED', 'Staged (in staging directory)'
+        PUBLISHED = 'PUBLISHED', 'Published (in stream root)'
 
     source = models.ForeignKey(
         DataSource, on_delete=models.SET_NULL, null=True, blank=True,
@@ -105,12 +116,23 @@ class CDRFile(models.Model):
                               help_text='Equipment vendor, e.g. huawei')
     network_element = models.CharField(max_length=10, blank=True,
                                        help_text='e.g. msc, pgw, ims')
+    cbs_substream = models.CharField(
+        max_length=50, blank=True,
+        help_text='CBS substream (data, voice, sms, recharge) for CBS files'
+    )
 
     status = models.CharField(
-        max_length=15, choices=Status.choices, default=Status.PENDING, db_index=True
+        max_length=15, choices=Status.choices, default=Status.COLLECTED, db_index=True
     )
     error_message = models.TextField(blank=True)
     retry_count = models.IntegerField(default=0)
+
+    # Staging/Publication paths
+    staging_path = models.CharField(max_length=1000, blank=True, db_index=True)
+    published_path = models.CharField(max_length=1000, blank=True, db_index=True)
+    archive_path = models.CharField(max_length=1000, blank=True, db_index=True)
+    published_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    archived_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     # Processing stats
     records_total = models.IntegerField(default=0)
@@ -154,6 +176,40 @@ class CDRFile(models.Model):
         if self.records_total > 0:
             return round(self.records_valid / self.records_total * 100, 1)
         return 0
+
+
+class ReplayLog(models.Model):
+    """Tracks selective downstream replay operations."""
+
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        SUCCESS = 'SUCCESS', 'Success'
+        FAILED = 'FAILED', 'Failed'
+
+    cdr_file = models.ForeignKey(
+        CDRFile, on_delete=models.CASCADE, related_name='replay_logs'
+    )
+    output_portal = models.ForeignKey(
+        'portals.OutputPortal', on_delete=models.SET_NULL, null=True, blank=True
+    )
+    requested_by = models.CharField(max_length=150, blank=True)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    task_id = models.CharField(max_length=100, blank=True)
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.PENDING
+    )
+    records_delivered = models.IntegerField(default=0)
+    error = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'collection_replay_logs'
+        ordering = ['-requested_at']
+        verbose_name = 'Replay Log'
+        verbose_name_plural = 'Replay Logs'
+
+    def __str__(self):
+        portal_name = self.output_portal.name if self.output_portal else 'unknown'
+        return f'Replay {self.cdr_file.filename} → {portal_name} [{self.status}]'
 
 
 class DistributionPortal(models.Model):

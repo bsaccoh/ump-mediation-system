@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}UMP | International Traffic{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/natca-dashboard.css' %}">
+{% endblock %}
+
+{% block topbar %}
+<div class="topbar">
+    <div class="topbar-left">
+        <h5 class="topbar-title">International Traffic</h5>
+        <span class="topbar-subtitle">Outbound &amp; Inbound International Volume</span>
+    </div>
+    <div class="topbar-right">
+        <button class="btn btn-outline-light btn-sm"><i class="bi bi-download"></i> Export</button>
+        <button class="btn btn-outline-light btn-sm"><i class="bi bi-printer"></i> Print</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+
+    <!-- Filters -->
+    <form method="get" class="row g-2 mb-3">
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" name="period">
+                <option value="7"   {% if period == '7'   %}selected{% endif %}>Last 7 days</option>
+                <option value="30"  {% if period == '30'  %}selected{% endif %}>Last 30 days</option>
+                <option value="90"  {% if period == '90'  %}selected{% endif %}>Last 90 days</option>
+                <option value="365" {% if period == '365' %}selected{% endif %}>Last year</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" name="operator">
+                <option value="">All Operators</option>
+                <option value="orange"    {% if operator == 'orange'    %}selected{% endif %}>Orange</option>
+                <option value="africell"  {% if operator == 'africell'  %}selected{% endif %}>Africell</option>
+                <option value="qcell"     {% if operator == 'qcell'     %}selected{% endif %}>Qcell</option>
+                <option value="sierratel" {% if operator == 'sierratel' %}selected{% endif %}>SierraTel</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel"></i> Apply Filters</button>
+        </div>
+    </form>
+
+    <!-- KPI Cards -->
+    <div class="row g-3 mb-3">
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon bg-primary"><i class="bi bi-globe"></i></div>
+                <div class="metric-content">
+                    <div class="metric-value">{{ kpis.intl_calls.value|default:"0" }}</div>
+                    <div class="metric-title">International Calls</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon bg-success"><i class="bi bi-clock-history"></i></div>
+                <div class="metric-content">
+                    <div class="metric-value">{{ kpis.intl_minutes.value|default:"0" }}</div>
+                    <div class="metric-title">International Minutes</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon bg-info"><i class="bi bi-chat-square-dots"></i></div>
+                <div class="metric-content">
+                    <div class="metric-value">{{ kpis.intl_sms.value|default:"0" }}</div>
+                    <div class="metric-title">International SMS</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon bg-warning"><i class="bi bi-flag"></i></div>
+                <div class="metric-content">
+                    <div class="metric-value">{{ kpis.intl_countries.value|default:"0" }}</div>
+                    <div class="metric-title">Destination Countries</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="row g-3 mb-3">
+        <div class="col-xl-8">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-graph-up text-primary"></i>
+                        <span>International Traffic Trend</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <canvas id="intlTrendChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-4">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-arrow-left-right text-primary"></i>
+                        <span>Outbound vs Inbound</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <canvas id="directionChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Destination Countries -->
+    <div class="row g-3 mb-3">
+        <div class="col-xl-6">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-bar-chart-steps text-primary"></i>
+                        <span>Top Destination Countries (Outbound)</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <canvas id="topDestChart" height="260"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-6">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-bar-chart-steps text-primary"></i>
+                        <span>Top Origin Countries (Inbound)</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <canvas id="topOriginChart" height="260"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Table -->
+    <div class="row g-3">
+        <div class="col-12">
+            <div class="dashboard-card">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-table text-primary"></i>
+                        <span>International Traffic by Country</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Country</th>
+                                    <th>Operator</th>
+                                    <th class="text-end">Outbound Calls</th>
+                                    <th class="text-end">Outbound Minutes</th>
+                                    <th class="text-end">Outbound SMS</th>
+                                    <th class="text-end">Inbound Calls</th>
+                                    <th class="text-end">Inbound Minutes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if intl_by_country %}
+                                {% for row in intl_by_country %}
+                                <tr>
+                                    <td>{{ row.country }}</td>
+                                    <td>{{ row.operator }}</td>
+                                    <td class="text-end">{{ row.outbound_calls }}</td>
+                                    <td class="text-end">{{ row.outbound_minutes }}</td>
+                                    <td class="text-end">{{ row.outbound_sms }}</td>
+                                    <td class="text-end">{{ row.inbound_calls }}</td>
+                                    <td class="text-end">{{ row.inbound_minutes }}</td>
+                                </tr>
+                                {% endfor %}
+                                {% else %}
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-4">
+                                        <i class="bi bi-globe" style="font-size:48px;"></i>
+                                        <p class="mb-0 mt-2">No international traffic data for selected period</p>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{{ trend|json_script:"intl-trend-data" }}
+{{ direction_totals|json_script:"intl-direction-data" }}
+{{ top_destinations|json_script:"intl-top-dest-labels" }}
+{{ top_dest_minutes|json_script:"intl-top-dest-values" }}
+{{ top_origins|json_script:"intl-top-orig-labels" }}
+{{ top_orig_minutes|json_script:"intl-top-orig-values" }}
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const COLORS = ['#0d6efd','#198754','#ffc107','#dc3545','#6f42c1','#0dcaf0','#fd7e14','#20c997'];
+
+    const trend    = JSON.parse(document.getElementById('intl-trend-data').textContent);
+    const dirTots  = JSON.parse(document.getElementById('intl-direction-data').textContent);
+    const destLbls = JSON.parse(document.getElementById('intl-top-dest-labels').textContent);
+    const destVals = JSON.parse(document.getElementById('intl-top-dest-values').textContent);
+    const origLbls = JSON.parse(document.getElementById('intl-top-orig-labels').textContent);
+    const origVals = JSON.parse(document.getElementById('intl-top-orig-values').textContent);
+
+    new Chart(document.getElementById('intlTrendChart'), {
+        type: 'line',
+        data: {
+            labels: trend.labels,
+            datasets: [
+                { label: 'Outbound Calls', data: trend.outbound, borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.08)', fill: true, tension: 0.4 },
+                { label: 'Inbound Calls',  data: trend.inbound,  borderColor: '#198754', backgroundColor: 'rgba(25,135,84,0.08)',  fill: true, tension: 0.4 },
+            ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } }
+    });
+
+    new Chart(document.getElementById('directionChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Outbound', 'Inbound'],
+            datasets: [{ data: dirTots, backgroundColor: ['#0d6efd', '#198754'] }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+    });
+
+    new Chart(document.getElementById('topDestChart'), {
+        type: 'bar',
+        data: { labels: destLbls, datasets: [{ label: 'Outbound Minutes', data: destVals, backgroundColor: COLORS }] },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+
+    new Chart(document.getElementById('topOriginChart'), {
+        type: 'bar',
+        data: { labels: origLbls, datasets: [{ label: 'Inbound Minutes', data: origVals, backgroundColor: COLORS }] },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,21 @@
+<div class="nra-kpi-card">
+    <div class="nra-kpi-icon {{ color }}">
+        <i class="bi {{ icon }}"></i>
+    </div>
+    <div class="nra-kpi-content">
+        <div class="nra-kpi-title">{{ title }}</div>
+        <div class="nra-kpi-value">
+            {% if currency %}<span class="currency">{{ currency }}</span>{% endif %}
+            {{ value }}
+            {% if unit %}<span class="unit">{{ unit }}</span>{% endif %}
+        </div>
+        {% if status %}
+            <span class="kpi-status {{ status|lower }}">{{ status }}</span>
+        {% elif change != None %}
+            <div class="kpi-change {% if change >= 0 %}positive{% else %}negative{% endif %}">
+                {% if change >= 0 %}↑ {{ change }}%{% else %}↓ {{ change|cut:"-" }}%{% endif %}
+                <span>vs last month</span>
+            </div>
+        {% endif %}
+    </div>
+</div>

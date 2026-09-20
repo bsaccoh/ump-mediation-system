@@ -38,7 +38,7 @@
 <div class="card mb-3">
     <div class="card-header"><i class="bi bi-input-cursor-text"></i> Input parameters</div>
     <div class="card-body p-0">
-        <pre class="m-0 p-3 small bg-light" id="paramsBlock">{{ job.params|safe }}</pre>
+        <pre class="m-0 p-3 small bg-light" id="paramsBlock">{{ job.params }}</pre>
     </div>
 </div>
 {% endif %}
@@ -46,7 +46,7 @@
 <div class="card mb-3" id="resultCard" {% if not job.result %}style="display:none"{% endif %}>
     <div class="card-header"><i class="bi bi-check2-square"></i> Result</div>
     <div class="card-body p-0">
-        <pre class="m-0 p-3 small bg-light" id="resultBlock">{{ job.result|safe }}</pre>
+        <pre class="m-0 p-3 small bg-light" id="resultBlock">{{ job.result }}</pre>
     </div>
 </div>
 

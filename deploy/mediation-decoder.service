@@ -1,0 +1,21 @@
+[Unit]
+Description=UMP Mediation Decoder
+After=network.target postgresql.service mediation-collector.service
+Requires=postgresql.service
+PartOf=mediation.target
+
+[Service]
+Type=simple
+User=ump
+Group=ump
+WorkingDirectory=/opt/ump/mediation
+EnvironmentFile=/opt/ump/.env
+ExecStart=/opt/ump/venv/bin/python manage.py run_decoder --batch 10 --interval 5
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mediation-decoder
+
+[Install]
+WantedBy=mediation.target

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}UMP | New Reconciliation Run{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+
+{% block topbar %}
+<div class="topbar">
+    <div class="topbar-left">
+        <h5 class="topbar-title">New Reconciliation Run</h5>
+        <span class="topbar-subtitle">National Revenue Authority</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <div class="dashboard-card">
+        <div class="card-content">
+            <form method="post">
+                {% csrf_token %}
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Operator</label>
+                        <select class="form-select" name="operator_code" required>
+                            <option value="">Select Operator</option>
+                            {% for op in operators %}
+                            <option value="{{ op.code }}" {% if selected_declaration and selected_declaration.operator_code == op.code %}selected{% endif %}>{{ op.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Level</label>
+                        <select class="form-select" name="level">
+                            <option value="FULL" selected>Full Reconciliation</option>
+                            <option value="TRAFFIC">Traffic</option>
+                            <option value="REVENUE">Revenue</option>
+                            <option value="TAXABLE_REVENUE">Taxable Revenue</option>
+                            <option value="GST">GST</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Period Start</label>
+                        <input type="date" class="form-control" name="period_start" value="{% if selected_declaration %}{{ selected_declaration.period_start|date:'Y-m-d' }}{% endif %}" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Period End</label>
+                        <input type="date" class="form-control" name="period_end" value="{% if selected_declaration %}{{ selected_declaration.period_end|date:'Y-m-d' }}{% endif %}" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Declaration (Optional)</label>
+                        <select class="form-select" name="declaration">
+                            <option value="">None</option>
+                            {% for decl in declarations %}
+                            <option value="{{ decl.pk }}" {% if selected_declaration and selected_declaration.pk == decl.pk %}selected{% endif %}>{{ decl.operator_code }} - {{ decl.period_start }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-play-fill"></i> Run Reconciliation
+                    </button>
+                    <a href="{% url 'regulatory:reconciliation_list' %}" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

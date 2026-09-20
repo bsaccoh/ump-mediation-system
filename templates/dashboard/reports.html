@@ -1,0 +1,599 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Reports - UMP Mediation{% endblock %}
+{% block page_title %}Reports{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-bar { background: #f8f9fa; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
+    .section-table { font-size: 0.85rem; }
+    .section-table th { white-space: nowrap; background: #f1f3f5; }
+    .section-table td { vertical-align: middle; }
+    .row-total td { font-weight: 600; background: #f8f9fa; }
+    .stream-badge { font-size: 0.72rem; padding: 2px 6px; }
+    .summary-card { border-top: 3px solid; }
+    .summary-card.in { border-color: #0d6efd; }
+    .summary-card.out { border-color: #198754; }
+    .summary-card.rec { border-color: #0dcaf0; }
+    .summary-card.rate { border-color: #ffc107; }
+    .delta { font-size: 0.72rem; font-weight: 600; }
+    .delta.up { color: #198754; }
+    .delta.down { color: #dc3545; }
+    .delta.neutral { color: #6c757d; }
+    .latency-card { border-left: 3px solid #6f42c1; }
+    .latency-value { font-size: 1.4rem; font-weight: 700; color: #6f42c1; }
+    .latency-label { font-size: 0.75rem; color: #6c757d; }
+    .error-stage { font-size: 0.72rem; padding: 2px 6px; }
+    .rule-rate { font-weight: 600; }
+    .rule-rate.good { color: #198754; }
+    .rule-rate.warn { color: #fd7e14; }
+    .rule-rate.bad { color: #dc3545; }
+    .prev-period { font-size: 0.72rem; color: #6c757d; display: block; margin-top: 2px; }
+    .chart-row { display: flex; gap: 1rem; }
+    .chart-row .chart-col { flex: 1; min-width: 0; }
+    @media (max-width: 768px) { .chart-row { flex-direction: column; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Date Range + Operator Selector -->
+<div class="filter-bar">
+    <form id="reportForm" class="row g-2 align-items-end">
+        <div class="col-md-2">
+            <label class="form-label small">From</label>
+            <input type="date" class="form-control form-control-sm" id="fStart" required>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">To</label>
+            <input type="date" class="form-control form-control-sm" id="fEnd" required>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">Operator</label>
+            <select class="form-select form-select-sm" id="fOperator">
+                <option value="">All Operators</option>
+                {% for op in operators %}
+                <option value="{{ op.code }}">{{ op.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-auto">
+            <button type="submit" class="btn btn-primary btn-sm" id="btnGenerate"><i class="bi bi-bar-chart-line"></i> Generate</button>
+        </div>
+        <div class="col-md-auto">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btnToday">Today</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btn7d">7 Days</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btn30d">30 Days</button>
+        </div>
+        <div class="col-md-auto ms-auto">
+            <button type="button" class="btn btn-success btn-sm" id="btnExport" style="display:none"><i class="bi bi-file-earmark-spreadsheet"></i> Excel</button>
+        </div>
+    </form>
+</div>
+
+<!-- Report Period -->
+<div id="reportPeriod" class="mb-2" style="display:none">
+    <span class="text-muted small"><i class="bi bi-calendar3"></i> Report Period: <strong id="periodLabel"></strong></span>
+    <span class="text-muted small ms-3" id="compPeriodLabel"></span>
+</div>
+
+<!-- Summary Cards with Comparison Deltas -->
+<div class="row mb-3" id="summaryCards" style="display:none">
+    <div class="col-md-3 col-6 mb-2">
+        <div class="card text-center py-2 summary-card in">
+            <div class="fw-bold fs-4 text-primary" id="sumFilesIn">0</div>
+            <small class="text-muted">Files Received</small>
+            <span class="delta neutral" id="deltaFilesIn"></span>
+            <span class="prev-period" id="prevFilesIn"></span>
+        </div>
+    </div>
+    <div class="col-md-3 col-6 mb-2">
+        <div class="card text-center py-2 summary-card out">
+            <div class="fw-bold fs-4 text-success" id="sumFilesOut">0</div>
+            <small class="text-muted">Files Distributed</small>
+            <span class="delta neutral" id="deltaFilesOut"></span>
+            <span class="prev-period" id="prevFilesOut"></span>
+        </div>
+    </div>
+    <div class="col-md-3 col-6 mb-2">
+        <div class="card text-center py-2 summary-card rec">
+            <div class="fw-bold fs-4 text-info" id="sumRecords">0</div>
+            <small class="text-muted">Records Processed</small>
+            <span class="delta neutral" id="deltaRecords"></span>
+            <span class="prev-period" id="prevRecords"></span>
+        </div>
+    </div>
+    <div class="col-md-3 col-6 mb-2">
+        <div class="card text-center py-2 summary-card rate">
+            <div class="fw-bold fs-4 text-warning" id="sumRate">0%</div>
+            <small class="text-muted">Success Rate</small>
+            <span class="delta neutral" id="deltaRate"></span>
+            <span class="prev-period" id="prevRate"></span>
+        </div>
+    </div>
+</div>
+
+<!-- Processing Latency -->
+<div class="row mb-3" id="latencySection" style="display:none">
+    <div class="col-12">
+        <h6 class="mb-2"><i class="bi bi-stopwatch text-purple"></i> Processing Latency</h6>
+    </div>
+    <div class="col-md-3 col-6 mb-2">
+        <div class="card latency-card px-3 py-2">
+            <div class="latency-value" id="latAvg">-</div>
+            <div class="latency-label">Avg Decode Time</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6 mb-2">
+        <div class="card latency-card px-3 py-2">
+            <div class="latency-value" id="latMin">-</div>
+            <div class="latency-label">Fastest</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6 mb-2">
+        <div class="card latency-card px-3 py-2">
+            <div class="latency-value" id="latMax">-</div>
+            <div class="latency-label">Slowest</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6 mb-2">
+        <div class="card latency-card px-3 py-2">
+            <div class="latency-value" id="latCount">-</div>
+            <div class="latency-label">Files Measured</div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row: Daily + Stream Breakdown -->
+<div class="chart-row mb-3" id="chartRow" style="display:none">
+    <div class="chart-col" style="flex:2">
+        <div class="card">
+            <div class="card-header py-1 small fw-bold">Daily Volume</div>
+            <div class="card-body py-2">
+                <canvas id="dailyChart" height="70"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="chart-col" style="flex:1">
+        <div class="card">
+            <div class="card-header py-1 small fw-bold">Stream Breakdown</div>
+            <div class="card-body py-2 d-flex align-items-center justify-content-center">
+                <canvas id="streamChart" height="180" width="180"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Input Section -->
+<div id="inputSection" style="display:none">
+    <h6 class="mb-2"><i class="bi bi-arrow-down-circle text-primary"></i> Input (By Data Source)</h6>
+    <div class="table-responsive mb-3">
+        <table class="table table-sm table-bordered section-table mb-0">
+            <thead>
+                <tr>
+                    <th>Data Source</th>
+                    <th class="text-center">Files</th>
+                    <th class="text-center">Records</th>
+                    <th class="text-center">Completed</th>
+                    <th class="text-center">Failed</th>
+                    <th class="text-center">Duplicate</th>
+                    <th class="text-center">First Received</th>
+                    <th class="text-center">Last Received</th>
+                    <th>Streams</th>
+                </tr>
+            </thead>
+            <tbody id="inputBody"></tbody>
+            <tfoot id="inputFoot"></tfoot>
+        </table>
+    </div>
+</div>
+
+<!-- Output Section -->
+<div id="outputSection" style="display:none">
+    <h6 class="mb-2"><i class="bi bi-arrow-up-circle text-success"></i> Output (By Output Portal)</h6>
+    <div class="table-responsive mb-3">
+        <table class="table table-sm table-bordered section-table mb-0">
+            <thead>
+                <tr>
+                    <th>Output Portal</th>
+                    <th class="text-center">Deliveries</th>
+                    <th class="text-center">Records</th>
+                    <th class="text-center">Success</th>
+                    <th class="text-center">Failed</th>
+                    <th class="text-center">Skipped</th>
+                    <th class="text-center">First Delivered</th>
+                    <th class="text-center">Last Delivered</th>
+                    <th>Streams</th>
+                </tr>
+            </thead>
+            <tbody id="outputBody"></tbody>
+            <tfoot id="outputFoot"></tfoot>
+        </table>
+    </div>
+</div>
+
+<!-- Distribution Rule Performance -->
+<div id="ruleSection" style="display:none">
+    <h6 class="mb-2"><i class="bi bi-diagram-3 text-info"></i> Distribution Rule Performance</h6>
+    <div class="table-responsive mb-3">
+        <table class="table table-sm table-bordered section-table mb-0">
+            <thead>
+                <tr>
+                    <th>Rule</th>
+                    <th class="text-center">Stream</th>
+                    <th>Portal</th>
+                    <th class="text-center">Executions</th>
+                    <th class="text-center">Records</th>
+                    <th class="text-center">Success</th>
+                    <th class="text-center">Failed</th>
+                    <th class="text-center">Retries</th>
+                    <th class="text-center">Rate</th>
+                </tr>
+            </thead>
+            <tbody id="ruleBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Error Analysis -->
+<div id="errorSection" style="display:none">
+    <h6 class="mb-2"><i class="bi bi-exclamation-triangle text-danger"></i> Error Analysis</h6>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-header py-1 small fw-bold">Top Processing Errors <span class="badge bg-danger ms-1" id="totalProcErrors">0</span></div>
+                <div class="card-body p-0">
+                    <table class="table table-sm section-table mb-0">
+                        <thead><tr><th>Stage</th><th>Error Class</th><th class="text-center">Count</th></tr></thead>
+                        <tbody id="procErrorBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-header py-1 small fw-bold">Top File-Level Errors <span class="badge bg-danger ms-1" id="totalFileErrors">0</span></div>
+                <div class="card-body p-0">
+                    <table class="table table-sm section-table mb-0">
+                        <thead><tr><th>Error Message</th><th class="text-center">Files</th></tr></thead>
+                        <tbody id="fileErrorBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading / Empty -->
+<div id="loadingMsg" class="text-center py-5 text-muted" style="display:none">
+    <div class="spinner-border spinner-border-sm me-2"></div> Generating report...
+</div>
+<div id="emptyMsg" class="text-center py-5 text-muted">
+    <i class="bi bi-bar-chart-line fs-1 d-block mb-2"></i>
+    Select a date range and click Generate Report.
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script>
+(function(){
+    const csrf = '{{ csrf_token }}';
+    let dailyChart = null, streamChart = null;
+    const STREAM_COLORS = {
+        'MSC':'#0d6efd','IMS':'#6610f2','PGW':'#6f42c1','SGSN':'#d63384',
+        'SGW':'#fd7e14','CBS':'#20c997','OCS':'#0dcaf0','CSV':'#6c757d',
+        'FORWARD':'#198754','AUTO':'#adb5bd','UNKNOWN':'#dee2e6'
+    };
+
+    function setDates(s, e) {
+        document.getElementById('fStart').value = s;
+        document.getElementById('fEnd').value = e;
+    }
+    function iso(d) { return d.toISOString().split('T')[0]; }
+    function fmt(n) { return (n || 0).toLocaleString(); }
+    function fmtSec(s) {
+        if (s === null || s === undefined) return '-';
+        if (s < 1) return (s * 1000).toFixed(0) + 'ms';
+        if (s < 60) return s.toFixed(1) + 's';
+        return (s / 60).toFixed(1) + 'm';
+    }
+
+    const today = new Date();
+    document.getElementById('btnToday').addEventListener('click', () => setDates(iso(today), iso(today)));
+    document.getElementById('btn7d').addEventListener('click', () => {
+        const d = new Date(today); d.setDate(d.getDate() - 7); setDates(iso(d), iso(today));
+    });
+    document.getElementById('btn30d').addEventListener('click', () => {
+        const d = new Date(today); d.setDate(d.getDate() - 30); setDates(iso(d), iso(today));
+    });
+
+    function streamBadges(streams) {
+        if (!streams || !streams.length) return '<span class="text-muted small">-</span>';
+        return streams.map(s => s.stream).join(', ');
+    }
+
+    function deltaHtml(val, suffix, invert) {
+        if (val === null || val === undefined) return '';
+        const cls = val > 0 ? (invert ? 'down' : 'up') : val < 0 ? (invert ? 'up' : 'down') : 'neutral';
+        const arrow = val > 0 ? '▲' : val < 0 ? '▼' : '▬';
+        return `<span class="delta ${cls}">${arrow} ${Math.abs(val)}${suffix || '%'}</span>`;
+    }
+
+    function renderInputRow(src) {
+        return `<tr>
+            <td>${src.source_name}</td>
+            <td class="text-center">${fmt(src.total_files)}</td>
+            <td class="text-center">${fmt(src.total_records)}</td>
+            <td class="text-center">${fmt(src.completed)}</td>
+            <td class="text-center">${fmt(src.failed)}</td>
+            <td class="text-center">${fmt(src.duplicates)}</td>
+            <td class="text-center small">${src.first_received || '-'}</td>
+            <td class="text-center small">${src.last_received || '-'}</td>
+            <td>${streamBadges(src.by_stream)}</td>
+        </tr>`;
+    }
+
+    function renderOutputRow(p) {
+        return `<tr>
+            <td>${p.portal_name}</td>
+            <td class="text-center">${fmt(p.total_files)}</td>
+            <td class="text-center">${fmt(p.total_records)}</td>
+            <td class="text-center">${fmt(p.success)}</td>
+            <td class="text-center">${fmt(p.failed)}</td>
+            <td class="text-center">${fmt(p.skipped)}</td>
+            <td class="text-center small">${p.first_delivered || '-'}</td>
+            <td class="text-center small">${p.last_delivered || '-'}</td>
+            <td>${streamBadges(p.by_stream)}</td>
+        </tr>`;
+    }
+
+    function renderRuleRow(r) {
+        return `<tr>
+            <td>${r.rule_name}</td>
+            <td class="text-center">${r.stream_type}</td>
+            <td>${r.portal_name}</td>
+            <td class="text-center">${fmt(r.total)}</td>
+            <td class="text-center">${fmt(r.records)}</td>
+            <td class="text-center">${fmt(r.success)}</td>
+            <td class="text-center">${fmt(r.failed)}</td>
+            <td class="text-center">${fmt(r.retries)}</td>
+            <td class="text-center">${r.success_rate}%</td>
+        </tr>`;
+    }
+
+    function totalRow(items, fields) {
+        const t = {};
+        fields.forEach(f => { t[f] = items.reduce((s, i) => s + (i[f] || 0), 0); });
+        return t;
+    }
+
+    const allSections = ['reportPeriod','summaryCards','latencySection','chartRow',
+        'inputSection','outputSection','ruleSection','errorSection'];
+
+    document.getElementById('reportForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        document.getElementById('emptyMsg').style.display = 'none';
+        document.getElementById('loadingMsg').style.display = 'block';
+        allSections.forEach(id => document.getElementById(id).style.display = 'none');
+        document.getElementById('btnExport').style.display = 'none';
+
+        const fd = new FormData();
+        fd.append('start_date', document.getElementById('fStart').value);
+        fd.append('end_date', document.getElementById('fEnd').value);
+        fd.append('operator', document.getElementById('fOperator').value);
+
+        fetch('{% url "dashboard:reports_api" %}', {method:'POST', headers:{'X-CSRFToken':csrf}, body:fd})
+        .then(r => r.json()).then(d => {
+            document.getElementById('loadingMsg').style.display = 'none';
+            if (!d.success) { alert(d.message); return; }
+
+            // Period label
+            document.getElementById('reportPeriod').style.display = 'block';
+            document.getElementById('periodLabel').textContent =
+                document.getElementById('fStart').value + '  to  ' + document.getElementById('fEnd').value;
+            if (d.comparison) {
+                document.getElementById('compPeriodLabel').innerHTML =
+                    '<i class="bi bi-arrow-left-right"></i> vs ' + d.comparison.prev_start + ' to ' + d.comparison.prev_end;
+            }
+
+            // Summary cards with comparison
+            document.getElementById('summaryCards').style.display = 'flex';
+            document.getElementById('sumFilesIn').textContent = fmt(d.summary.total_files_in);
+            document.getElementById('sumFilesOut').textContent = fmt(d.summary.total_files_out);
+            document.getElementById('sumRecords').textContent = fmt(d.summary.total_records_in);
+            document.getElementById('sumRate').textContent = d.summary.success_rate + '%';
+
+            if (d.comparison) {
+                document.getElementById('deltaFilesIn').innerHTML = deltaHtml(d.comparison.delta_files_in);
+                document.getElementById('deltaFilesOut').innerHTML = deltaHtml(d.comparison.delta_files_out);
+                document.getElementById('deltaRecords').innerHTML = deltaHtml(d.comparison.delta_records_in);
+                document.getElementById('deltaRate').innerHTML = deltaHtml(d.comparison.delta_success_rate, 'pp');
+                document.getElementById('prevFilesIn').textContent = 'prev: ' + fmt(d.comparison.prev_files_in);
+                document.getElementById('prevFilesOut').textContent = 'prev: ' + fmt(d.comparison.prev_files_out);
+                document.getElementById('prevRecords').textContent = 'prev: ' + fmt(d.comparison.prev_records_in);
+                document.getElementById('prevRate').textContent = 'prev: ' + d.comparison.prev_success_rate + '%';
+            }
+
+            // Export button
+            document.getElementById('btnExport').style.display = 'inline-block';
+
+            // Processing Latency
+            if (d.latency && d.latency.sample_count > 0) {
+                document.getElementById('latencySection').style.display = 'flex';
+                document.getElementById('latAvg').textContent = fmtSec(d.latency.avg_seconds);
+                document.getElementById('latMin').textContent = fmtSec(d.latency.min_seconds);
+                document.getElementById('latMax').textContent = fmtSec(d.latency.max_seconds);
+                document.getElementById('latCount').textContent = fmt(d.latency.sample_count);
+            }
+
+            // Charts
+            document.getElementById('chartRow').style.display = 'flex';
+
+            // Daily chart
+            if (dailyChart) dailyChart.destroy();
+            const ctx1 = document.getElementById('dailyChart').getContext('2d');
+            dailyChart = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: d.by_day.map(r => r.day),
+                    datasets: [{
+                        label: 'Files',
+                        data: d.by_day.map(r => r.files),
+                        backgroundColor: 'rgba(13,110,253,0.7)',
+                        maxBarThickness: 60,
+                        yAxisID: 'y',
+                    },{
+                        label: 'Records',
+                        data: d.by_day.map(r => r.records),
+                        type: 'line',
+                        borderColor: '#198754',
+                        pointBackgroundColor: '#198754',
+                        pointRadius: 3,
+                        fill: false,
+                        tension: 0.3,
+                        yAxisID: 'y1',
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } } },
+                    scales: {
+                        y: { position: 'left', title: { display: true, text: 'Files', font: { size: 11 } }, beginAtZero: true },
+                        y1: { position: 'right', title: { display: true, text: 'Records', font: { size: 11 } }, grid: { drawOnChartArea: false }, beginAtZero: true }
+                    }
+                }
+            });
+
+            // Stream breakdown donut
+            if (streamChart) streamChart.destroy();
+            if (d.stream_breakdown && d.stream_breakdown.length) {
+                const ctx2 = document.getElementById('streamChart').getContext('2d');
+                const labels = d.stream_breakdown.map(s => s.stream);
+                const values = d.stream_breakdown.map(s => s.files);
+                const colors = labels.map(l => STREAM_COLORS[l] || '#adb5bd');
+                streamChart = new Chart(ctx2, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{ data: values, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }]
+                    },
+                    options: {
+                        responsive: false,
+                        cutout: '55%',
+                        plugins: {
+                            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 }, padding: 8 } },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(ctx) {
+                                        const s = d.stream_breakdown[ctx.dataIndex];
+                                        return ` ${s.stream}: ${fmt(s.files)} files, ${fmt(s.records)} records`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Input table
+            document.getElementById('inputSection').style.display = 'block';
+            const inputBody = document.getElementById('inputBody');
+            const inputFoot = document.getElementById('inputFoot');
+            if (d.input_sources.length) {
+                inputBody.innerHTML = d.input_sources.map(renderInputRow).join('');
+                const it = totalRow(d.input_sources, ['total_files','total_records','completed','failed','duplicates']);
+                inputFoot.innerHTML = `<tr class="row-total">
+                    <td>Total</td>
+                    <td class="text-center">${fmt(it.total_files)}</td>
+                    <td class="text-center">${fmt(it.total_records)}</td>
+                    <td class="text-center">${fmt(it.completed)}</td>
+                    <td class="text-center">${fmt(it.failed)}</td>
+                    <td class="text-center">${fmt(it.duplicates)}</td>
+                    <td></td><td></td><td></td>
+                </tr>`;
+            } else {
+                inputBody.innerHTML = '<tr><td colspan="9" class="text-muted text-center py-2">No input data for this period.</td></tr>';
+                inputFoot.innerHTML = '';
+            }
+
+            // Output table
+            document.getElementById('outputSection').style.display = 'block';
+            const outputBody = document.getElementById('outputBody');
+            const outputFoot = document.getElementById('outputFoot');
+            if (d.output_portals.length) {
+                outputBody.innerHTML = d.output_portals.map(renderOutputRow).join('');
+                const ot = totalRow(d.output_portals, ['total_files','total_records','success','failed','skipped']);
+                outputFoot.innerHTML = `<tr class="row-total">
+                    <td>Total</td>
+                    <td class="text-center">${fmt(ot.total_files)}</td>
+                    <td class="text-center">${fmt(ot.total_records)}</td>
+                    <td class="text-center">${fmt(ot.success)}</td>
+                    <td class="text-center">${fmt(ot.failed)}</td>
+                    <td class="text-center">${fmt(ot.skipped)}</td>
+                    <td></td><td></td><td></td>
+                </tr>`;
+            } else {
+                outputBody.innerHTML = '<tr><td colspan="9" class="text-muted text-center py-2">No output data for this period.</td></tr>';
+                outputFoot.innerHTML = '';
+            }
+
+            // Distribution Rule Performance
+            if (d.rule_performance && d.rule_performance.length) {
+                document.getElementById('ruleSection').style.display = 'block';
+                document.getElementById('ruleBody').innerHTML = d.rule_performance.map(renderRuleRow).join('');
+            }
+
+            // Error Analysis
+            const ea = d.error_analysis;
+            if (ea && (ea.total_processing_errors > 0 || ea.total_failed_files > 0)) {
+                document.getElementById('errorSection').style.display = 'block';
+                document.getElementById('totalProcErrors').textContent = fmt(ea.total_processing_errors);
+                document.getElementById('totalFileErrors').textContent = fmt(ea.total_failed_files);
+                if (ea.processing_errors.length) {
+                    document.getElementById('procErrorBody').innerHTML = ea.processing_errors.map(e =>
+                        `<tr><td><span class="badge error-stage bg-secondary">${e.stage}</span></td>
+                         <td class="small">${e.error_class}</td>
+                         <td class="text-center">${fmt(e.count)}</td></tr>`
+                    ).join('');
+                } else {
+                    document.getElementById('procErrorBody').innerHTML =
+                        '<tr><td colspan="3" class="text-muted text-center py-2">No record-level errors.</td></tr>';
+                }
+                if (ea.file_errors.length) {
+                    document.getElementById('fileErrorBody').innerHTML = ea.file_errors.map(e =>
+                        `<tr><td class="small text-truncate" style="max-width:300px" title="${e.message}">${e.message}</td>
+                         <td class="text-center">${fmt(e.count)}</td></tr>`
+                    ).join('');
+                } else {
+                    document.getElementById('fileErrorBody').innerHTML =
+                        '<tr><td colspan="2" class="text-muted text-center py-2">No file-level errors.</td></tr>';
+                }
+            }
+        });
+    });
+
+    // Excel export
+    document.getElementById('btnExport').addEventListener('click', function() {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{% url "dashboard:reports_export" %}';
+        form.style.display = 'none';
+
+        const fields = {
+            'csrfmiddlewaretoken': csrf,
+            'start_date': document.getElementById('fStart').value,
+            'end_date': document.getElementById('fEnd').value,
+            'operator': document.getElementById('fOperator').value,
+        };
+        for (const [k, v] of Object.entries(fields)) {
+            const inp = document.createElement('input');
+            inp.type = 'hidden'; inp.name = k; inp.value = v;
+            form.appendChild(inp);
+        }
+        document.body.appendChild(form);
+        form.submit();
+        form.remove();
+    });
+})();
+</script>
+{% endblock %}

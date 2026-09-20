@@ -21,6 +21,9 @@ urlpatterns = [
     path('numbering-plan/api/', views.numbering_plan_api, name='numbering_plan_api'),
     path('numbering-plan/save/', views.numbering_plan_save, name='numbering_plan_save'),
     path('numbering-plan/delete/<int:pk>/', views.numbering_plan_delete, name='numbering_plan_delete'),
+    path('numbering-plan/bulk/', views.numbering_plan_bulk_action, name='numbering_plan_bulk'),
+    path('numbering-plan/export/', views.numbering_plan_export, name='numbering_plan_export'),
+    path('numbering-plan/fill-cc/', views.numbering_plan_fill_cc, name='numbering_plan_fill_cc'),
 
     # Trunk Groups
     path('trunks/', views.trunk_list, name='trunks'),

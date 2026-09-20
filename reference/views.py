@@ -3,6 +3,7 @@ import json
 import csv
 import io
 from django.contrib.auth.decorators import login_required
+from core.decorators import staff_required
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render, get_object_or_404
 from django.views.decorators.http import require_POST, require_http_methods
@@ -16,7 +17,7 @@ from core.enums import DecoderType
 # Helper
 # =============================================================================
 
-def _paginate(qs, page, per_page=25):
+def _paginate(qs, page, per_page=15):
     total = qs.count()
     pages = max(1, (total + per_page - 1) // per_page)
     page = max(1, min(page, pages))
@@ -56,7 +57,7 @@ def mcc_mnc_api(request):
     return JsonResponse({'records': data, 'total': total, 'page': page, 'pages': pages})
 
 
-@login_required
+@staff_required
 @require_POST
 def mcc_mnc_save(request):
     pk = request.POST.get('id')
@@ -77,7 +78,7 @@ def mcc_mnc_save(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
-@login_required
+@staff_required
 @require_POST
 def mcc_mnc_delete(request, pk):
     get_object_or_404(MccMnc, pk=pk).delete()
@@ -115,7 +116,7 @@ def imsi_prefix_api(request):
     return JsonResponse({'records': data, 'total': total, 'page': page, 'pages': pages})
 
 
-@login_required
+@staff_required
 @require_POST
 def imsi_prefix_save(request):
     pk = request.POST.get('id')
@@ -135,7 +136,7 @@ def imsi_prefix_save(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
-@login_required
+@staff_required
 @require_POST
 def imsi_prefix_delete(request, pk):
     get_object_or_404(ImsiPrefix, pk=pk).delete()
@@ -179,7 +180,7 @@ def numbering_plan_api(request):
     return JsonResponse({'records': data, 'total': total, 'page': page, 'pages': pages})
 
 
-@login_required
+@staff_required
 @require_POST
 def numbering_plan_save(request):
     pk = request.POST.get('id')
@@ -202,11 +203,66 @@ def numbering_plan_save(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
-@login_required
+@staff_required
 @require_POST
 def numbering_plan_delete(request, pk):
     get_object_or_404(NumberingPlan, pk=pk).delete()
     return JsonResponse({'success': True})
+
+
+@login_required
+def numbering_plan_export(request):
+    """Export NumberingPlan entries as CSV, respecting current search/type filters."""
+    q = request.GET.get('q', '').strip()
+    number_type = request.GET.get('number_type', '').strip()
+    qs = NumberingPlan.objects.all().order_by('prefix')
+    if q:
+        qs = qs.filter(
+            Q(prefix__icontains=q) | Q(operator__icontains=q) |
+            Q(country__icontains=q) | Q(country_code__icontains=q)
+        )
+    if number_type:
+        qs = qs.filter(number_type=number_type)
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="numbering_plan.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['prefix', 'country_code', 'operator', 'country', 'number_type',
+                     'min_length', 'max_length', 'subscriber_segment', 'enabled', 'notes'])
+    for r in qs:
+        writer.writerow([r.prefix, r.country_code, r.operator, r.country, r.number_type,
+                         r.min_length, r.max_length, r.subscriber_segment, r.enabled, r.notes or ''])
+    return response
+
+
+@staff_required
+@require_POST
+def numbering_plan_fill_cc(request):
+    """Set country_code='232' on all Sierra Leone entries that are missing it."""
+    count = NumberingPlan.objects.filter(country='Sierra Leone', country_code='').update(country_code='232')
+    return JsonResponse({'success': True, 'message': f'{count} entries updated with country code 232.'})
+
+
+@staff_required
+@require_POST
+def numbering_plan_bulk_action(request):
+    import json
+    data = json.loads(request.body)
+    ids = data.get('ids', [])
+    action = data.get('action', '')
+    if not ids:
+        return JsonResponse({'success': False, 'error': 'No rows selected.'})
+    qs = NumberingPlan.objects.filter(pk__in=ids)
+    if action == 'delete':
+        count = qs.count()
+        qs.delete()
+        return JsonResponse({'success': True, 'message': f'{count} entries deleted.'})
+    if action == 'enable':
+        count = qs.update(enabled=True)
+        return JsonResponse({'success': True, 'message': f'{count} entries enabled.'})
+    if action == 'disable':
+        count = qs.update(enabled=False)
+        return JsonResponse({'success': True, 'message': f'{count} entries disabled.'})
+    return JsonResponse({'success': False, 'error': f'Unknown action: {action}'})
 
 
 # =============================================================================
@@ -261,7 +317,7 @@ def trunk_api(request):
     return JsonResponse({'records': data, 'total': total, 'page': page, 'pages': pages})
 
 
-@login_required
+@staff_required
 @require_POST
 def trunk_save(request):
     pk = request.POST.get('id')
@@ -283,7 +339,7 @@ def trunk_save(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
-@login_required
+@staff_required
 @require_POST
 def trunk_delete(request, pk):
     get_object_or_404(TrunkGroup, pk=pk).delete()
@@ -294,7 +350,7 @@ def trunk_delete(request, pk):
 # CSV Import (shared)
 # =============================================================================
 
-@login_required
+@staff_required
 @require_POST
 def csv_import(request, table):
     """Generic CSV import for any reference table."""
@@ -315,7 +371,11 @@ def csv_import(request, table):
     try:
         text = f.read().decode('utf-8-sig')
         reader = csv.DictReader(io.StringIO(text))
-        created, updated, errors = importer(reader)
+        rows = [
+            {k.strip().lower().replace(' ', '_'): v for k, v in row.items()}
+            for row in reader
+        ]
+        created, updated, errors = importer(iter(rows))
         return JsonResponse({
             'success': True,
             'message': f'Imported: {created} created, {updated} updated, {errors} errors'
@@ -481,7 +541,7 @@ def vendor_api(request):
     return JsonResponse({"records": data, "total": total, "page": page, "pages": pages})
 
 
-@login_required
+@staff_required
 @require_POST
 def vendor_save(request):
     pk = request.POST.get("id")
@@ -497,7 +557,7 @@ def vendor_save(request):
         return JsonResponse({"success": False, "error": str(e)})
 
 
-@login_required
+@staff_required
 @require_POST
 def vendor_delete(request, pk):
     v = get_object_or_404(Vendor, pk=pk)
@@ -526,7 +586,7 @@ def vendor_portals_api(request, pk):
     return JsonResponse({"portals": data, "vendor_id": pk, "vendor_name": vendor.name, "output_portals": op_list})
 
 
-@login_required
+@staff_required
 @require_POST
 def portal_save(request):
     from collection.models import DistributionPortal
@@ -555,7 +615,7 @@ def portal_save(request):
         return JsonResponse({"success": False, "error": str(e)})
 
 
-@login_required
+@staff_required
 @require_POST
 def portal_delete(request, pk):
     from collection.models import DistributionPortal
@@ -588,7 +648,7 @@ def operator_api(request):
     return JsonResponse({'records': data, 'total': len(data)})
 
 
-@login_required
+@staff_required
 @require_POST
 def operator_save(request):
     pk = request.POST.get('id')
@@ -608,7 +668,7 @@ def operator_save(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
-@login_required
+@staff_required
 @require_POST
 def operator_delete(request, pk):
     get_object_or_404(Operator, pk=pk).delete()
@@ -646,7 +706,7 @@ def sourcepattern_api(request):
     return JsonResponse({'records': data, 'total': len(data)})
 
 
-@login_required
+@staff_required
 @require_POST
 def sourcepattern_save(request):
     pk = request.POST.get('id')
@@ -667,7 +727,7 @@ def sourcepattern_save(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
-@login_required
+@staff_required
 @require_POST
 def sourcepattern_delete(request, pk):
     get_object_or_404(SourcePattern, pk=pk).delete()

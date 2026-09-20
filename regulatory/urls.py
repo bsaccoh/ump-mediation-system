@@ -1,104 +1,84 @@
-"""Regulatory Service URL patterns."""
 from django.urls import path
-from . import views
+
+from .views import audit, compliance, tax_rates, tariffs, dashboards, natca, nra, traffic, declarations, reconciliation, risk, reports
 
 app_name = 'regulatory'
 
 urlpatterns = [
-    # Index → redirect to NATCOM Reports
-    path('', views.index, name='index'),
+    path('reports/', reports.report_hub, name='report_hub'),
+    path('reports/generate/', reports.report_generate, name='report_generate'),
+    path('reports/generate/<str:report_type>/', reports.report_download, name='report_download'),
+    # Dashboard
+    path('', dashboards.executive_dashboard, name='dashboard'),
 
-    # 1. NATCOM Reports
-    path('reports/', views.report_list, name='report_list'),
-    path('reports/api/', views.report_api, name='report_api'),
-    path('reports/generate/', views.report_generate, name='report_generate'),
-    path('reports/<int:pk>/pdf/', views.report_pdf, name='report_pdf'),
-    path('reports/<int:pk>/xlsx/', views.report_xlsx, name='report_xlsx'),
-    path('reports/<int:pk>/delete/', views.report_delete, name='report_delete'),
-    path('reports/<int:pk>/status/', views.report_set_status, name='report_set_status'),
+    # NatCA Dashboard
+    path('natca/dashboard/', natca.natca_dashboard, name='natca_dashboard'),
 
-    # 2. Levy & USF
-    path('levy/', views.levy_list, name='levy_list'),
-    path('levy/api/', views.levy_api, name='levy_api'),
-    path('levy/compute/', views.levy_compute, name='levy_compute'),
-    path('levy/<int:pk>/pay/', views.levy_mark_paid, name='levy_mark_paid'),
-    path('levy/<int:pk>/delete/', views.levy_delete, name='levy_delete'),
+    # NatCA Traffic Monitoring
+    path('natca/traffic/', traffic.traffic_overview, name='traffic_overview'),
+    path('natca/traffic/international/', traffic.traffic_international, name='traffic_international'),
+    path('natca/traffic/interconnect/', traffic.traffic_interconnect, name='traffic_interconnect'),
+    path('natca/traffic/roaming/', traffic.traffic_roaming, name='traffic_roaming'),
+    path('natca/tariff-compliance/', compliance.tariff_compliance_list, name='tariff_compliance_list'),
+    path('natca/tariff-compliance/run/', compliance.tariff_compliance_run, name='tariff_compliance_run'),
+    path('natca/tariff-compliance/export/', compliance.tariff_compliance_export, name='tariff_compliance_export'),
+    path('natca/tariff-compliance/<int:pk>/', compliance.tariff_compliance_detail, name='tariff_compliance_detail'),
+    path('natca/tariff-compliance/<int:pk>/compare/', compliance.tariff_compliance_compare, name='tariff_compliance_compare'),
+    path('natca/tariff-compliance/<int:pk>/create-finding/', compliance.tariff_compliance_create_finding, name='tariff_compliance_create_finding'),
 
-    # 3. Retail Revenue (manual entry)
-    path('retail/', views.retail_list, name='retail_list'),
-    path('retail/api/', views.retail_api, name='retail_api'),
-    path('retail/save/', views.retail_save, name='retail_save'),
-    path('retail/<int:pk>/delete/', views.retail_delete, name='retail_delete'),
+    # NRA Dashboard
+    path('nra/dashboard/', nra.nra_dashboard, name='nra_dashboard'),
 
-    # 4. Lawful Intercept (gated)
-    path('intercept/', views.intercept_list, name='intercept_list'),
-    path('intercept/api/', views.intercept_api, name='intercept_api'),
-    path('intercept/save/', views.intercept_save, name='intercept_save'),
-    path('intercept/<int:pk>/', views.intercept_detail, name='intercept_detail'),
-    path('intercept/<int:pk>/execute/', views.intercept_execute, name='intercept_execute'),
-    path('intercept/<int:pk>/export/', views.intercept_export, name='intercept_export'),
-    path('intercept/<int:pk>/delete/', views.intercept_delete, name='intercept_delete'),
-    path('intercept/extraction/<int:pk>/download/', views.intercept_download_extraction,
-         name='intercept_download_extraction'),
+    # NRA Declarations
+    path('nra/declarations/', declarations.declaration_list, name='declaration_list'),
+    path('nra/declarations/create/', declarations.declaration_create, name='declaration_create'),
+    path('nra/declarations/<int:pk>/', declarations.declaration_detail, name='declaration_detail'),
+    path('nra/declarations/<int:pk>/edit/', declarations.declaration_edit, name='declaration_edit'),
+    path('nra/declarations/<int:pk>/submit/', declarations.declaration_submit, name='declaration_submit'),
+    path('nra/declarations/<int:pk>/review/', declarations.declaration_review, name='declaration_review'),
+    path('nra/declarations/<int:pk>/amend/', declarations.declaration_amend, name='declaration_amend'),
+    path('nra/declarations/import/', declarations.declaration_import, name='declaration_import'),
+    path('nra/declarations/import/template/', declarations.declaration_import_template, name='declaration_import_template'),
 
-    # 5. QoS / KPIs
-    path('qos/', views.qos_view, name='qos_view'),
-    path('qos/api/', views.qos_api, name='qos_api'),
-    path('qos/refresh/', views.qos_refresh, name='qos_refresh'),
+    # NRA Reconciliation
+    path('nra/reconciliation/', reconciliation.reconciliation_list, name='reconciliation_list'),
+    path('nra/reconciliation/run/', reconciliation.reconciliation_create, name='reconciliation_create'),
+    path('nra/reconciliation/export/', reconciliation.reconciliation_export, name='reconciliation_export'),
+    path('nra/reconciliation/<int:pk>/', reconciliation.reconciliation_detail, name='reconciliation_detail'),
+    path('nra/reconciliation/discrepancy/<int:pk>/', reconciliation.discrepancy_detail, name='discrepancy_detail'),
 
-    # 6. Network Performance Monitoring (PM KPIs)
-    path('network-performance/', views.network_performance_view, name='network_performance_view'),
-    path('network-performance/api/', views.network_performance_api, name='network_performance_api'),
-    path('network-performance/comparison/', views.network_performance_comparison_api, name='network_performance_comparison_api'),
-    path('network-performance/import/', views.network_performance_import, name='network_performance_import'),
-    path('network-performance/api/push/', views.network_performance_api_push, name='network_performance_api_push'),
-    path('network-performance/save/', views.network_performance_save, name='network_performance_save'),
-    path('network-performance/<int:pk>/delete/', views.network_performance_delete, name='network_performance_delete'),
+    # NRA Risk Management
+    path('nra/risk/rules/', risk.risk_rule_list, name='risk_rule_list'),
+    path('nra/risk/rules/create/', risk.risk_rule_create, name='risk_rule_create'),
+    path('nra/risk/rules/<int:pk>/edit/', risk.risk_rule_edit, name='risk_rule_edit'),
+    path('nra/risk/alerts/', risk.risk_alert_list, name='risk_alert_list'),
+    path('nra/risk/alerts/export/', risk.risk_alert_export, name='risk_alert_export'),
+    path('nra/risk/alerts/<str:identifier>/', risk.risk_alert_detail, name='risk_alert_detail'),
+    path('nra/risk/alerts/<str:identifier>/evidence/', risk.risk_alert_evidence_export, name='risk_alert_evidence_export'),
 
-    # 7. Drive Test Management
-    path('drive-test/', views.drive_test_list, name='drive_test_list'),
-    path('drive-test/api/', views.drive_test_api, name='drive_test_api'),
-    path('drive-test/upload/', views.drive_test_upload, name='drive_test_upload'),
-    path('drive-test/<int:pk>/', views.drive_test_detail, name='drive_test_detail'),
-    path('drive-test/<int:pk>/samples/', views.drive_test_samples_api, name='drive_test_samples_api'),
-    path('drive-test/<int:pk>/analyse/', views.drive_test_analyse, name='drive_test_analyse'),
-    path('drive-test/<int:pk>/delete/', views.drive_test_delete, name='drive_test_delete'),
-    path('drive-test/live/start/', views.drive_test_live_start, name='drive_test_live_start'),
-    path('drive-test/live/<int:pk>/samples/', views.drive_test_live_samples, name='drive_test_live_samples'),
-    path('drive-test/live/<int:pk>/end/', views.drive_test_live_end, name='drive_test_live_end'),
-    path('drive-test/<int:pk>/pdf/', views.download_drive_test_pdf, name='download_drive_test_pdf'),
-    path('drive-test/<int:pk>/excel/', views.download_drive_test_excel, name='download_drive_test_excel'),
-    path('drive-test/<int:pk>/csv/', views.download_drive_test_csv, name='download_drive_test_csv'),
+    # NRA Audit Case Management
+    path('nra/audit/', audit.audit_case_list, name='audit_case_list'),
+    path('nra/audit/export/', audit.audit_case_export, name='audit_case_export'),
+    path('nra/audit/create/', audit.audit_case_create, name='audit_case_create'),
+    path('nra/audit/<int:pk>/', audit.audit_case_detail, name='audit_case_detail'),
+    path('nra/audit/<int:pk>/report/', audit.audit_case_report, name='audit_case_report'),
 
-    # 8. Cell Site & Geo Dimension (GeoDim) Management
-    path('sites/', views.site_list_view, name='site_list_view'),
-    path('sites/api/', views.site_api, name='site_api'),
-    path('sites/sectors/api/', views.sector_cell_api, name='sector_cell_api'),
-    path('sites/save/', views.site_save, name='site_save'),
-    path('sites/import/', views.site_import, name='site_import'),
-    path('sites/template/', views.site_download_template, name='site_download_template'),
-    path('sites/<int:pk>/delete/', views.site_delete, name='site_delete'),
+    # Tariff management
+    path('natca/tariffs/', tariffs.tariff_list, name='tariff_list'),
+    path('natca/tariffs/create/', tariffs.tariff_create, name='tariff_create'),
+    path('natca/tariffs/<int:pk>/edit/', tariffs.tariff_edit, name='tariff_edit'),
+    path('natca/tariffs/<int:pk>/', tariffs.tariff_detail, name='tariff_detail'),
+    path('natca/tariffs/<int:pk>/workflow/<str:action>/', tariffs.tariff_workflow, name='tariff_workflow'),
+    path('natca/tariffs/<int:pk>/deactivate/', tariffs.tariff_deactivate, name='tariff_deactivate'),
+    path('natca/tariffs/<int:pk>/new-version/', tariffs.tariff_new_version, name='tariff_new_version'),
+    path('tariffs/', tariffs.tariff_list, name='tariff_list_legacy'),
 
-    # 9. Counter Dictionary / Inventory Catalog
-    path('counters/', views.counter_list_view, name='counter_list_view'),
-    path('counters/api/', views.counter_api, name='counter_api'),
-    path('counters/save/', views.counter_save, name='counter_save'),
-    path('counters/import/', views.counter_import, name='counter_import'),
-    path('counters/template/', views.counter_download_template, name='counter_download_template'),
-    path('counters/<int:pk>/delete/', views.counter_delete, name='counter_delete'),
-
-    # 10. PM KPI Definition & Threshold Configuration
-    path('kpis/', views.kpi_config_view, name='kpi_config_view'),
-    path('kpis/api/', views.kpi_config_api, name='kpi_config_api'),
-    path('kpis/save/', views.kpi_config_save, name='kpi_config_save'),
-    path('kpis/<int:pk>/delete/', views.kpi_config_delete, name='kpi_config_delete'),
-
-    # 11. NatCA Compliance Audit & Regulatory Penalty Engine
-    path('compliance/', views.compliance_page_view, name='compliance_page_view'),
-    path('network-performance/audit/api/', views.compliance_audit_api, name='compliance_audit_api'),
-    path('network-performance/audit/pdf/', views.download_audit_pdf, name='download_audit_pdf'),
-    path('network-performance/audit/excel/', views.download_audit_excel, name='download_audit_excel'),
-
-    # Regulatory Profile (admin)
-    path('profile/save/', views.profile_save, name='profile_save'),
+    # NRA tax rates
+    path('nra/tax-rates/', tax_rates.tax_rate_list, name='tax_rate_list'),
+    path('nra/tax-rates/create/', tax_rates.tax_type_create, name='tax_type_create'),
+    path('nra/tax-rates/<int:pk>/', tax_rates.tax_type_detail, name='tax_type_detail'),
+    path('nra/tax-rates/<int:pk>/edit/', tax_rates.tax_type_edit, name='tax_type_edit'),
+    path('nra/tax-rates/<int:pk>/deactivate/', tax_rates.tax_type_deactivate, name='tax_type_deactivate'),
+    path('nra/tax-rates/<int:tax_type_id>/versions/create/', tax_rates.tax_rate_create, name='tax_rate_create'),
+    path('tax-rates/', tax_rates.tax_rate_list, name='tax_rate_list_legacy'),
 ]

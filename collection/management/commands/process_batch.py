@@ -17,9 +17,12 @@ DB inserts).
 import multiprocessing as mp
 import os
 import time
+from pathlib import Path
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
+from django.utils import timezone
+from collection.services.paths import PathBuilder
 
 # Map decoder type -> (module path, processor class name). Module-level so the
 # worker function stays importable/picklable under the spawn start method.
@@ -33,6 +36,19 @@ PROCESSORS = {
 }
 
 ALLOWED_EXT = ('.dat', '.bin', '.asn', '.ber', '.unl', '.add', '.csv', '.txt')
+
+
+def _canonical_location(path: str) -> tuple[str, str]:
+    """Return stream and optional CBS substream encoded in an input path."""
+    try:
+        relative = Path(path).resolve().relative_to(Path(settings.UMP_INPUT_ROOT).resolve())
+    except ValueError:
+        return '', ''
+    parts = relative.parts
+    if len(parts) < 2:
+        return '', ''
+    stream = parts[1].lower()
+    return stream, parts[2].lower() if stream == 'cbs' and len(parts) > 3 else ''
 
 
 def _worker_init():
@@ -56,11 +72,18 @@ def _hash_one(path: str):
 def _process_one(job) -> dict:
     """Classify + register + process a single file. Runs in a pool worker.
 
-    `job` is (path, file_hash, archive)."""
+    `job` is (path, file_hash, archive).
+
+    File lifecycle: input → processing → archive.
+    The collector picks files from the input directory and moves them to the
+    processing directory before decoding begins, so the input directory only
+    contains files waiting to be collected.
+    """
     import importlib
+    import shutil
     from collection.models import CDRFile
     from collection.services.file_detector import classify_file
-    from collection.services.storage import archive_file
+    from collection.services.storage import archive_file, processing_storage_dir
 
     path, file_hash, archive = job
     fname = os.path.basename(path)
@@ -68,9 +91,19 @@ def _process_one(job) -> dict:
     try:
         cls = classify_file(fname)
         decoder = cls.decoder_type
+        stream, cbs_substream = _canonical_location(path)
         entry = PROCESSORS.get(decoder)
         if entry is None:
             return {'file': fname, 'status': 'SKIPPED', 'reason': f'no processor for {decoder}'}
+
+        # Move file from input to processing directory before decoding
+        proc_dir = processing_storage_dir(
+            cls.operator, cls.network_element or stream, decoder, cbs_substream,
+        )
+        processing_path = os.path.join(proc_dir, fname)
+        if os.path.abspath(path) != os.path.abspath(processing_path):
+            shutil.move(path, processing_path)
+        path = processing_path
 
         # Register the file with status=PROCESSING so the post_save signal does
         # NOT also queue it (it only fires for PENDING) — we process inline here.
@@ -78,7 +111,8 @@ def _process_one(job) -> dict:
             filename=fname, file_path=path,
             file_size=os.path.getsize(path), file_hash=file_hash,
             decoder_type=decoder, operator_code=cls.operator or '',
-            vendor=cls.vendor or '', network_element=cls.network_element or '',
+            vendor=cls.vendor or '', network_element=cls.network_element or stream,
+            cbs_substream=cbs_substream,
             status=CDRFile.Status.PROCESSING,
         )
 
@@ -91,9 +125,11 @@ def _process_one(job) -> dict:
         if ok and archive:
             try:
                 archived = archive_file(path, cls.operator, cls.vendor,
-                                        cls.network_element, decoder)
-                CDRFile.objects.filter(pk=cdr.pk).update(file_path=archived)
-            except Exception as exc:  # don't fail a good decode over a move error
+                                        cls.network_element, decoder, cbs_substream)
+                CDRFile.objects.filter(pk=cdr.pk).update(
+                    file_path=archived, archive_path=archived, archived_at=timezone.now(),
+                )
+            except Exception as exc:
                 archived = f'(archive failed: {str(exc).splitlines()[0][:80]})'
 
         return {
@@ -111,13 +147,13 @@ def _collect_files(directory: str | None, operator: str | None) -> list[str]:
     if directory:
         roots = [directory]
     else:
-        data_dir = str(settings.DATA_DIR)
         ops = [operator] if operator else list(settings.OPERATORS)
-        roots = [os.path.join(data_dir, op, 'input') for op in ops]
+        roots = [str(PathBuilder.input_published(op, 'unknown').parent) for op in ops]
     for root in roots:
         if not os.path.isdir(root):
             continue
-        for dirpath, _dirs, names in os.walk(root):
+        for dirpath, dirs, names in os.walk(root):
+            dirs[:] = [directory for directory in dirs if directory != 'staging']
             for n in names:
                 if n.startswith('.') or not n.lower().endswith(ALLOWED_EXT):
                     continue

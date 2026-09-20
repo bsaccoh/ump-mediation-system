@@ -1,17 +1,15 @@
-"""Cross-platform Job views.
-
-Browse + poll the status of long-running tasks (invoice generation, NATCOM
-reports, LEA exports, roaming-file generation, etc.) that go through
-``core.JobRecord``.
-"""
+"""Cross-platform Job + User-management views."""
 from __future__ import annotations
 
-from django.contrib.auth.decorators import login_required
+import json
+
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404
+from django.views.decorators.http import require_http_methods
 
-from .models import JobRecord
+from .models import JobRecord, User
 
 
 def _paginate(qs, page, per_page=25):
@@ -62,6 +60,141 @@ def job_detail(request, pk):
         'job': job,
     })
 
+
+def _is_superuser(u):
+    return u.is_superuser
+
+
+# ── User Management ──────────────────────────────────────────────────────────
+
+@login_required
+@user_passes_test(_is_superuser)
+def user_list(request):
+    users = User.objects.all().order_by('-is_active', '-is_superuser', 'username')
+    stats = {
+        'total': users.count(),
+        'active': users.filter(is_active=True).count(),
+        'inactive': users.filter(is_active=False).count(),
+        'superusers': users.filter(is_superuser=True).count(),
+        'staff': users.filter(is_staff=True).count(),
+    }
+    return render(request, 'core/users.html', {'users': users, 'stats': stats})
+
+
+@login_required
+@user_passes_test(_is_superuser)
+@require_http_methods(['GET', 'POST'])
+def users_api(request):
+    if request.method == 'GET':
+        uid = request.GET.get('id')
+        if uid:
+            u = get_object_or_404(User, pk=uid)
+            return JsonResponse({'user': _serialize_user(u)})
+        return JsonResponse({'error': 'id required'}, status=400)
+
+    data = json.loads(request.body)
+    action = data.get('action')
+
+    if action == 'toggle':
+        u = get_object_or_404(User, pk=data['user_id'])
+        if u.pk == request.user.pk:
+            return JsonResponse({'success': False, 'error': 'Cannot deactivate yourself.'})
+        u.is_active = not u.is_active
+        u.save(update_fields=['is_active'])
+        return JsonResponse({'success': True})
+
+    if action == 'create':
+        return _create_user(data)
+
+    if action == 'edit':
+        return _edit_user(data, request.user)
+
+    return JsonResponse({'error': 'Unknown action'}, status=400)
+
+
+def _create_user(data):
+    username = (data.get('username') or '').strip()
+    password = data.get('password', '')
+    password2 = data.get('password_confirm', '')
+
+    if not username:
+        return JsonResponse({'success': False, 'error': 'Username is required.'})
+    if User.objects.filter(username=username).exists():
+        return JsonResponse({'success': False, 'error': f'Username "{username}" already exists.'})
+    if not password or len(password) < 8:
+        return JsonResponse({'success': False, 'error': 'Password must be at least 8 characters.'})
+    if password != password2:
+        return JsonResponse({'success': False, 'error': 'Passwords do not match.'})
+
+    u = User(
+        username=username,
+        email=data.get('email', ''),
+        first_name=data.get('first_name', ''),
+        last_name=data.get('last_name', ''),
+        phone=data.get('phone', ''),
+        department=data.get('department', ''),
+        is_active=bool(data.get('is_active', True)),
+        is_staff=bool(data.get('is_staff', False)),
+        is_superuser=bool(data.get('is_superuser', False)),
+        is_operator=bool(data.get('is_operator', False)),
+        is_analyst=bool(data.get('is_analyst', False)),
+        can_lawful_intercept=bool(data.get('can_lawful_intercept', False)),
+    )
+    u.set_password(password)
+    u.save()
+    return JsonResponse({'success': True, 'id': u.pk})
+
+
+def _edit_user(data, current_user):
+    u = get_object_or_404(User, pk=data.get('user_id'))
+
+    u.email = data.get('email', u.email)
+    u.first_name = data.get('first_name', u.first_name)
+    u.last_name = data.get('last_name', u.last_name)
+    u.phone = data.get('phone', u.phone)
+    u.department = data.get('department', u.department)
+    u.is_staff = bool(data.get('is_staff', u.is_staff))
+    u.is_operator = bool(data.get('is_operator', u.is_operator))
+    u.is_analyst = bool(data.get('is_analyst', u.is_analyst))
+    u.can_lawful_intercept = bool(data.get('can_lawful_intercept', u.can_lawful_intercept))
+
+    if u.pk != current_user.pk:
+        u.is_active = bool(data.get('is_active', u.is_active))
+        u.is_superuser = bool(data.get('is_superuser', u.is_superuser))
+
+    password = data.get('password', '')
+    if password:
+        password2 = data.get('password_confirm', '')
+        if len(password) < 8:
+            return JsonResponse({'success': False, 'error': 'Password must be at least 8 characters.'})
+        if password != password2:
+            return JsonResponse({'success': False, 'error': 'Passwords do not match.'})
+        u.set_password(password)
+
+    u.save()
+    return JsonResponse({'success': True})
+
+
+def _serialize_user(u):
+    return {
+        'id': u.pk,
+        'username': u.username,
+        'email': u.email,
+        'first_name': u.first_name,
+        'last_name': u.last_name,
+        'phone': u.phone,
+        'department': u.department,
+        'is_active': u.is_active,
+        'is_staff': u.is_staff,
+        'is_superuser': u.is_superuser,
+        'is_operator': u.is_operator,
+        'is_analyst': u.is_analyst,
+        'can_lawful_intercept': u.can_lawful_intercept,
+        'last_login': u.last_login.isoformat() if u.last_login else None,
+    }
+
+
+# ── Jobs ─────────────────────────────────────────────────────────────────────
 
 def _serialize(job: JobRecord) -> dict:
     return {

@@ -53,16 +53,12 @@ class SGWProcessor(BaseProcessor):
             count = len(sgw_records)
             total_decoded = len(records or [])
             logger.info(
-                f"SGW decoded {count} SGW records (from {total_decoded} total) in {file_path}"
-            )
-            print(
-                f"[SGW PROCESSOR] Decoded {count} SGW-CDR records "
-                f"(filtered from {total_decoded} total). "
+                f"SGW decoded {count} SGW records (from {total_decoded} total) in {file_path}. "
                 f"Decoder errors: {len(decoder.errors)}"
             )
             if decoder.errors:
                 for err in decoder.errors[:5]:
-                    print(f"[SGW DECODER ERROR] {err}")
+                    logger.warning(f"[SGW DECODER ERROR] {err}")
 
             # Write decoded CSV output
             self._write_decoded_csv(self._decoded_records, file_path, 'sgw')
@@ -305,6 +301,5 @@ class SGWProcessor(BaseProcessor):
                     writer.writerow(row)
 
             logger.info(f'[SGW] Decoded CSV written: {csv_path} ({len(records)} rows)')
-            print(f'[SGW PROCESSOR] Decoded CSV: {csv_path}')
         except Exception as e:
             logger.warning(f'[SGW] Could not write decoded CSV: {e}')

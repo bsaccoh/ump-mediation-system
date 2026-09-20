@@ -9,6 +9,8 @@ import json
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from core.fields import EncryptedCharField
+
 
 class StreamTypeMixin(models.Model):
     """Abstract mixin providing stream_type choices."""
@@ -46,7 +48,7 @@ class InputPortal(StreamTypeMixin):
     host = models.CharField(max_length=255, blank=True)
     port = models.IntegerField(null=True, blank=True)
     username = models.CharField(max_length=100, blank=True)
-    password = models.CharField(max_length=255, blank=True)
+    password = EncryptedCharField(max_length=500, blank=True)
     directory = models.CharField(max_length=500, blank=True)
     file_pattern = models.CharField(max_length=200, blank=True, default='*.dat')
     polling_interval = models.IntegerField(
@@ -105,6 +107,24 @@ class InputPortal(StreamTypeMixin):
     input_script = models.CharField(max_length=50, default='None')
     large_file_access_descriptor = models.CharField(max_length=50, default='None')
 
+    # --- Staging/Publication Configuration ---
+    landing_root = models.CharField(
+        max_length=500, blank=True,
+        help_text='Root directory for input landing (e.g., /ump/landing/input/{operator}/)'
+    )
+    staging_path = models.CharField(
+        max_length=500, blank=True,
+        help_text='Staging directory path relative to landing_root (e.g., {stream}/staging/)'
+    )
+    archive_path = models.CharField(
+        max_length=500, blank=True,
+        help_text='Archive directory path with date placeholders (e.g., /ump/archive/input/{operator}/{stream}/YYYY/MM/DD/HH/)'
+    )
+    enable_staging = models.BooleanField(
+        default=True,
+        help_text='Enable staging/publication semantics for this portal'
+    )
+
     # Meta and original string
     class Meta:
         db_table = 'portals_input_portal'
@@ -143,7 +163,7 @@ class OutputPortal(StreamTypeMixin):
     host = models.CharField(max_length=255, blank=True)
     port = models.IntegerField(null=True, blank=True)
     username = models.CharField(max_length=100, blank=True)
-    password = models.CharField(max_length=255, blank=True)
+    password = EncryptedCharField(max_length=500, blank=True)
     directory = models.CharField(
         max_length=500, blank=True,
         help_text='Absolute path OR path relative to project DATA_DIR. '
@@ -155,6 +175,24 @@ class OutputPortal(StreamTypeMixin):
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # --- Staging/Publication Configuration ---
+    landing_root = models.CharField(
+        max_length=500, blank=True,
+        help_text='Root directory for output landing (e.g., /ump/landing/output/{downstream}/{operator}/)'
+    )
+    staging_path = models.CharField(
+        max_length=500, blank=True,
+        help_text='Staging directory path relative to landing_root (e.g., {stream}/staging/)'
+    )
+    archive_path = models.CharField(
+        max_length=500, blank=True,
+        help_text='Archive directory path with date placeholders (e.g., /ump/archive/output/{downstream}/{operator}/{stream}/YYYY/MM/DD/HH/)'
+    )
+    enable_staging = models.BooleanField(
+        default=True,
+        help_text='Enable staging/publication semantics for this portal'
+    )
 
     class Meta:
         db_table = 'portals_output_portal'
@@ -171,12 +209,20 @@ class OutputPortal(StreamTypeMixin):
             self.directory = self.directory.strip('"').strip("'")
 
     def resolve_directory(self, dt=None, *, operator=None, vendor=None,
-                          network_element=None):
+                          network_element=None, cbs_substream=None,
+                          downstream=None, context='published'):
         """Returns the absolute output path, resolving placeholders.
 
         Multi-operator layout: ``{operator}/output/{vendor}/{ne}``. The
         operator/vendor/network_element come from the CDRFile being delivered;
         each falls back to a safe token when unknown so a file is never lost.
+
+        Args:
+            dt: Datetime for date placeholders (defaults to now)
+            operator: Operator code from CDRFile
+            vendor: Vendor from CDRFile
+            network_element: Network element from CDRFile
+            context: 'published' (default), 'staging', or 'archive'
         """
         import os
         from django.conf import settings
@@ -185,26 +231,79 @@ class OutputPortal(StreamTypeMixin):
         op = (operator or 'unknown').lower()
         vend = (vendor or 'unknown').lower()
         ne = (network_element or self.stream_type or 'unknown').lower()
-
-        directory = (self.directory or '').strip()
-        if not directory:
-            # Per-operator default tree: {operator}/output/{vendor}/{ne}
-            directory = os.path.join(op, 'output', vend, ne)
+        downstream = (downstream or self.name or 'unknown').lower()
 
         dt = dt or datetime.now()
+
+        # Use canonical paths for blank portal configurations while preserving
+        # existing explicit portal directories.
+        if not self.directory and not self.landing_root and not self.staging_path:
+            from collection.services.paths import PathBuilder
+            stream = (self.stream_type or ne).lower()
+            if context == 'staging':
+                return str(PathBuilder.output_staging(downstream, op, stream, cbs_substream))
+            if context == 'published':
+                return str(PathBuilder.output_published(downstream, op, stream, cbs_substream))
+
+        # Placeholder map shared across all contexts
         replacements = {
             '{operator}': op,
             '{vendor}': vend,
             '{ne}': ne,
             '{stream}': self.stream_type.lower(),
             '{portal}': self.name.lower(),
+            '{downstream}': downstream,
+            '{cbs_substream}': (cbs_substream or '').lower(),
             '{YYYY}': dt.strftime('%Y'),
             '{MM}': dt.strftime('%m'),
             '{DD}': dt.strftime('%d'),
+            '{HH}': dt.strftime('%H'),
         }
-        for placeholder, value in replacements.items():
-            directory = directory.replace(placeholder, value)
 
+        def _resolve(tpl):
+            result = tpl
+            for ph, val in replacements.items():
+                result = result.replace(ph, val)
+            return result
+
+        # When landing_root is configured, derive all three contexts from it.
+        if self.landing_root:
+            base = _resolve(self.landing_root.strip())
+            if context == 'staging' and self.enable_staging and self.staging_path:
+                directory = os.path.join(base, _resolve(self.staging_path))
+            elif context == 'archive' and self.archive_path:
+                directory = os.path.join(base, _resolve(self.archive_path))
+            elif context == 'published' and self.staging_path:
+                # Published = staging path without the trailing staging/ component
+                staging_rel = _resolve(self.staging_path).rstrip('/\\')
+                if staging_rel.endswith('staging'):
+                    staging_rel = staging_rel[:-len('staging')].rstrip('/\\')
+                directory = os.path.join(base, staging_rel) if staging_rel else base
+            else:
+                directory = os.path.join(base, _resolve((self.directory or '').strip() or os.path.join(op, 'output', vend, ne)))
+
+            if not os.path.isabs(directory):
+                directory = os.path.join(settings.DATA_DIR, directory)
+            return directory
+
+        # Legacy path: no landing_root — use directory field directly
+        if context == 'staging' and self.enable_staging and self.staging_path:
+            directory = self.staging_path
+        elif context == 'archive' and self.enable_staging and self.archive_path:
+            directory = self.archive_path
+        else:
+            directory = (self.directory or '').strip()
+            if not directory:
+                directory = os.path.join(op, 'output', vend, ne)
+
+        directory = _resolve(directory)
+
+        # Add staging suffix if context is staging and not already in path
+        stripped = directory.rstrip('/\\')
+        if context == 'staging' and self.enable_staging and not stripped.endswith('staging'):
+            directory = os.path.join(directory, 'staging')
+
+        # Resolve to absolute path
         if not os.path.isabs(directory):
             directory = os.path.join(settings.DATA_DIR, directory)
 
@@ -382,3 +481,36 @@ class DistributionRule(StreamTypeMixin):
             raise ValidationError({'filter_logic': f'Invalid JSON: {e}'})
         if not isinstance(data, dict):
             raise ValidationError({'filter_logic': 'filter_logic must be a JSON object'})
+
+
+class PathSecurity(models.Model):
+    """Defines allowed path prefixes for security validation.
+
+    Prevents path traversal and symlink escape attacks by validating
+    that resolved paths are within allowed directories.
+    """
+    name = models.CharField(
+        max_length=100, unique=True,
+        help_text='Unique name for this path security rule (e.g., input_landing_orange)'
+    )
+    path_prefix = models.CharField(
+        max_length=500,
+        help_text='Allowed path prefix (e.g., /ump/landing/input/orange/)'
+    )
+    allowed_operations = models.JSONField(
+        default=list,
+        help_text='List of allowed operations: read, write, delete, move'
+    )
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'portals_path_security'
+        ordering = ['name']
+        verbose_name = 'Path Security Rule'
+        verbose_name_plural = 'Path Security Rules'
+
+    def __str__(self):
+        return f"{self.name} ({self.path_prefix})"

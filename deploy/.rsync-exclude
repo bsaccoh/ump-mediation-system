@@ -1,0 +1,81 @@
+# =============================================================================
+# UMP Mediation — Production rsync exclude list
+# =============================================================================
+# Used by deploy.sh and update.sh to skip dev-only files.
+# Usage: rsync -a --delete --exclude-from=deploy/.rsync-exclude ./ /opt/ump/mediation/
+# =============================================================================
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+
+# SQLite databases (production uses PostgreSQL)
+*.sqlite3
+db.*
+
+# Empty per-operator SQLite directories
+ump_mediation/
+ump_mediation_*/
+
+# Git / IDE / Claude
+.git/
+.gitignore
+.claude/
+.vscode/
+.idea/
+
+# Logs (production writes to /opt/ump/logs)
+logs/
+*.log
+
+# Data directories (production uses /opt/ump/data)
+data/
+
+# Media uploads
+media/
+
+# Collected static (regenerated on deploy)
+staticfiles/
+
+# Dev scratch / planning
+scratch/
+scratchpad/
+
+# Documentation (not needed on server)
+docs/
+reports/
+AUDIT_REPORT.md
+DEPLOY_UBUNTU.md
+FEATURES.md
+NATCA_IMPLEMENTATION_PLAN.md
+README.md
+
+# Deploy scripts (already on server, not inside app dir)
+deploy/
+
+# Dev-only utility scripts
+check_schema.py
+check_db.py
+clean_test_data.py
+generate_test_data.py
+import_mcc_mnc.py
+load_existing_scripts.py
+process_pending.py
+seed_all_ref.py
+seed_reference.py
+seed_spectrum_data.py
+
+# Node / misc
+package-lock.json
+config_dump.json
+
+# Build artifacts / temp
+*.tar.gz
+*.xlsx
+*.csv.gz
+*.pptx
+
+# Per-operator SQLite files (root level)
+ump_mediation
+ump_mediation_*

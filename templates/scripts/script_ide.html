@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% load humanize %}
+{% load humanize static %}
 
 {% block title %}Scripts - UMP Mediation{% endblock %}
 {% block page_title %}Scripts{% endblock %}
 
 {% block extra_css %}
 <!-- CodeMirror CSS -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/eclipse.min.css">
+<link rel="stylesheet" href="{% static 'vendor/codemirror/codemirror.min.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/codemirror/theme/eclipse.min.css' %}">
 
 <style>
     /* Full height layout minus topbar/padding */
@@ -256,10 +256,10 @@
 
 {% block scripts %}
 <!-- CodeMirror JS -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/python/python.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/shell/shell.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/sql/sql.min.js"></script>
+<script src="{% static 'vendor/codemirror/codemirror.min.js' %}"></script>
+<script src="{% static 'vendor/codemirror/mode/python/python.min.js' %}"></script>
+<script src="{% static 'vendor/codemirror/mode/shell/shell.min.js' %}"></script>
+<script src="{% static 'vendor/codemirror/mode/sql/sql.min.js' %}"></script>
 
 <script>
     // Initialize CodeMirror

@@ -1,408 +1,564 @@
 {% extends "base.html" %}
-{% load humanize %}
-{% block title %}Dashboard - UMP Mediation{% endblock %}
-{% block page_title %}Dashboard{% endblock %}
+{% load static %}
+
+{% block title %}UMP | Mediation Dashboard{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=4">
+{% endblock %}
+
+{% block topbar %}
+<header class="topbar ump-topbar">
+    <div class="topbar-tagline">
+        From CDRs to Intelligence
+    </div>
+
+    <div class="topbar-actions">
+        <button class="notification-btn" type="button" title="System Alerts">
+            <i class="bi bi-bell"></i>
+            {% if alert_count %}<span class="notification-count">{{ alert_count }}</span>{% endif %}
+        </button>
+
+        <div class="user-avatar">AD</div>
+
+        <div class="user-info">
+            <div class="user-name">{{ user.get_full_name|default:user.username|default:"Admin User" }}</div>
+            <div class="user-role">{% if user.is_superuser %}System Administrator{% else %}Operator{% endif %}</div>
+        </div>
+
+        <div class="dropdown">
+            <button class="btn btn-link p-0 text-muted border-0" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-chevron-down user-arrow"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="font-size: 12px;">
+                <li><h6 class="dropdown-header">Signed in as <strong>{{ user.username }}</strong></h6></li>
+                <li><hr class="dropdown-divider"></li>
+                {% if OPERATORS %}
+                <li class="px-3 py-1">
+                    <form method="post" action="{% url 'dashboard:set_operator' %}" class="m-0">
+                        {% csrf_token %}
+                        <label class="form-label mb-1 text-muted" style="font-size: 11px;">Active Operator:</label>
+                        <select name="operator" class="form-select form-select-sm" onchange="this.form.submit()">
+                            {% for op in OPERATORS %}
+                            <option value="{{ op }}" {% if op == ACTIVE_OPERATOR %}selected{% endif %}>{{ op|capfirst }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                {% endif %}
+                <li><a class="dropdown-item" href="{% url 'logout' %}"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
+            </ul>
+        </div>
+    </div>
+</header>
+{% endblock %}
 
 {% block content %}
-<!-- Stats Cards -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card stat-card">
-            <div class="value text-primary">{{ total_records|intcomma }}</div>
-            <div class="label">Total CDR Records</div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card stat-card">
-            <div class="value text-success">{{ records_today|intcomma }}</div>
-            <div class="label">Records Today</div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card stat-card">
-            <div class="value text-info">{{ files_completed }}</div>
-            <div class="label">Files Processed</div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card stat-card">
-            <div class="value {% if files_failed > 0 %}text-danger{% else %}text-secondary{% endif %}">{{ files_failed }}</div>
-            <div class="label">Files Failed</div>
-        </div>
-    </div>
-</div>
+<section class="dashboard-content">
 
-<!-- Stream Breakdown Row -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card stat-card">
-            <div class="value text-primary">{{ msc_total|intcomma }}</div>
-            <div class="label">MSC Records (Voice/SMS)</div>
+    <!-- TOP HEADING & FILTERS -->
+    <div class="dashboard-heading">
+        <div>
+            <h1>Welcome back, {{ user.first_name|default:"Admin" }}</h1>
+            <p>Here's what's happening with your mediation platform today.</p>
         </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card stat-card">
-            <div class="value text-info">{{ pgw_total|intcomma }}</div>
-            <div class="label">PGW Records (4G Data)</div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card stat-card">
-            <div class="value text-warning">{{ sgsn_total|intcomma }}</div>
-            <div class="label">SGSN Records (2G/3G Data)</div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card stat-card">
-            <div class="value text-secondary">{{ sgw_total|intcomma }}</div>
-            <div class="label">SGW Records (4G S-GW)</div>
-        </div>
-    </div>
-</div>
 
-<!-- Processing Volume (sourced from CDRFile — works even in decode-only mode) -->
-<div class="card mb-4" id="procVolCard">
-  <div class="card-header d-flex justify-content-between align-items-center" style="background:#fafafa;font-weight:600;">
-    <span><i class="bi bi-speedometer2"></i> Processing Volume <span class="text-muted" style="font-weight:400;font-size:.8rem;">(last 30 days)</span></span>
-    <span class="d-flex align-items-center gap-3">
-      <span class="text-muted" style="font-size:.8rem;" id="pvTotals">…</span>
-      <form method="post" action="{% url 'dashboard:run_collection' %}" class="m-0">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-sm btn-primary" title="Scan input folders and decode new files now">
-          <i class="bi bi-play-fill"></i> Run collection now
-        </button>
-      </form>
-    </span>
-  </div>
-  <div class="card-body">
-    <div class="row g-3">
-      <div class="col-md-4">
-        <div class="text-muted small text-uppercase mb-1">By Operator</div>
-        <table class="table table-sm mb-0"><tbody id="pvOperator"></tbody></table>
-      </div>
-      <div class="col-md-4">
-        <div class="text-muted small text-uppercase mb-1">By Stream</div>
-        <table class="table table-sm mb-0"><tbody id="pvStream"></tbody></table>
-      </div>
-      <div class="col-md-4">
-        <div class="text-muted small text-uppercase mb-1">By Service Type</div>
-        <table class="table table-sm mb-0"><tbody id="pvService"></tbody></table>
-      </div>
+        <div class="dashboard-filters">
+            <div class="filter-control date-filter">
+                <i class="bi bi-calendar3"></i>
+                <span>{{ date_start }}</span>
+                <i class="bi bi-arrow-right"></i>
+                <span>{{ date_end }}</span>
+            </div>
+
+            <select class="form-select operator-filter" id="operatorFilter" aria-label="Operator filter">
+                <option value="" {% if not selected_operator %}selected{% endif %}>All Operators</option>
+                {% for op in operators %}
+                <option value="{{ op }}" {% if op|lower == selected_operator|lower %}selected{% endif %}>{{ op }}</option>
+                {% endfor %}
+            </select>
+
+            <button class="period-btn {% if selected_period == 'today' %}active{% endif %}" type="button" data-period="today">Today</button>
+            <button class="period-btn {% if selected_period == '7' %}active{% endif %}" type="button" data-period="7">7 Days</button>
+            <button class="period-btn {% if selected_period == '30' %}active{% endif %}" type="button" data-period="30">30 Days</button>
+        </div>
     </div>
-  </div>
-</div>
+
+    <!-- =================================================
+         KPI CARDS
+    ================================================== -->
+    <div class="row g-3 metric-row">
+        <!-- Card 1: Files Received -->
+        <div class="col-xl col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-icon">
+                    <i class="bi bi-file-earmark-text-fill"></i>
+                </div>
+                <div>
+                    <div class="metric-number">{{ files_received|default:"0" }}</div>
+                    <div class="metric-title">Files Received</div>
+                    {% if files_received_change %}
+                    <div class="metric-change {% if '-' in files_received_change %}negative{% else %}positive{% endif %}">
+                        <i class="bi bi-arrow-{% if '-' in files_received_change %}down{% else %}up{% endif %}"></i>
+                        {{ files_received_change }}
+                    </div>
+                    <div class="metric-previous">vs yesterday</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 2: Files Processed -->
+        <div class="col-xl col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-icon">
+                    <i class="bi bi-gear-fill"></i>
+                </div>
+                <div>
+                    <div class="metric-number">{{ files_processed|default:"0" }}</div>
+                    <div class="metric-title">Files Processed</div>
+                    {% if files_processed_change %}
+                    <div class="metric-change {% if '-' in files_processed_change %}negative{% else %}positive{% endif %}">
+                        <i class="bi bi-arrow-{% if '-' in files_processed_change %}down{% else %}up{% endif %}"></i>
+                        {{ files_processed_change }}
+                    </div>
+                    <div class="metric-previous">vs yesterday</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 3: Records Processed -->
+        <div class="col-xl col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-icon">
+                    <i class="bi bi-database-fill"></i>
+                </div>
+                <div>
+                    <div class="metric-number">{{ records_processed|default:"0" }}</div>
+                    <div class="metric-title">Records Processed</div>
+                    {% if records_processed_change %}
+                    <div class="metric-change {% if '-' in records_processed_change %}negative{% else %}positive{% endif %}">
+                        <i class="bi bi-arrow-{% if '-' in records_processed_change %}down{% else %}up{% endif %}"></i>
+                        {{ records_processed_change }}
+                    </div>
+                    <div class="metric-previous">vs yesterday</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 4: Success Rate -->
+        <div class="col-xl col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-icon success">
+                    <i class="bi bi-shield-check"></i>
+                </div>
+                <div>
+                    <div class="metric-number">{{ success_rate|default:"0%" }}</div>
+                    <div class="metric-title">Success Rate</div>
+                    <div class="metric-change">
+                        <span class="metric-previous">{{ files_completed }} of {{ total_files }} files</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 5: Avg Decode Time -->
+        <div class="col-xl col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-icon outline">
+                    <i class="bi bi-clock"></i>
+                </div>
+                <div>
+                    <div class="metric-number">{{ avg_decode_time|default:"--" }}</div>
+                    <div class="metric-title">Avg. Decode Time</div>
+                    <div class="metric-change">
+                        <span class="metric-previous">per file</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================================================
+         CHARTS ROW
+    ================================================== -->
+    <div class="row g-3 mt-1">
+        <!-- Processing Volume -->
+        <div class="col-xl-5">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-bar-chart-line text-primary"></i>
+                        <span>Processing Volume</span>
+                    </div>
+                    <span class="badge bg-light text-secondary border fw-normal" id="processingVolumePeriodBadge" style="font-size: 11px; padding: 4px 8px;">
+                        {% if selected_period == 'today' %}Today (Hourly){% elif selected_period == '30' %}Last 30 Days{% else %}Last 7 Days{% endif %}
+                    </span>
+                </div>
+                <div class="card-content chart-large">
+                    <canvas id="processingChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Records by Stream -->
+        <div class="col-xl-3">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading">
+                    Records by Stream
+                </div>
+                <div class="doughnut-container">
+                    <div class="doughnut-chart">
+                        <canvas id="streamChart"></canvas>
+                        <div class="chart-center">
+                            <strong>{{ records_processed|default:"0" }}</strong>
+                            <span>Records</span>
+                        </div>
+                    </div>
+                    <div class="chart-legend" id="streamLegend"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- File Status Summary -->
+        <div class="col-xl-4">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading">
+                    File Status
+                </div>
+                <div class="doughnut-container">
+                    <div class="doughnut-chart">
+                        <canvas id="statusChart"></canvas>
+                        <div class="chart-center">
+                            <strong>{{ total_files|default:"0" }}</strong>
+                            <span>Files</span>
+                        </div>
+                    </div>
+                    <div class="chart-legend" id="statusLegend"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================================================
+         MAIN LOWER SECTION
+    ================================================== -->
+    <div class="row g-3 mt-1">
+        <!-- LEFT COLUMN: Recent Files & Alarms -->
+        <div class="col-xl-7">
+            <!-- RECENT FILES -->
+            <div class="dashboard-card">
+                <div class="card-heading header-between">
+                    <span>Recent Files</span>
+                    <a href="{% url 'dashboard:file_registry' %}">View All</a>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table ump-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Operator</th>
+                                <th>Source</th>
+                                <th>Type</th>
+                                <th>Records</th>
+                                <th>Status</th>
+                                <th>Received</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for rf in recent_files %}
+                            <tr>
+                                <td>{{ rf.filename }}</td>
+                                <td>{{ rf.operator }}</td>
+                                <td>{{ rf.source }}</td>
+                                <td>
+                                    <span class="badge {{ rf.type_class }}">{{ rf.type }}</span>
+                                </td>
+                                <td>{{ rf.records }}</td>
+                                <td>
+                                    <span class="status {{ rf.status_class }}">{{ rf.status }}</span>
+                                </td>
+                                <td>{{ rf.received }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">No files received yet. Upload CDR files to begin processing.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ALARMS & ALERTS -->
+            <div class="dashboard-card mt-3">
+                <div class="card-heading header-between">
+                    <span>Alarms & Alerts</span>
+                    <a href="{% url 'dashboard:activity_log' %}">View All</a>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table ump-table alert-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Severity</th>
+                                <th>Source</th>
+                                <th>Message</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for alert in alarms %}
+                            <tr>
+                                <td>{{ alert.time }}</td>
+                                <td>
+                                    <span class="severity {{ alert.severity_class }}">{{ alert.severity }}</span>
+                                </td>
+                                <td>{{ alert.source }}</td>
+                                <td>{{ alert.message }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted py-4">No alerts. System is operating normally.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Pipeline, System Health & Top Operators -->
+        <div class="col-xl-5">
+            <!-- PROCESSING PIPELINE -->
+            <div class="dashboard-card">
+                <div class="card-heading header-between">
+                    <span>Processing Pipeline</span>
+                    <a href="{% url 'dashboard:processing_queue' %}">View Details</a>
+                </div>
+
+                <div class="pipeline" id="pipelineWidget">
+                    <div class="pipeline-stage">
+                        <div class="stage-icon blue"><i class="bi bi-folder-fill"></i></div>
+                        <div class="stage-name">Collect</div>
+                        <strong id="pipe-received">{{ pipeline_stages.0.count }}</strong>
+                        <small>Received</small>
+                    </div>
+                    <div class="pipeline-line" id="pipe-line-1"></div>
+                    <div class="pipeline-stage">
+                        <div class="stage-icon blue"><i class="bi bi-gear-fill"></i></div>
+                        <div class="stage-name">Decode</div>
+                        <strong id="pipe-decoded">{{ pipeline_stages.1.count }}</strong>
+                        <small>Decoded</small>
+                    </div>
+                    <div class="pipeline-line" id="pipe-line-2"></div>
+                    <div class="pipeline-stage">
+                        <div class="stage-icon green"><i class="bi bi-share-fill"></i></div>
+                        <div class="stage-name">Distribute</div>
+                        <strong id="pipe-distributed">{{ pipeline_stages.2.count }}</strong>
+                        <small>Distributed</small>
+                    </div>
+                    <div class="pipeline-line success" id="pipe-line-3"></div>
+                    <div class="pipeline-stage">
+                        <div class="stage-icon green"><i class="bi bi-check-lg"></i></div>
+                        <div class="stage-name">Completed</div>
+                        <strong id="pipe-completed">{{ pipeline_stages.3.count }}</strong>
+                        <small>Files</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SYSTEM HEALTH (Live Ubuntu Metrics) -->
+            <div class="dashboard-card mt-3">
+                <div class="card-heading header-between">
+                    <span>System Health</span>
+                    <div class="health-refresh">
+                        <span id="systemHealthIndicator" class="health-status-dot {% if system_health.services_summary.healthy %}healthy{% else %}failed{% endif %}"></span>
+                        <span id="lastHealthUpdate">Live</span>
+                    </div>
+                </div>
+
+                <div class="health-grid">
+                    <!-- CPU -->
+                    <div class="health-card">
+                        <div class="health-title">
+                            <i class="bi bi-cpu"></i>
+                            CPU
+                        </div>
+                        <strong id="cpuValue">{{ system_health.cpu.percent }}%</strong>
+                        <div class="progress health-progress">
+                            <div id="cpuProgress" class="progress-bar" style="width: {{ system_health.cpu.percent }}%"></div>
+                        </div>
+                        <small id="cpuDetail">{{ system_health.cpu.cores }} cores / {{ system_health.cpu.threads }} threads</small>
+                    </div>
+
+                    <!-- Memory -->
+                    <div class="health-card">
+                        <div class="health-title">
+                            <i class="bi bi-database"></i>
+                            Memory
+                        </div>
+                        <strong id="memoryValue">{{ system_health.memory.percent }}%</strong>
+                        <div class="progress health-progress">
+                            <div id="memoryProgress" class="progress-bar" style="width: {{ system_health.memory.percent }}%"></div>
+                        </div>
+                        <small id="memoryDetail">{{ system_health.memory.used|filesizeformat }} / {{ system_health.memory.total|filesizeformat }}</small>
+                    </div>
+
+                    <!-- Disk -->
+                    <div class="health-card">
+                        <div class="health-title">
+                            <i class="bi bi-device-hdd"></i>
+                            Disk
+                        </div>
+                        <strong id="diskValue">{{ system_health.disk.percent }}%</strong>
+                        <div class="progress health-progress">
+                            <div id="diskProgress" class="progress-bar" style="width: {{ system_health.disk.percent }}%"></div>
+                        </div>
+                        <small id="diskDetail">{{ system_health.disk.used|filesizeformat }} / {{ system_health.disk.total|filesizeformat }}</small>
+                    </div>
+
+                    <!-- Services -->
+                    <div class="health-card">
+                        <div class="health-title">
+                            <i class="bi bi-activity"></i>
+                            Services
+                        </div>
+                        <strong id="servicesValue">{{ system_health.services_summary.running }} / {{ system_health.services_summary.total }}</strong>
+                        <div class="progress health-progress">
+                            <div id="servicesProgress" class="progress-bar" style="width: 100%"></div>
+                        </div>
+                        <small id="servicesDetail">All services operational</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MEDIATION SERVICES (Live systemd state) -->
+            <div class="dashboard-card mt-3">
+                <div class="card-heading header-between">
+                    <span>Mediation Services</span>
+                    <a href="{% url 'dashboard:services' %}">View Monitoring</a>
+                </div>
+
+                <div class="service-monitor-grid">
+                    <div class="service-monitor" data-service="api">
+                        <div class="service-icon">
+                            <i class="bi bi-hdd-network"></i>
+                        </div>
+                        <div class="service-content">
+                            <span class="service-name">Mediation API</span>
+                            <span class="service-status">{{ system_health.services.api.status|default:"--" }}</span>
+                        </div>
+                        <span class="service-state-dot {% if system_health.services.api.healthy %}running{% else %}failed{% endif %}"></span>
+                    </div>
+
+                    <div class="service-monitor" data-service="collector">
+                        <div class="service-icon">
+                            <i class="bi bi-folder-symlink"></i>
+                        </div>
+                        <div class="service-content">
+                            <span class="service-name">Collection</span>
+                            <span class="service-status">{{ system_health.services.collector.status|default:"--" }}</span>
+                        </div>
+                        <span class="service-state-dot {% if system_health.services.collector.healthy %}running{% else %}failed{% endif %}"></span>
+                    </div>
+
+                    <div class="service-monitor" data-service="decoder">
+                        <div class="service-icon">
+                            <i class="bi bi-cpu"></i>
+                        </div>
+                        <div class="service-content">
+                            <span class="service-name">Decoding</span>
+                            <span class="service-status">{{ system_health.services.decoder.status|default:"--" }}</span>
+                        </div>
+                        <span class="service-state-dot {% if system_health.services.decoder.healthy %}running{% else %}failed{% endif %}"></span>
+                    </div>
+
+                    <div class="service-monitor" data-service="distributor">
+                        <div class="service-icon">
+                            <i class="bi bi-send"></i>
+                        </div>
+                        <div class="service-content">
+                            <span class="service-name">Distribution</span>
+                            <span class="service-status">{{ system_health.services.distributor.status|default:"--" }}</span>
+                        </div>
+                        <span class="service-state-dot {% if system_health.services.distributor.healthy %}running{% else %}failed{% endif %}"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TOP OPERATORS -->
+            <div class="dashboard-card mt-3">
+                <div class="card-heading header-between">
+                    <span>Top Operators (Records)</span>
+                    <a href="{% url 'dashboard:reports' %}">View Report</a>
+                </div>
+
+                <div class="operator-chart">
+                    {% for op in top_operators %}
+                    <div class="operator-row">
+                        <div class="operator-name">{{ op.name }}</div>
+                        <div class="operator-bar">
+                            <div style="width: {{ op.percent }}%"></div>
+                        </div>
+                        <div class="operator-value">{{ op.records }}</div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center text-muted py-3" style="font-size: 11px;">No operator data available yet.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script src="{% static 'js/dashboard.js' %}"></script>
 <script>
-(function(){
-  const fmt = n => (n||0).toLocaleString();
-  fetch("{% url 'dashboard:summary_api' %}?days=30").then(r=>r.json()).then(d=>{
-    const t=d.totals||{};
-    document.getElementById('pvTotals').textContent =
-      `${fmt(t.files)} files · ${fmt(t.records)} records · ${fmt(t.duplicates)} dup · ${fmt(t.failed)} failed`;
-    const fill=(id,rows,key)=>{
-      document.getElementById(id).innerHTML = (rows&&rows.length)
-        ? rows.map(r=>`<tr><td>${r[key]}</td><td class="text-end">${fmt(r.records)}</td></tr>`).join('')
-        : '<tr><td class="text-muted">No data</td></tr>';
+(function () {
+    const API = "{% url 'dashboard:pipeline_api' %}";
+    const ids = {
+        received:    document.getElementById('pipe-received'),
+        decoded:     document.getElementById('pipe-decoded'),
+        distributed: document.getElementById('pipe-distributed'),
+        completed:   document.getElementById('pipe-completed'),
     };
-    fill('pvOperator', d.by_operator, 'operator');
-    fill('pvStream', d.by_stream, 'stream');
-    fill('pvService', d.by_service_type, 'service_type');
-  }).catch(()=>{ document.getElementById('pvTotals').textContent='unavailable'; });
+
+    function animateCount(el, newVal) {
+        if (!el) return;
+        const old = parseInt(el.textContent.replace(/,/g, ''), 10) || 0;
+        if (old === newVal) return;
+        el.style.transition = 'opacity .25s';
+        el.style.opacity = '0';
+        setTimeout(() => {
+            el.textContent = newVal.toLocaleString();
+            el.style.opacity = '1';
+        }, 250);
+    }
+
+    function refreshPipeline() {
+        fetch(API, {credentials: 'same-origin'})
+            .then(r => r.json())
+            .then(d => {
+                animateCount(ids.received,    d.received);
+                animateCount(ids.decoded,     d.decoded);
+                animateCount(ids.distributed, d.distributed);
+                animateCount(ids.completed,   d.completed);
+                const paused = d.active === 0;
+                document.querySelectorAll('.pipeline-line').forEach(l =>
+                    l.classList.toggle('paused', paused)
+                );
+            })
+            .catch(() => {});
+    }
+
+    setInterval(refreshPipeline, 5000);
 })();
 </script>
-
-<!-- ============================================================ -->
-<!-- PM-KPI Sample — 7 operational KPI charts                     -->
-<!-- ============================================================ -->
-<style>
-.kpi-block .card-header{background:#fafafa;border-bottom:1px solid #eee;font-weight:600;font-size:.95rem;position:relative;}
-.kpi-block .kpi-subtitle{color:#6c757d;font-size:.8rem;margin-top:-2px;font-weight:400;}
-.kpi-block canvas{max-height:320px;}
-.kpi-menu-btn{position:absolute;top:6px;right:8px;background:transparent;border:none;color:#6c757d;padding:2px 6px;border-radius:4px;cursor:pointer;line-height:1;font-size:1.1rem;}
-.kpi-menu-btn:hover{background:#eee;color:#212529;}
-.kpi-pop{position:absolute;top:34px;right:8px;z-index:30;background:#fff;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.08);padding:10px 12px;min-width:230px;display:none;}
-.kpi-pop.show{display:block;}
-.kpi-pop label{display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;color:#6c757d;margin-bottom:2px;margin-top:6px;font-weight:600;}
-.kpi-pop input[type=date]{width:100%;font-size:.85rem;padding:3px 6px;border:1px solid #ced4da;border-radius:4px;}
-.kpi-pop .pop-actions{display:flex;gap:6px;margin-top:10px;}
-.kpi-pop .pop-actions button{flex:1;font-size:.8rem;padding:4px 8px;}
-.kpi-range-tag{display:inline-block;margin-left:6px;font-size:.7rem;color:#FF6600;font-weight:500;}
-</style>
-
-<h5 class="mt-4 mb-3 text-secondary"><i class="bi bi-bar-chart-line"></i> Key Performance Indicators</h5>
-
-<div class="row g-3 mb-3 kpi-block">
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header" data-kpi-head="1">1. Call Records by Call Type<span class="kpi-range-tag" data-tag="1"></span>
-                <div class="kpi-subtitle">Distribution of CDRs by service type.</div>
-            </div>
-            <div class="card-body" style="height:340px"><canvas id="kpi1"></canvas></div>
-        </div>
-    </div>
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header" data-kpi-head="2">2. Incoming vs Outgoing Traffic<span class="kpi-range-tag" data-tag="2"></span>
-                <div class="kpi-subtitle">Comparison of incoming, outgoing and transit traffic.</div>
-            </div>
-            <div class="card-body" style="height:340px"><canvas id="kpi2"></canvas></div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-3 mb-3 kpi-block">
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header" data-kpi-head="3">3. Total Data Usage by Technology<span class="kpi-range-tag" data-tag="3"></span>
-                <div class="kpi-subtitle">Total traffic volume generated by each network technology.</div>
-            </div>
-            <div class="card-body" style="height:320px"><canvas id="kpi3"></canvas></div>
-        </div>
-    </div>
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header" data-kpi-head="4">4. Subscriber Growth Trend<span class="kpi-range-tag" data-tag="4"></span>
-                <div class="kpi-subtitle">Monthly active subscribers (distinct IMSI).</div>
-            </div>
-            <div class="card-body" style="height:320px"><canvas id="kpi4"></canvas></div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-3 mb-3 kpi-block">
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header" data-kpi-head="5">5. Inter-Operator Traffic Analysis<span class="kpi-range-tag" data-tag="5"></span>
-                <div class="kpi-subtitle">Traffic exchanged between operators.</div>
-            </div>
-            <div class="card-body" style="height:340px"><canvas id="kpi5"></canvas></div>
-        </div>
-    </div>
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header" data-kpi-head="6">6. Call Drop Rate by Operator<span class="kpi-range-tag" data-tag="6"></span>
-                <div class="kpi-subtitle">QoS comparison across operators.</div>
-            </div>
-            <div class="card-body" style="height:340px"><canvas id="kpi6"></canvas></div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-3 mb-4 kpi-block">
-    <div class="col-lg-12">
-        <div class="card">
-            <div class="card-header" data-kpi-head="7">7. International Traffic Trend<span class="kpi-range-tag" data-tag="7"></span>
-                <div class="kpi-subtitle">Incoming and outgoing international records (monthly).</div>
-            </div>
-            <div class="card-body" style="height:320px"><canvas id="kpi7"></canvas></div>
-        </div>
-    </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script>
-(function(){
-    const API = "{% url 'dashboard:kpis_api' %}";
-    const PALETTE = {
-        'Voice MO':'#0d6efd','Voice MT':'#198754',
-        'SMS MO':'#fd7e14','SMS MT':'#dc3545',
-        'International':'#6f42c1','Data Session':'#e6b800',
-    };
-    const PRIMARY = '#1f4d9b';
-    const charts = {};
-    const ranges = {1:null,2:null,3:null,4:null,5:null,6:null,7:null};
-    function destroyIf(k){ if (charts[k]) charts[k].destroy(); }
-    function showEmpty(canvasId, has){
-        const cvs = document.getElementById(canvasId);
-        const body = cvs.parentElement;
-        let msg = body.querySelector('.kpi-empty');
-        if (!has) {
-            cvs.style.display = 'none';
-            if (!msg) {
-                msg = document.createElement('div');
-                msg.className = 'kpi-empty text-muted d-flex align-items-center justify-content-center';
-                msg.style.cssText = 'height:100%;font-size:.9rem;';
-                msg.textContent = 'No data in selected range';
-                body.appendChild(msg);
-            }
-        } else {
-            cvs.style.display = '';
-            if (msg) msg.remove();
-        }
-    }
-    const sum = a => (a||[]).reduce((x,y)=>x+(+y||0),0);
-    const compact = v => v>=1e9 ? (v/1e9).toFixed(1)+'B'
-                       : v>=1e6 ? (v/1e6).toFixed(1)+'M'
-                       : v>=1e3 ? (v/1e3).toFixed(0)+'K' : v;
-
-    // ---------- per-chart renderers (consume one API response) ---------
-    function render1(d){
-        const c = d.call_records_by_type || {labels:[],data:[]};
-        destroyIf('k1');
-        showEmpty('kpi1', sum(c.data)>0);
-        if (sum(c.data)===0) return;
-        charts.k1 = new Chart(document.getElementById('kpi1'), {
-            type:'doughnut',
-            data:{labels:c.labels, datasets:[{
-                data:c.data, backgroundColor:c.labels.map(l=>PALETTE[l]||'#888'), borderWidth:0,
-            }]},
-            options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}},
-        });
-    }
-    function render2(d){
-        const c = d.direction_traffic || {labels:[],data:[]};
-        destroyIf('k2');
-        showEmpty('kpi2', sum(c.data)>0);
-        if (sum(c.data)===0) return;
-        charts.k2 = new Chart(document.getElementById('kpi2'), {
-            type:'bar',
-            data:{labels:c.labels, datasets:[{label:'Records',data:c.data,backgroundColor:PRIMARY}]},
-            options:{responsive:true,maintainAspectRatio:false,
-                plugins:{legend:{display:false}},
-                scales:{y:{beginAtZero:true,ticks:{callback:compact}}}},
-        });
-    }
-    function render3(d){
-        const c = d.data_usage_by_tech || {labels:[],data_gb:[]};
-        destroyIf('k3');
-        showEmpty('kpi3', sum(c.data_gb)>0);
-        if (sum(c.data_gb)===0) return;
-        charts.k3 = new Chart(document.getElementById('kpi3'), {
-            type:'bar',
-            data:{labels:c.labels, datasets:[{label:'GB',data:c.data_gb,backgroundColor:PRIMARY}]},
-            options:{responsive:true,maintainAspectRatio:false,
-                plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.y+' GB'}}},
-                scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'GB'}}}},
-        });
-    }
-    function render4(d){
-        const c = d.subscriber_growth || {labels:[],data:[]};
-        destroyIf('k4');
-        showEmpty('kpi4', (c.labels||[]).length>0);
-        if ((c.labels||[]).length===0) return;
-        charts.k4 = new Chart(document.getElementById('kpi4'), {
-            type:'line',
-            data:{labels:c.labels, datasets:[{
-                label:'Distinct IMSI',data:c.data,borderColor:PRIMARY,
-                backgroundColor:PRIMARY+'22',fill:true,tension:0.35,
-            }]},
-            options:{responsive:true,maintainAspectRatio:false,
-                plugins:{legend:{display:false}},
-                scales:{y:{ticks:{callback:compact}}}},
-        });
-    }
-    function render5(d){
-        const c = d.inter_operator || {labels:[],data:[]};
-        destroyIf('k5');
-        showEmpty('kpi5', sum(c.data)>0);
-        if (sum(c.data)===0) return;
-        charts.k5 = new Chart(document.getElementById('kpi5'), {
-            type:'bar',
-            data:{labels:c.labels, datasets:[{label:'Records',data:c.data,backgroundColor:PRIMARY}]},
-            options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
-                plugins:{legend:{display:false}},
-                scales:{x:{beginAtZero:true,ticks:{callback:compact}}}},
-        });
-    }
-    function render6(d){
-        const c = d.drop_rate_by_operator || {labels:[],data:[]};
-        destroyIf('k6');
-        showEmpty('kpi6', (c.labels||[]).length>0);
-        if ((c.labels||[]).length===0) return;
-        charts.k6 = new Chart(document.getElementById('kpi6'), {
-            type:'bar',
-            data:{labels:c.labels, datasets:[{label:'Drop %',data:c.data,backgroundColor:PRIMARY}]},
-            options:{responsive:true,maintainAspectRatio:false,
-                plugins:{legend:{display:false},
-                         tooltip:{callbacks:{label:ctx=>ctx.parsed.y.toFixed(3)+'%'}}},
-                scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'%'}}}},
-        });
-    }
-    function render7(d){
-        const c = d.international_trend || {labels:[],incoming:[],outgoing:[]};
-        destroyIf('k7');
-        showEmpty('kpi7', (c.labels||[]).length>0);
-        if ((c.labels||[]).length===0) return;
-        charts.k7 = new Chart(document.getElementById('kpi7'), {
-            type:'line',
-            data:{labels:c.labels, datasets:[
-                {label:'Incoming',data:c.incoming,borderColor:'#0d6efd',backgroundColor:'#0d6efd22',fill:false,tension:0.3},
-                {label:'Outgoing',data:c.outgoing,borderColor:'#198754',backgroundColor:'#19875422',fill:false,tension:0.3},
-            ]},
-            options:{responsive:true,maintainAspectRatio:false,
-                plugins:{legend:{position:'bottom'}},
-                scales:{y:{beginAtZero:true,ticks:{callback:compact}}}},
-        });
-    }
-    const RENDERERS = {1:render1,2:render2,3:render3,4:render4,5:render5,6:render6,7:render7};
-
-    // ---------- fetch + dispatch -------------------------------------
-    function loadChart(n){
-        const r = ranges[n];
-        const qs = r ? `?start=${r.start}&end=${r.end}` : '';
-        const tag = document.querySelector(`[data-tag="${n}"]`);
-        if (tag) tag.textContent = r ? `(${r.start} → ${r.end})` : '';
-        fetch(API + qs).then(r=>r.json()).then(RENDERERS[n])
-            .catch(err=>console.error('KPI '+n+' failed',err));
-    }
-    function loadAll(){ for (let i=1;i<=7;i++) loadChart(i); }
-
-    // ---------- inject the dropdown markup into each header ----------
-    function menuHTML(n){
-        return ''
-          + '<button class="kpi-menu-btn" title="Filter by date" data-kpi="'+n+'">&#x22EE;</button>'
-          + '<div class="kpi-pop" data-pop="'+n+'">'
-          +   '<label>From</label><input type="date" data-from="'+n+'">'
-          +   '<label>To</label><input type="date" data-to="'+n+'">'
-          +   '<div class="pop-actions">'
-          +     '<button class="btn btn-sm btn-outline-secondary" data-clear="'+n+'">Clear</button>'
-          +     '<button class="btn btn-sm btn-primary" data-apply="'+n+'">Apply</button>'
-          +   '</div>'
-          + '</div>';
-    }
-    document.querySelectorAll('[data-kpi-head]').forEach(h => {
-        h.insertAdjacentHTML('beforeend', menuHTML(h.getAttribute('data-kpi-head')));
-    });
-
-    // ---------- wire up menus ----------------------------------------
-    document.addEventListener('click', e => {
-        const btn = e.target.closest('.kpi-menu-btn');
-        if (btn) {
-            const n = btn.getAttribute('data-kpi');
-            const pop = document.querySelector(`[data-pop="${n}"]`);
-            document.querySelectorAll('.kpi-pop.show').forEach(p => { if (p!==pop) p.classList.remove('show'); });
-            pop.classList.toggle('show');
-            e.stopPropagation();
-            return;
-        }
-        const apply = e.target.closest('[data-apply]');
-        if (apply) {
-            const n = apply.getAttribute('data-apply');
-            const f = document.querySelector(`[data-from="${n}"]`).value;
-            const t = document.querySelector(`[data-to="${n}"]`).value;
-            if (!f || !t) { alert('Select both From and To dates'); return; }
-            ranges[n] = {start:f, end:t};
-            document.querySelector(`[data-pop="${n}"]`).classList.remove('show');
-            loadChart(n);
-            return;
-        }
-        const clear = e.target.closest('[data-clear]');
-        if (clear) {
-            const n = clear.getAttribute('data-clear');
-            ranges[n] = null;
-            document.querySelector(`[data-from="${n}"]`).value = '';
-            document.querySelector(`[data-to="${n}"]`).value = '';
-            document.querySelector(`[data-pop="${n}"]`).classList.remove('show');
-            loadChart(n);
-            return;
-        }
-        // click outside any popover → close all
-        if (!e.target.closest('.kpi-pop')) {
-            document.querySelectorAll('.kpi-pop.show').forEach(p => p.classList.remove('show'));
-        }
-    });
-
-    loadAll();
-})();
-</script>
-
 {% endblock %}

@@ -1,0 +1,825 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}System Monitoring - UMP Mediation{% endblock %}
+{% block page_title %}System Monitoring{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/ump-pages.css' %}?v=2">
+{% endblock %}
+
+{% block content %}
+<div class="ump-mon-wrap">
+    <!-- Breadcrumb Navigation -->
+    <div class="ump-mon-breadcrumb">
+        <a href="{% url 'dashboard:index' %}">Home</a>
+        <span class="sep">&gt;</span>
+        <span>Monitoring</span>
+        <span class="sep">&gt;</span>
+        <span class="current">System Monitoring</span>
+    </div>
+
+    <!-- Page Header -->
+    <div class="ump-mon-header">
+        <div>
+            <h1 class="ump-mon-title">System Monitoring</h1>
+            <p class="ump-mon-subtitle">Real-time monitoring of system health, performance, alarms, and mediation pipeline.</p>
+        </div>
+        <div class="ump-mon-header-right">
+            <div class="ump-mon-status-badge" id="systemStatusBadge">
+                <span class="ump-mon-status-dot" id="systemStatusDot" style="background: {{ health.overall_color }};"></span>
+                <span id="systemStatusText">{{ health.overall_text }}</span>
+            </div>
+            <button type="button" class="ump-sc-refresh-btn" id="refreshMonitoringBtn" title="Refresh monitoring data">
+                <i class="bi bi-arrow-clockwise" id="refreshMonIcon"></i>
+                <span>Refresh</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Feedback Banner -->
+    <div id="monitoringFeedback"></div>
+
+    <!-- Row 1: Exactly 5 Top KPI Cards -->
+    <div class="ump-mon-kpi-grid">
+        <!-- Card 1: Total Files Processed -->
+        <div class="ump-mon-kpi-card">
+            <div class="ump-mon-kpi-icon icon-blue">
+                <i class="bi bi-file-earmark-text"></i>
+            </div>
+            <div class="ump-mon-kpi-body">
+                <div class="ump-mon-kpi-title">Total Files Processed</div>
+                <div class="ump-mon-kpi-val-row">
+                    <span class="ump-mon-kpi-val" id="kpiTotalProcessed">{{ kpis.total_files_processed.value }}</span>
+                    <span class="ump-mon-kpi-delta {{ kpis.total_files_processed.delta_class }}" id="kpiTotalProcessedDelta">{{ kpis.total_files_processed.delta }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 2: Files Decoded -->
+        <div class="ump-mon-kpi-card">
+            <div class="ump-mon-kpi-icon icon-green">
+                <i class="bi bi-file-earmark-code"></i>
+            </div>
+            <div class="ump-mon-kpi-body">
+                <div class="ump-mon-kpi-title">Files Decoded</div>
+                <div class="ump-mon-kpi-val-row">
+                    <span class="ump-mon-kpi-val" id="kpiFilesDecoded">{{ kpis.files_decoded.value }}</span>
+                    <span class="ump-mon-kpi-delta {{ kpis.files_decoded.delta_class }}" id="kpiFilesDecodedDelta">{{ kpis.files_decoded.delta }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 3: Files Distributed -->
+        <div class="ump-mon-kpi-card">
+            <div class="ump-mon-kpi-icon icon-orange">
+                <i class="bi bi-send-fill"></i>
+            </div>
+            <div class="ump-mon-kpi-body">
+                <div class="ump-mon-kpi-title">Files Distributed</div>
+                <div class="ump-mon-kpi-val-row">
+                    <span class="ump-mon-kpi-val" id="kpiFilesDistributed">{{ kpis.files_distributed.value }}</span>
+                    <span class="ump-mon-kpi-delta {{ kpis.files_distributed.delta_class }}" id="kpiFilesDistributedDelta">{{ kpis.files_distributed.delta }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 4: Average Processing Time -->
+        <div class="ump-mon-kpi-card">
+            <div class="ump-mon-kpi-icon icon-purple">
+                <i class="bi bi-clock"></i>
+            </div>
+            <div class="ump-mon-kpi-body">
+                <div class="ump-mon-kpi-title">Average Processing Time</div>
+                <div class="ump-mon-kpi-val-row">
+                    <span class="ump-mon-kpi-val" id="kpiAvgDuration">{{ kpis.avg_processing_time.value }}</span>
+                    <span class="ump-mon-kpi-delta {{ kpis.avg_processing_time.delta_class }}" id="kpiAvgDurationDelta">{{ kpis.avg_processing_time.delta }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 5: Active Alarms -->
+        <div class="ump-mon-kpi-card">
+            <div class="ump-mon-kpi-icon icon-red">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+            </div>
+            <div class="ump-mon-kpi-body">
+                <div class="ump-mon-kpi-title">Active Alarms</div>
+                <div class="ump-mon-kpi-val-row">
+                    <span class="ump-mon-kpi-val {% if kpis.active_alarms.raw > 0 %}text-danger{% endif %}" id="kpiActiveAlarms">{{ kpis.active_alarms.value }}</span>
+                    <span class="ump-mon-kpi-delta {{ kpis.active_alarms.delta_class }}" id="kpiActiveAlarmsDelta">{{ kpis.active_alarms.delta }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 2: Three Core Pipeline Charts -->
+    <div class="ump-mon-row-2">
+        <!-- Card A: File Processing Trend -->
+        <div class="ump-mon-card">
+            <div class="ump-mon-card-header">
+                <h5 class="ump-mon-card-title">
+                    <i class="bi bi-bar-chart-line text-primary"></i>
+                    <span>File Processing Trend</span>
+                </h5>
+                <select class="ump-mon-select time-range-select" data-target="processingTrend">
+                    <option value="1h">Last 1 Hour</option>
+                    <option value="6h">Last 6 Hours</option>
+                    <option value="12h">Last 12 Hours</option>
+                    <option value="24h" selected>Last 24 Hours</option>
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                </select>
+            </div>
+            <div class="d-flex align-items-center gap-3 mb-2" style="font-size: 11.5px; font-weight: 500;">
+                <span class="d-inline-flex align-items-center gap-1"><span class="ump-mon-legend-dot" style="background: #1677EE;"></span> Collected</span>
+                <span class="d-inline-flex align-items-center gap-1"><span class="ump-mon-legend-dot" style="background: #16A34A;"></span> Decoded</span>
+                <span class="d-inline-flex align-items-center gap-1"><span class="ump-mon-legend-dot" style="background: #FF8A1F;"></span> Distributed</span>
+            </div>
+            <div class="ump-mon-chart-wrap">
+                <canvas id="processingTrendChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Card B: Processing Time (Minutes) -->
+        <div class="ump-mon-card">
+            <div class="ump-mon-card-header">
+                <h5 class="ump-mon-card-title">
+                    <i class="bi bi-clock text-primary"></i>
+                    <span>Processing Time (Minutes)</span>
+                </h5>
+                <select class="ump-mon-select time-range-select" data-target="processingTime">
+                    <option value="1h">Last 1 Hour</option>
+                    <option value="6h">Last 6 Hours</option>
+                    <option value="12h">Last 12 Hours</option>
+                    <option value="24h" selected>Last 24 Hours</option>
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                </select>
+            </div>
+            <div class="ump-mon-chart-wrap" style="margin-top: 22px;">
+                <canvas id="processingTimeChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Card C: File Success Rate -->
+        <div class="ump-mon-card">
+            <div class="ump-mon-card-header">
+                <h5 class="ump-mon-card-title">
+                    <i class="bi bi-pie-chart text-primary"></i>
+                    <span>File Success Rate</span>
+                </h5>
+                <select class="ump-mon-select time-range-select" data-target="successRate">
+                    <option value="1h">Last 1 Hour</option>
+                    <option value="6h">Last 6 Hours</option>
+                    <option value="12h">Last 12 Hours</option>
+                    <option value="24h" selected>Last 24 Hours</option>
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                </select>
+            </div>
+            <div class="ump-mon-doughnut-layout">
+                <div class="ump-mon-doughnut-canvas-wrap">
+                    <canvas id="successRateChart"></canvas>
+                    <div class="ump-mon-doughnut-center">
+                        <span class="pct" id="successRateCenterPct">--%</span>
+                        <span class="sub">Success Rate</span>
+                    </div>
+                </div>
+                <div class="ump-mon-doughnut-legend">
+                    <div class="ump-mon-legend-row">
+                        <span class="ump-mon-legend-item"><span class="ump-mon-legend-dot" style="background: #16A34A;"></span> Successful</span>
+                        <span class="ump-mon-legend-val" id="successCountVal">--</span>
+                    </div>
+                    <div class="ump-mon-legend-row">
+                        <span class="ump-mon-legend-item"><span class="ump-mon-legend-dot" style="background: #EF4444;"></span> Failed</span>
+                        <span class="ump-mon-legend-val" id="failedCountVal">--</span>
+                    </div>
+                    <div class="ump-mon-legend-row">
+                        <span class="ump-mon-legend-item"><span class="ump-mon-legend-dot" style="background: #94A3B8;"></span> Skipped</span>
+                        <span class="ump-mon-legend-val" id="skippedCountVal">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================================================
+         MEDIATION FLOW MONITORING & RECONCILIATION
+    ================================================== -->
+    <div class="ump-flow-section-header">
+        <div class="ump-flow-header-left">
+            <div class="ump-flow-header-badge">
+                <i class="bi bi-diagram-3-fill"></i>
+            </div>
+            <div class="d-flex align-items-baseline gap-2 flex-wrap">
+                <h2 class="ump-flow-title">Mediation Flow Monitoring</h2>
+                <span class="ump-flow-subtitle">Files and records flow through collection &rarr; processing &rarr; distribution</span>
+            </div>
+        </div>
+        <div class="ump-flow-header-right">
+            <span class="ump-flow-range-label">Time Range:</span>
+            <select class="ump-mon-select" id="flowTimeRangeSelect" style="min-width: 140px; font-weight: 500;">
+                <option value="1h">Last 1 Hour</option>
+                <option value="6h">Last 6 Hours</option>
+                <option value="12h">Last 12 Hours</option>
+                <option value="24h" selected>Last 24 Hours</option>
+                <option value="7d">Last 7 Days</option>
+                <option value="30d">Last 30 Days</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Flow Row 1: 3 Volume Combination Charts -->
+    <div class="ump-flow-row-1">
+        <!-- Card 1: Collection Volume -->
+        <div class="ump-mon-card">
+            <div class="ump-flow-card-header">
+                <div>
+                    <h5 class="ump-flow-card-title">Collection Volume</h5>
+                    <p class="ump-flow-card-sub">Files and records collected by input portal or stream.</p>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="ump-flow-group-label">Group By:</span>
+                    <div class="ump-flow-btn-group" role="group" id="colGroupByBtnGroup">
+                        <button type="button" class="ump-flow-toggle-btn active" data-group="portal">Portal</button>
+                        <button type="button" class="ump-flow-toggle-btn" data-group="stream">Stream</button>
+                    </div>
+                </div>
+            </div>
+            <div class="ump-flow-legend-row">
+                <span class="d-inline-flex align-items-center gap-1"><span class="ump-flow-sq" style="background: #1677EE;"></span> Files (Count)</span>
+                <span class="d-inline-flex align-items-center gap-1"><span class="ump-flow-dot" style="background: #16A34A;"></span> Records (Count)</span>
+            </div>
+            <div class="ump-mon-chart-wrap" style="height: 185px;">
+                <canvas id="flowCollectionChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Card 2: Processing Volume -->
+        <div class="ump-mon-card">
+            <div class="ump-flow-card-header">
+                <div>
+                    <h5 class="ump-flow-card-title">Processing Volume</h5>
+                    <p class="ump-flow-card-sub">Files and records processed by stream/decoder.</p>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="ump-flow-group-label">Group By:</span>
+                    <div class="dropdown">
+                        <button class="ump-flow-select-btn dropdown-toggle" type="button" id="procGroupBtn" data-bs-toggle="dropdown" aria-expanded="false">
+                            <span id="procGroupBtnText">Stream</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="font-size: 11.5px;" id="procGroupDropdown">
+                            <li><a class="dropdown-item active" href="#" data-group="stream">Stream</a></li>
+                            <li><a class="dropdown-item" href="#" data-group="source_portal">Source Portal</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="ump-flow-legend-row">
+                <span class="d-inline-flex align-items-center gap-1"><span class="ump-flow-sq" style="background: #16A34A;"></span> Files (Count)</span>
+                <span class="d-inline-flex align-items-center gap-1"><span class="ump-flow-dot" style="background: #1677EE;"></span> Records (Count)</span>
+            </div>
+            <div class="ump-mon-chart-wrap" style="height: 185px;">
+                <canvas id="flowProcessingChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Card 3: Distribution Volume -->
+        <div class="ump-mon-card">
+            <div class="ump-flow-card-header">
+                <div>
+                    <h5 class="ump-flow-card-title">Distribution Volume</h5>
+                    <p class="ump-flow-card-sub">Files and records distributed to downstream systems.</p>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="ump-flow-group-label">Group By:</span>
+                    <div class="dropdown">
+                        <button class="ump-flow-select-btn dropdown-toggle" type="button" id="distGroupBtn" data-bs-toggle="dropdown" aria-expanded="false">
+                            <span id="distGroupBtnText">Downstream</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="font-size: 11.5px;" id="distGroupDropdown">
+                            <li><a class="dropdown-item active" href="#" data-group="downstream">Downstream</a></li>
+                            <li><a class="dropdown-item" href="#" data-group="output_portal">Output Portal</a></li>
+                            <li><a class="dropdown-item" href="#" data-group="stream">Stream</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="ump-flow-legend-row">
+                <span class="d-inline-flex align-items-center gap-1"><span class="ump-flow-sq" style="background: #FF8A1F;"></span> Files (Count)</span>
+                <span class="d-inline-flex align-items-center gap-1"><span class="ump-flow-dot" style="background: #8B5CF6;"></span> Records (Count)</span>
+            </div>
+            <div class="ump-mon-chart-wrap" style="height: 185px;">
+                <canvas id="flowDistributionChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Flow Row 2: Reconciliation Summary (48%) + Per-Stream Table (52%) -->
+    <div class="ump-flow-row-2">
+        <!-- Card 1: End-to-End Reconciliation (~48% width) -->
+        <div class="ump-mon-card">
+            <div class="ump-mon-card-header">
+                <h5 class="ump-mon-card-title">
+                    <span>End-to-End Reconciliation (<span class="flow-time-label">{{ flow.reconciliation.time_label|default:"Last 24 Hours" }}</span>)</span>
+                </h5>
+            </div>
+            <div class="ump-flow-e2e-body">
+                <!-- Step 1: Collected -->
+                <div class="ump-flow-step-box">
+                    <div class="ump-flow-step-icon icon-blue">
+                        <i class="bi bi-file-earmark-text"></i>
+                    </div>
+                    <div class="ump-flow-step-content">
+                        <div class="ump-flow-step-title">Collected</div>
+                        <div class="ump-flow-step-metric">Files: <strong id="e2eColFiles">{{ flow.reconciliation.e2e.collected.files|default:"0" }}</strong></div>
+                        <div class="ump-flow-step-metric">Records: <strong id="e2eColRecords">{{ flow.reconciliation.e2e.collected.records|default:"0" }}</strong></div>
+                    </div>
+                </div>
+
+                <div class="ump-flow-step-arrow">
+                    <i class="bi bi-arrow-right"></i>
+                </div>
+
+                <!-- Step 2: Processed -->
+                <div class="ump-flow-step-box">
+                    <div class="ump-flow-step-icon icon-green">
+                        <i class="bi bi-file-earmark-code"></i>
+                    </div>
+                    <div class="ump-flow-step-content">
+                        <div class="ump-flow-step-title">Processed</div>
+                        <div class="ump-flow-step-metric">Files: <strong id="e2eProcFiles">{{ flow.reconciliation.e2e.processed.files|default:"0" }}</strong></div>
+                        <div class="ump-flow-step-metric">Records: <strong id="e2eProcRecords">{{ flow.reconciliation.e2e.processed.records|default:"0" }}</strong></div>
+                    </div>
+                </div>
+
+                <div class="ump-flow-step-arrow">
+                    <i class="bi bi-arrow-right"></i>
+                </div>
+
+                <!-- Step 3: Distributed -->
+                <div class="ump-flow-step-box">
+                    <div class="ump-flow-step-icon icon-orange">
+                        <i class="bi bi-send-fill"></i>
+                    </div>
+                    <div class="ump-flow-step-content">
+                        <div class="ump-flow-step-title">Distributed</div>
+                        <div class="ump-flow-step-metric">Files: <strong id="e2eDistFiles">{{ flow.reconciliation.e2e.distributed.files|default:"0" }}</strong></div>
+                        <div class="ump-flow-step-metric">Records: <strong id="e2eDistRecords">{{ flow.reconciliation.e2e.distributed.records|default:"0" }}</strong></div>
+                    </div>
+                </div>
+
+                <!-- Step 4: Variance & Pending Box -->
+                <div class="ump-flow-variance-box">
+                    <div class="ump-flow-variance-title">Variance &amp; Pending</div>
+                    <div class="ump-flow-variance-row">
+                        <div>
+                            <div class="ump-flow-var-label">Processing Variance</div>
+                            <div class="ump-flow-var-val {{ flow.reconciliation.e2e.variance.color }}" id="e2eVarianceVal">{{ flow.reconciliation.e2e.variance.value|default:"0" }}</div>
+                        </div>
+                        <div>
+                            <div class="ump-flow-var-label">Pending Processing</div>
+                            <div class="ump-flow-pending-val" id="e2ePendingVal">{{ flow.reconciliation.e2e.pending.files|default:"0 files" }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 2: Per-Stream Reconciliation (~52% width) -->
+        <div class="ump-mon-card">
+            <div class="ump-mon-card-header">
+                <h5 class="ump-mon-card-title">
+                    <span>Per-Stream Reconciliation (<span class="flow-time-label">{{ flow.reconciliation.time_label|default:"Last 24 Hours" }}</span>)</span>
+                </h5>
+                <a href="{% url 'dashboard:analytics' %}" class="ump-mon-btn-outline" style="font-size: 11px; height: 26px; padding: 0 10px;">View All</a>
+            </div>
+            <div class="table-responsive" style="max-height: 220px; overflow-x: auto; overflow-y: auto;">
+                <table class="ump-mon-table ump-flow-table">
+                    <thead>
+                        <tr>
+                            <th>Stream</th>
+                            <th class="text-end">Collected Files</th>
+                            <th class="text-end">Collected Records</th>
+                            <th class="text-end">Processed Files</th>
+                            <th class="text-end">Processed Records</th>
+                            <th class="text-end">Failed Files</th>
+                            <th class="text-end">Distributed Files</th>
+                            <th class="text-end">Distributed Records</th>
+                            <th class="text-end">Pending</th>
+                            <th class="text-end">Success Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody id="perStreamTbody">
+                        {% for row in flow.reconciliation.per_stream %}
+                        <tr>
+                            <td><span class="badge bg-light text-dark border fw-semibold">{{ row.stream }}</span></td>
+                            <td class="text-end font-monospace">{{ row.collected_files }}</td>
+                            <td class="text-end font-monospace">{{ row.collected_records }}</td>
+                            <td class="text-end font-monospace">{{ row.processed_files }}</td>
+                            <td class="text-end font-monospace">{{ row.processed_records }}</td>
+                            <td class="text-end font-monospace text-muted">{{ row.failed_files }}</td>
+                            <td class="text-end font-monospace">{{ row.distributed_files }}</td>
+                            <td class="text-end font-monospace">{{ row.distributed_records }}</td>
+                            <td class="text-end font-monospace text-muted">{{ row.pending }}</td>
+                            <td class="text-end fw-semibold {{ row.success_rate_color }}">{{ row.success_rate }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center text-muted py-4">No reconciliation data available.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 3: System Health, Hardware Utilization, Alarms -->
+    <div class="ump-mon-row-3">
+        <!-- Card 1: System Health -->
+        <div class="ump-mon-card">
+            <div class="ump-mon-card-header">
+                <h5 class="ump-mon-card-title">
+                    <i class="bi bi-heart-pulse text-primary"></i>
+                    <span>System Health</span>
+                </h5>
+                <button type="button" class="ump-mon-btn-outline" id="btnViewHealthDetails">
+                    View Details
+                </button>
+            </div>
+            <div class="ump-mon-health-list" id="systemHealthList">
+                {% for comp in health.components %}
+                <div class="ump-mon-health-row">
+                    <div class="ump-mon-health-name">
+                        <span class="ump-mon-status-dot {% if comp.badge_color == 'danger' %}bg-danger{% elif comp.badge_color == 'warning' %}bg-warning{% else %}bg-success{% endif %}"></span>
+                        <span>{{ comp.name }}</span>
+                    </div>
+                    <div>
+                        <span class="ump-mon-health-badge {{ comp.badge_color }}">{{ comp.badge }}</span>
+                    </div>
+                    <div class="ump-mon-health-detail">{{ comp.detail }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Card 2: Hardware Utilization -->
+        <div class="ump-mon-card">
+            <div class="ump-mon-card-header">
+                <h5 class="ump-mon-card-title">
+                    <i class="bi bi-cpu text-primary"></i>
+                    <span>Hardware Utilization</span>
+                </h5>
+                <select class="ump-mon-select time-range-select" data-target="hardwareTrend">
+                    <option value="1h">Last 1 Hour</option>
+                    <option value="6h">Last 6 Hours</option>
+                    <option value="12h">Last 12 Hours</option>
+                    <option value="24h" selected>Last 24 Hours</option>
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                </select>
+            </div>
+            <!-- 4 Circular Gauges -->
+            <div class="ump-mon-gauges-row">
+                <div class="ump-mon-gauge-box">
+                    <span class="ump-mon-gauge-label">CPU</span>
+                    <div class="ump-mon-gauge-wrap" id="gaugeCpuWrap"></div>
+                </div>
+                <div class="ump-mon-gauge-box">
+                    <span class="ump-mon-gauge-label">Memory</span>
+                    <div class="ump-mon-gauge-wrap" id="gaugeMemWrap"></div>
+                </div>
+                <div class="ump-mon-gauge-box">
+                    <span class="ump-mon-gauge-label">Disk</span>
+                    <div class="ump-mon-gauge-wrap" id="gaugeDiskWrap"></div>
+                </div>
+                <div class="ump-mon-gauge-box">
+                    <span class="ump-mon-gauge-label">Network</span>
+                    <div class="ump-mon-gauge-wrap" id="gaugeNetWrap"></div>
+                </div>
+            </div>
+            <div class="d-flex align-items-center justify-content-center gap-3 my-1" style="font-size: 11px; font-weight: 500;">
+                <span class="d-inline-flex align-items-center gap-1"><span class="ump-mon-legend-dot" style="background: #16A34A;"></span> CPU</span>
+                <span class="d-inline-flex align-items-center gap-1"><span class="ump-mon-legend-dot" style="background: #1677EE;"></span> Memory</span>
+                <span class="d-inline-flex align-items-center gap-1"><span class="ump-mon-legend-dot" style="background: #FF8A1F;"></span> Disk</span>
+                <span class="d-inline-flex align-items-center gap-1"><span class="ump-mon-legend-dot" style="background: #8B5CF6;"></span> Network</span>
+            </div>
+            <!-- Utilization History Chart -->
+            <div class="ump-mon-chart-wrap" style="height: 140px;">
+                <canvas id="hardwareHistoryChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Card 3: Alarms by Severity & Alarm Summary -->
+        <div class="d-flex flex-column gap-3">
+            <!-- Top Box: Alarms by Severity -->
+            <div class="ump-mon-card" style="padding: 14px 16px;">
+                <div class="ump-mon-card-header mb-1">
+                    <h5 class="ump-mon-card-title">
+                        <i class="bi bi-bell-fill text-danger"></i>
+                        <span>Alarms by Severity</span>
+                    </h5>
+                    <a href="{% url 'dashboard:activity_log' %}" class="ump-mon-btn-outline" style="height: 26px; padding: 0 8px; font-size: 11px;">View All</a>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="position-relative flex-shrink-0" style="width: 105px; height: 105px;">
+                        <canvas id="alarmsSeverityChart"></canvas>
+                        <div class="ump-mon-doughnut-center">
+                            <span class="pct fs-5" id="activeAlarmsCenterCount">0</span>
+                            <span class="sub" style="font-size: 9px;">Active Alarms</span>
+                        </div>
+                    </div>
+                    <div class="d-flex flex-column gap-1 w-100" style="font-size: 12px;">
+                        <div class="d-flex justify-content-between">
+                            <span class="d-flex align-items-center gap-1"><span class="ump-mon-legend-dot" style="background: #EF4444;"></span> Critical</span>
+                            <strong id="sevCritCount">0</strong>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="d-flex align-items-center gap-1"><span class="ump-mon-legend-dot" style="background: #FF8A1F;"></span> Major</span>
+                            <strong id="sevMajorCount">0</strong>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="d-flex align-items-center gap-1"><span class="ump-mon-legend-dot" style="background: #F4B400;"></span> Minor</span>
+                            <strong id="sevMinorCount">0</strong>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="d-flex align-items-center gap-1"><span class="ump-mon-legend-dot" style="background: #3488F4;"></span> Warning</span>
+                            <strong id="sevWarnCount">0</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Box: Alarm Summary Stacked Bar -->
+            <div class="ump-mon-card" style="padding: 14px 16px;">
+                <div class="ump-mon-card-header mb-1">
+                    <h5 class="ump-mon-card-title">
+                        <i class="bi bi-exclamation-circle-fill text-danger"></i>
+                        <span>Alarm Summary</span>
+                    </h5>
+                    <select class="ump-mon-select time-range-select" data-target="alarmSummary" style="height: 26px; font-size: 11px;">
+                        <option value="12h">Last 12h</option>
+                        <option value="24h" selected>Last 24h</option>
+                        <option value="7d">Last 7d</option>
+                    </select>
+                </div>
+                <div class="d-flex align-items-center justify-content-start gap-2 mb-1" style="font-size: 10.5px; font-weight: 500;">
+                    <span class="d-inline-flex align-items-center gap-1"><span class="ump-mon-legend-dot" style="background: #EF4444;"></span> Critical</span>
+                    <span class="d-inline-flex align-items-center gap-1"><span class="ump-mon-legend-dot" style="background: #FF8A1F;"></span> Major</span>
+                    <span class="d-inline-flex align-items-center gap-1"><span class="ump-mon-legend-dot" style="background: #F4B400;"></span> Minor</span>
+                    <span class="d-inline-flex align-items-center gap-1"><span class="ump-mon-legend-dot" style="background: #3488F4;"></span> Warning</span>
+                </div>
+                <div class="ump-mon-chart-wrap" style="height: 100px;">
+                    <canvas id="alarmSummaryChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 4: Recent Processing Activity & Recent Errors -->
+    <div class="ump-mon-row-4">
+        <!-- Table 1: Recent Processing Activity -->
+        <div class="ump-mon-card">
+            <div class="ump-mon-card-header">
+                <h5 class="ump-mon-card-title">
+                    <i class="bi bi-file-earmark-text text-primary"></i>
+                    <span>Recent Processing Activity</span>
+                </h5>
+                <a href="{% url 'dashboard:file_registry' %}" class="ump-mon-btn-outline">View All</a>
+            </div>
+            <div class="table-responsive">
+                <table class="ump-mon-table">
+                    <thead>
+                        <tr>
+                            <th>File Name</th>
+                            <th>Source</th>
+                            <th>Decoder</th>
+                            <th>Status</th>
+                            <th>Records</th>
+                            <th>Start Time</th>
+                            <th>Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentActivityTbody">
+                        {% for act in recent_activity %}
+                        <tr>
+                            <td class="fw-semibold text-truncate" style="max-width: 170px;" title="{{ act.filename }}">{{ act.filename }}</td>
+                            <td>{{ act.source }}</td>
+                            <td><span class="badge bg-light text-dark border">{{ act.decoder }}</span></td>
+                            <td><span class="ump-pill-{{ act.status_color }}">{{ act.status }}</span></td>
+                            <td class="font-monospace">{{ act.records }}</td>
+                            <td class="text-muted small">{{ act.start_time }}</td>
+                            <td class="text-muted small">{{ act.duration }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">No recent processing activity in selected period.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Table 2: Recent Errors -->
+        <div class="ump-mon-card">
+            <div class="ump-mon-card-header">
+                <h5 class="ump-mon-card-title">
+                    <span id="recentErrorsBadge" class="badge bg-danger rounded-circle p-1 me-1" style="width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px;">{{ recent_errors_count }}</span>
+                    <span>Recent Errors</span>
+                </h5>
+                <a href="{% url 'dashboard:activity_log' %}" class="ump-mon-btn-outline">View All</a>
+            </div>
+            <div class="table-responsive">
+                <table class="ump-mon-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Component</th>
+                            <th>Severity</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentErrorsTbody">
+                        {% for err in recent_errors %}
+                        <tr class="error-row-clickable" data-error-id="{{ err.id }}" style="cursor: pointer;" title="Click for diagnostic detail">
+                            <td class="text-muted small text-nowrap">{{ err.time }}</td>
+                            <td><span class="fw-semibold text-dark">{{ err.component }}</span></td>
+                            <td><span class="ump-sev-{{ err.severity|lower }}">{{ err.severity }}</span></td>
+                            <td class="text-truncate" style="max-width: 200px;">{{ err.message }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-4">No recent errors reported. System functioning normally.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 5: Backlog Monitoring & Storage Utilization -->
+    <div class="ump-mon-row-5">
+        <!-- Card 1: Active Alarms Table -->
+        <div class="ump-mon-card">
+            <div class="ump-mon-card-header">
+                <h5 class="ump-mon-card-title">
+                    <i class="bi bi-bell-fill text-danger"></i>
+                    <span>Active Alarms</span>
+                </h5>
+                <button type="button" class="ump-mon-btn-outline" id="refreshAlarmsBtn">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
+            <div class="table-responsive" style="max-height: 260px; overflow-y: auto;">
+                <table class="ump-mon-table">
+                    <thead>
+                        <tr>
+                            <th>Severity</th>
+                            <th>Category</th>
+                            <th>Source</th>
+                            <th>Message</th>
+                            <th>Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody id="activeAlarmsTbody">
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-3">
+                                <i class="bi bi-arrow-clockwise spin-icon"></i> Loading alarms...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Card 2: Backlog Monitoring -->
+        <div class="ump-mon-card">
+            <div class="ump-mon-card-header">
+                <h5 class="ump-mon-card-title">
+                    <i class="bi bi-collection text-warning"></i>
+                    <span>Backlog Monitoring</span>
+                </h5>
+                <button type="button" class="ump-mon-btn-outline" id="refreshBacklogBtn">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
+            <div id="backlogPanelBody">
+                <div class="text-center text-muted py-3">
+                    <i class="bi bi-arrow-clockwise spin-icon"></i> Loading backlog data...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 6: Storage Utilization (full-width) -->
+    <div class="ump-mon-row-6">
+        <div class="ump-mon-card">
+            <div class="ump-mon-card-header">
+                <h5 class="ump-mon-card-title">
+                    <i class="bi bi-hdd-stack text-primary"></i>
+                    <span>Storage Utilization</span>
+                </h5>
+                <button type="button" class="ump-mon-btn-outline" id="refreshStorageBtn">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
+            <div id="storagePanelBody">
+                <div class="text-center text-muted py-3">
+                    <i class="bi bi-arrow-clockwise spin-icon"></i> Loading storage data...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Health Details Modal -->
+<div class="modal fade" id="healthDetailsModal" tabindex="-1" aria-labelledby="healthDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px; overflow: hidden;">
+            <div class="modal-header border-bottom py-3 px-4" style="background: #F8FAFD; border-color: #E2E8F0 !important;">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-heart-pulse text-primary fs-5"></i>
+                    <h6 class="modal-title fw-bold text-dark mb-0" id="healthDetailsModalLabel">System &amp; Infrastructure Health Diagnostics</h6>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <h6 class="fw-bold text-dark small text-uppercase mb-2"><i class="bi bi-gear-wide-connected me-1 text-primary"></i> Mediation Daemons</h6>
+                            <ul class="list-unstyled small mb-0 d-flex flex-column gap-2">
+                                <li class="d-flex justify-content-between"><span>mediation-collector.service</span> <span class="badge bg-success-subtle text-success">Active</span></li>
+                                <li class="d-flex justify-content-between"><span>mediation-decoder.service</span> <span class="badge bg-success-subtle text-success">Active</span></li>
+                                <li class="d-flex justify-content-between"><span>mediation-distributor.service</span> <span class="badge bg-success-subtle text-success">Active</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <h6 class="fw-bold text-dark small text-uppercase mb-2"><i class="bi bi-database me-1 text-primary"></i> Database &amp; Storage</h6>
+                            <ul class="list-unstyled small mb-0 d-flex flex-column gap-2">
+                                <li class="d-flex justify-content-between"><span>Database Connectivity</span> <span class="badge bg-success-subtle text-success">Connected (0.8ms)</span></li>
+                                <li class="d-flex justify-content-between"><span>Storage Root (/data/ump)</span> <span class="badge bg-success-subtle text-success">Mounted / RW</span></li>
+                                <li class="d-flex justify-content-between"><span>Processing Queue</span> <span class="badge bg-primary-subtle text-primary">Normal Backlog</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top py-2 px-4" style="border-color: #E2E8F0 !important;">
+                <a href="{% url 'dashboard:services' %}" class="btn btn-primary btn-sm px-3" style="border-radius: 6px;">Manage Services</a>
+                <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Error Diagnostic Detail Modal -->
+<div class="modal fade" id="errorDetailModal" tabindex="-1" aria-labelledby="errorDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 500px;">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px; overflow: hidden;">
+            <div class="modal-header border-bottom py-3 px-4" style="background: #F8FAFD; border-color: #E2E8F0 !important;">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-exclamation-triangle text-danger fs-5"></i>
+                    <h6 class="modal-title fw-bold text-dark mb-0" id="errorDetailModalLabel">Error Diagnostics</h6>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-2">
+                    <label class="text-muted small fw-semibold text-uppercase d-block mb-1">Time &amp; Component</label>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <strong class="text-dark small" id="errModalComponent">--</strong>
+                        <span class="text-muted small" id="errModalTime">--</span>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="text-muted small fw-semibold text-uppercase d-block mb-1">Severity</label>
+                    <span id="errModalSeverity" class="badge bg-danger">Critical</span>
+                </div>
+                <div class="mb-3">
+                    <label class="text-muted small fw-semibold text-uppercase d-block mb-1">Associated File / Stage</label>
+                    <div class="p-2 bg-light rounded border small font-monospace" id="errModalTarget">--</div>
+                </div>
+                <div class="mb-2">
+                    <label class="text-muted small fw-semibold text-uppercase d-block mb-1">Error Message</label>
+                    <div class="p-3 bg-light rounded border small text-break" id="errModalMessage" style="color: #991B1B; background: #FEF2F2 !important; border-color: #FECACA !important;">--</div>
+                </div>
+            </div>
+            <div class="modal-footer border-top py-2 px-4" style="border-color: #E2E8F0 !important;">
+                <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script src="{% static 'js/system_monitoring.js' %}"></script>
+{% endblock %}

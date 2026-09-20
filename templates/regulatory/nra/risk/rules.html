@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}UMP | Risk Rules{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+
+{% block topbar %}
+<div class="topbar">
+    <div class="topbar-left">
+        <h5 class="topbar-title">Risk Rules</h5>
+        <span class="topbar-subtitle">National Revenue Authority</span>
+    </div>
+    <div class="topbar-right">
+        {% if request.user.is_regulatory_admin or request.user.is_superuser %}
+        <a href="{% url 'regulatory:risk_rule_create' %}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg"></i> New Rule
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Filters -->
+    <div class="row g-2 mb-3">
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" name="operator">
+                <option value="">All Operators</option>
+                {% for op in operators %}
+                <option value="{{ op.code }}" {% if filter_operator == op.code %}selected{% endif %}>{{ op.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" name="alert_type">
+                <option value="">All Types</option>
+                {% for value, label in alert_type_choices %}<option value="{{ value }}" {% if filter_alert_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" name="status">
+                <option value="">All Statuses</option>
+                {% for value, label in status_choices %}<option value="{{ value }}" {% if filter_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary btn-sm w-100">
+                <i class="bi bi-funnel"></i> Filter
+            </button>
+        </div>
+    </div>
+
+    <!-- Rules Table -->
+    <div class="dashboard-card">
+        <div class="card-content">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Operator</th>
+                            <th>Type</th>
+                            <th>Metric</th>
+                            <th>Threshold</th>
+                            <th>Severity</th>
+                            <th>Enabled</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rule in rules %}
+                        <tr>
+                            <td>{{ rule.name }}</td>
+                            <td>{{ rule.operator_code }}</td>
+                            <td>{{ rule.rule_type }}</td>
+                            <td>{{ rule.metric }}</td>
+                            <td>{{ rule.threshold_value }}%</td>
+                            <td>
+                                {% if rule.severity == 'HIGH' %}
+                                <span class="badge bg-danger">High</span>
+                                {% elif rule.severity == 'MEDIUM' %}
+                                <span class="badge bg-warning">Medium</span>
+                                {% else %}
+                                <span class="badge bg-info">Low</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if rule.enabled %}
+                                <span class="badge bg-success">Yes</span>
+                                {% else %}
+                                <span class="badge bg-secondary">No</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if request.user.is_regulatory_admin or request.user.is_superuser %}
+                                <a href="{% url 'regulatory:risk_rule_edit' rule.pk %}" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox" style="font-size: 48px;"></i>
+                                <p class="mb-0 mt-2">No risk rules found</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

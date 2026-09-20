@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Audit Cases | NRA{% endblock %}
+{% block page_title %}Audit Cases{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'regulatory/css/tariff_management.css' %}">
+<link rel="stylesheet" href="{% static 'regulatory/css/risk.css' %}">
+<link rel="stylesheet" href="{% static 'regulatory/css/audit.css' %}">
+{% endblock %}
+{% block content %}
+<div class="regulatory-page audit-page">
+    <nav class="regulatory-breadcrumb">
+        <span>NRA</span><i class="bi bi-chevron-right"></i>
+        <span>Audit</span><i class="bi bi-chevron-right"></i>
+        <span>Audit Cases</span>
+    </nav>
+
+    <div class="regulatory-page-header">
+        <div>
+            <h1>Audit Cases</h1>
+            <p>Manage regulatory investigations, supporting evidence and audit actions</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'regulatory:audit_case_export' %}?{{ query_string }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download"></i> Export</a>
+            {% if request.user.is_superuser or request.user.is_regulatory_admin %}
+            <a href="{% url 'regulatory:audit_case_create' %}" class="btn btn-primary btn-sm regulatory-primary-action"><i class="bi bi-plus-lg"></i> New Audit Case</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <section class="regulatory-kpi-grid audit-kpi-grid">
+        <div class="regulatory-kpi-card">
+            <span class="kpi-icon blue"><i class="bi bi-folder2-open"></i></span>
+            <div><small>Total Cases</small><strong>{{ summary.total }}</strong></div>
+        </div>
+        <div class="regulatory-kpi-card">
+            <span class="kpi-icon red"><i class="bi bi-exclamation-circle"></i></span>
+            <div><small>Open</small><strong>{{ summary.open }}</strong></div>
+        </div>
+        <div class="regulatory-kpi-card">
+            <span class="kpi-icon orange"><i class="bi bi-search"></i></span>
+            <div><small>Investigating</small><strong>{{ summary.investigating }}</strong></div>
+        </div>
+        <div class="regulatory-kpi-card">
+            <span class="kpi-icon purple"><i class="bi bi-envelope"></i></span>
+            <div><small>Awaiting Operator</small><strong>{{ summary.awaiting_operator }}</strong></div>
+        </div>
+        <div class="regulatory-kpi-card">
+            <span class="kpi-icon green"><i class="bi bi-check-circle"></i></span>
+            <div><small>Resolved</small><strong>{{ summary.resolved }}</strong></div>
+        </div>
+        <div class="regulatory-kpi-card">
+            <span class="kpi-icon teal"><i class="bi bi-archive"></i></span>
+            <div><small>Closed</small><strong>{{ summary.closed }}</strong></div>
+        </div>
+    </section>
+
+    <form method="get" class="regulatory-filter-bar audit-filter-bar">
+        <select name="operator" class="form-select form-select-sm">
+            <option value="">All Operators</option>
+            {% for operator in operators %}
+            <option value="{{ operator.code }}" {% if filters.operator == operator.code %}selected{% endif %}>{{ operator.name }}</option>
+            {% endfor %}
+        </select>
+        <select name="case_type" class="form-select form-select-sm">
+            <option value="">All Case Types</option>
+            {% for value, label in case_type_choices %}
+            <option value="{{ value }}" {% if filters.case_type == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="status" class="form-select form-select-sm">
+            <option value="">All Status</option>
+            {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="risk_level" class="form-select form-select-sm">
+            <option value="">All Risk</option>
+            {% for value, label in risk_choices %}
+            <option value="{{ value }}" {% if filters.risk_level == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="assigned_officer" class="form-select form-select-sm">
+            <option value="">All Officers</option>
+            <option value="unassigned" {% if filters.assigned_officer == 'unassigned' %}selected{% endif %}>Unassigned</option>
+            {% for officer in officers %}
+            <option value="{{ officer.pk }}" {% if filters.assigned_officer == officer.pk|stringformat:"s" %}selected{% endif %}>{{ officer.get_full_name|default:officer.username }}</option>
+            {% endfor %}
+        </select>
+        <input type="date" name="start_date" value="{{ filters.start_date }}" class="form-control form-control-sm" aria-label="Start date">
+        <input type="date" name="end_date" value="{{ filters.end_date }}" class="form-control form-control-sm" aria-label="End date">
+        <div class="regulatory-search-wrap">
+            <i class="bi bi-search"></i>
+            <input name="search" value="{{ filters.search }}" class="form-control form-control-sm" placeholder="Search audit cases...">
+        </div>
+        <button class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Filter</button>
+        <a href="{% url 'regulatory:audit_case_list' %}" class="btn btn-outline-secondary btn-sm">Clear</a>
+    </form>
+
+    <section class="regulatory-table-card">
+        <div class="table-responsive">
+            <table class="table table-hover regulatory-data-table audit-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Case ID</th>
+                        <th>Operator</th>
+                        <th>Case Type</th>
+                        <th>Period</th>
+                        <th>Finding</th>
+                        <th class="text-end">Exposure</th>
+                        <th>Risk</th>
+                        <th>Assigned To</th>
+                        <th>Status</th>
+                        <th>Opened</th>
+                        <th>Last Updated</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for case in cases %}
+                    <tr>
+                        <td><strong>{{ case.case_number }}</strong></td>
+                        <td>{{ case.operator_code }}</td>
+                        <td>{{ case.get_case_type_display }}</td>
+                        <td>{% if case.period_start %}{{ case.period_start|date:"M Y" }}{% else %}—{% endif %}</td>
+                        <td class="text-truncate" style="max-width:220px;" title="{{ case.finding_summary }}">{{ case.finding_summary|default:"—"|truncatechars:60 }}</td>
+                        <td class="text-end">{{ case.currency }} {{ case.potential_exposure|floatformat:1 }}</td>
+                        <td><span class="status-badge risk-severity-{{ case.risk_level|lower }}">{{ case.get_risk_level_display }}</span></td>
+                        <td>{{ case.assigned_to|default:"—" }}</td>
+                        <td><span class="status-badge audit-status-{{ case.status|lower }}">{{ case.get_status_display }}</span></td>
+                        <td>{{ case.opened_at|date:"d M Y" }}</td>
+                        <td>{{ case.updated_at|date:"d M Y" }}</td>
+                        <td>
+                            <div class="regulatory-row-actions">
+                                <a class="icon-action" href="{% url 'regulatory:audit_case_detail' case.pk %}" title="View"><i class="bi bi-eye"></i></a>
+                                <a class="icon-action" href="{% url 'regulatory:audit_case_report' case.pk %}" title="Generate Report"><i class="bi bi-file-earmark-spreadsheet"></i></a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="12">
+                            <div class="regulatory-empty-state">
+                                <i class="bi bi-shield-check"></i>
+                                <strong>No audit cases found</strong>
+                                <span>No regulatory investigations match the current filters.</span>
+                                <div class="d-flex gap-2">
+                                    {% if request.user.is_superuser or request.user.is_regulatory_admin %}
+                                    <a href="{% url 'regulatory:audit_case_create' %}" class="btn btn-primary btn-sm">+ New Audit Case</a>
+                                    {% endif %}
+                                    <a href="{% url 'regulatory:audit_case_list' %}" class="btn btn-outline-secondary btn-sm">Clear Filters</a>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="regulatory-table-footer">
+            <span>{% if page_obj.paginator.count %}Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} entries{% else %}Showing 0 entries{% endif %}</span>
+            <form method="get" class="page-size-form">
+                {% for key, value in request.GET.items %}{% if key != 'page_size' and key != 'page' %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endif %}{% endfor %}
+                <select name="page_size" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="15" {% if page_size == 15 %}selected{% endif %}>15 per page</option>
+                    <option value="25" {% if page_size == 25 %}selected{% endif %}>25 per page</option>
+                    <option value="50" {% if page_size == 50 %}selected{% endif %}>50 per page</option>
+                    <option value="100" {% if page_size == 100 %}selected{% endif %}>100 per page</option>
+                </select>
+            </form>
+            {% if page_obj.paginator.num_pages > 1 %}
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+                        {% if page_obj.has_previous %}<a class="page-link" href="?{{ query_string }}&page={{ page_obj.previous_page_number }}">Previous</a>{% else %}<span class="page-link">Previous</span>{% endif %}
+                    </li>
+                    {% for number in page_obj.paginator.page_range %}
+                    {% if number == page_obj.number %}
+                    <li class="page-item active"><span class="page-link">{{ number }}</span></li>
+                    {% else %}
+                    <li class="page-item"><a class="page-link" href="?{{ query_string }}&page={{ number }}">{{ number }}</a></li>
+                    {% endif %}
+                    {% endfor %}
+                    <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+                        {% if page_obj.has_next %}<a class="page-link" href="?{{ query_string }}&page={{ page_obj.next_page_number }}">Next</a>{% else %}<span class="page-link">Next</span>{% endif %}
+                    </li>
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </section>
+</div>
+{% endblock %}

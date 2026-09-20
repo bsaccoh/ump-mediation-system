@@ -24,6 +24,18 @@ class User(AbstractUser):
         default=False,
         help_text='Can open / execute / export lawful-intercept (LEA) requests',
     )
+    is_regulator = models.BooleanField(
+        default=False,
+        help_text='Can view regulatory dashboards, traffic monitoring and reports',
+    )
+    is_auditor = models.BooleanField(
+        default=False,
+        help_text='Can manage audit cases and view detailed reconciliation',
+    )
+    is_regulatory_admin = models.BooleanField(
+        default=False,
+        help_text='Can manage tariffs, tax rates, risk rules and regulatory configuration',
+    )
 
     class Meta:
         db_table = 'users'
@@ -103,6 +115,48 @@ class Alert(models.Model):
 
     def __str__(self):
         return f'[{self.severity}] {self.category}: {self.message[:80]}'
+
+
+class ActivityLog(models.Model):
+    """Pipeline activity log — captures collection, decoding, distribution,
+    and system events for operational visibility."""
+
+    class Stage(models.TextChoices):
+        COLLECTION = 'COLLECTION', 'Collection'
+        DECODING = 'DECODING', 'Decoding'
+        DISTRIBUTION = 'DISTRIBUTION', 'Distribution'
+        SYSTEM = 'SYSTEM', 'System'
+
+    class Level(models.TextChoices):
+        INFO = 'INFO', 'Info'
+        WARNING = 'WARNING', 'Warning'
+        ERROR = 'ERROR', 'Error'
+
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    event_type = models.CharField(max_length=60, db_index=True)
+    stage = models.CharField(max_length=15, choices=Stage.choices, db_index=True)
+    stream = models.CharField(max_length=10, blank=True)
+    operator = models.CharField(max_length=30, blank=True)
+    level = models.CharField(max_length=10, choices=Level.choices, default=Level.INFO)
+    cdr_file = models.ForeignKey(
+        'collection.CDRFile', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+',
+    )
+    source = models.ForeignKey(
+        'collection.DataSource', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+',
+    )
+    message = models.TextField()
+    details = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = 'activity_logs'
+        ordering = ['-timestamp']
+        verbose_name = 'Activity Log'
+        verbose_name_plural = 'Activity Logs'
+
+    def __str__(self):
+        return f'{self.timestamp:%Y-%m-%d %H:%M:%S} [{self.stage}] {self.event_type}'
 
 
 class JobRecord(models.Model):
@@ -190,3 +244,122 @@ class JobRecord(models.Model):
         if self.started_at and self.finished_at:
             return (self.finished_at - self.started_at).total_seconds()
         return None
+
+
+class AlertThreshold(models.Model):
+    """Configurable alarm thresholds — operations defines these, not code.
+
+    Each row maps a metric (e.g. cpu_percent, collection_backlog_count) to
+    warning / major / critical thresholds. The alarm engine evaluates live
+    metrics against these and creates or resolves Alert rows accordingly.
+    """
+
+    METRIC_CHOICES = [
+        ('cpu_percent', 'CPU Utilisation (%)'),
+        ('memory_percent', 'Memory Utilisation (%)'),
+        ('disk_percent', 'Disk Utilisation (%)'),
+        ('collection_backlog_count', 'Collection Backlog (file count)'),
+        ('collection_backlog_age', 'Collection Backlog Oldest File (seconds)'),
+        ('processing_backlog_count', 'Processing Backlog (file count)'),
+        ('output_staging_count', 'Output Staging Backlog (file count)'),
+        ('distribution_failure_count', 'Distribution Failures (count in window)'),
+        ('decoder_failure_count', 'Decoder Failures (count in window)'),
+        ('processing_latency', 'Avg Processing Latency (seconds)'),
+        ('zero_record_file_count', 'Empty Files Received (count in window)'),
+        ('source_not_sending_hours', 'Source Silent Duration (hours)'),
+        ('worker_count', 'Available Celery Workers'),
+    ]
+
+    metric = models.CharField(max_length=50, choices=METRIC_CHOICES, unique=True)
+    warning_threshold = models.FloatField(
+        help_text='Value at which a WARNING alert is raised'
+    )
+    major_threshold = models.FloatField(
+        help_text='Value at which a MAJOR/ERROR alert is raised'
+    )
+    critical_threshold = models.FloatField(
+        help_text='Value at which a CRITICAL alert is raised'
+    )
+    enabled = models.BooleanField(default=True)
+    evaluation_window_seconds = models.IntegerField(
+        default=300,
+        help_text='Time window (seconds) over which count-based metrics are evaluated'
+    )
+    notes = models.TextField(
+        blank=True,
+        help_text='INITIAL OPERATIONAL DEFAULT — subject to Operations approval'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'alert_thresholds'
+        ordering = ['metric']
+        verbose_name = 'Alert Threshold'
+        verbose_name_plural = 'Alert Thresholds'
+
+    def __str__(self):
+        return f'{self.get_metric_display()} (W:{self.warning_threshold} M:{self.major_threshold} C:{self.critical_threshold})'
+
+
+class SystemMetricSnapshot(models.Model):
+    """Periodic hardware and server performance metric snapshot for historical monitoring charts."""
+
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    hostname = models.CharField(max_length=120, blank=True)
+    cpu_percent = models.FloatField(default=0.0)
+    memory_percent = models.FloatField(default=0.0)
+    memory_used_bytes = models.BigIntegerField(default=0)
+    memory_total_bytes = models.BigIntegerField(default=0)
+    disk_percent = models.FloatField(default=0.0)
+    disk_used_bytes = models.BigIntegerField(default=0)
+    disk_free_bytes = models.BigIntegerField(default=0)
+    network_rx_bytes = models.BigIntegerField(default=0)
+    network_tx_bytes = models.BigIntegerField(default=0)
+    network_percent = models.FloatField(default=0.0)
+    load_average = models.FloatField(default=0.0)
+
+    class Meta:
+        db_table = 'system_metric_snapshots'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['timestamp']),
+        ]
+        verbose_name = 'System Metric Snapshot'
+        verbose_name_plural = 'System Metric Snapshots'
+
+    def __str__(self):
+        return f'{self.timestamp:%Y-%m-%d %H:%M:%S} | CPU {self.cpu_percent}% | RAM {self.memory_percent}% | Disk {self.disk_percent}%'
+
+
+class SystemControl(models.Model):
+    """Singleton record holding global pipeline control flags."""
+
+    intake_paused = models.BooleanField(default=False)
+    intake_paused_reason = models.CharField(max_length=500, blank=True)
+    intake_paused_by = models.ForeignKey(
+        'core.User', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+',
+    )
+    intake_paused_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'system_control'
+        verbose_name = 'System Control'
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    @classmethod
+    def is_intake_paused(cls):
+        try:
+            return cls.objects.filter(pk=1, intake_paused=True).exists()
+        except Exception:
+            return False
+
+    def __str__(self):
+        return f'SystemControl (intake_paused={self.intake_paused})'
+

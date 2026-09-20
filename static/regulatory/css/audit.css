@@ -1,0 +1,76 @@
+.audit-kpi-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.kpi-icon.teal { background: #5b7c78; }
+.audit-filter-bar { grid-template-columns: repeat(5, minmax(100px, 1fr)) minmax(115px, 1fr) minmax(115px, 1fr) minmax(160px, 1.3fr) auto auto; }
+.audit-table td { font-size: .73rem; }
+.audit-table th, .audit-table td { white-space: nowrap; }
+
+.audit-status-open { background: #ffe1e1; color: #c92a2a; }
+.audit-status-assigned { background: #dbeafe; color: #1d4ed8; }
+.audit-status-investigation { background: #ffedd5; color: #c2660a; }
+.audit-status-awaiting_operator { background: #f1e4ff; color: #6d28d9; }
+.audit-status-operator_response { background: #e3e0ff; color: #4c3ec9; }
+.audit-status-regulatory_review { background: #fff0cf; color: #a85d00; }
+.audit-status-resolved { background: #d9f8e8; color: #13804b; }
+.audit-status-closed { background: #e6ece9; color: #4b6353; }
+
+/* Finding statuses */
+.status-open { background: #ffe1e1; color: #c92a2a; }
+.status-confirmed { background: #ffedd5; color: #c2660a; }
+.status-disputed { background: #f1e4ff; color: #6d28d9; }
+.status-resolved { background: #d9f8e8; color: #13804b; }
+
+/* Operator response statuses */
+.status-pending { background: #e9edf2; color: #556678; }
+.status-under_review { background: #fff0cf; color: #a85d00; }
+.status-accepted { background: #d9f8e8; color: #13804b; }
+.status-rejected { background: #ffe1e3; color: #ce3945; }
+
+/* Source file registry statuses */
+.status-completed, .status-decoded { background: #d9f8e8; color: #13804b; }
+.status-processing, .status-dispatching, .status-collected { background: #dbeafe; color: #1761bb; }
+.status-failed { background: #ffe1e3; color: #ce3945; }
+.status-duplicate { background: #e9edf2; color: #556678; }
+
+.audit-detail-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .6rem; margin-bottom: .7rem; }
+.audit-status-strip-8 { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+.audit-financial-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: .9rem; }
+.audit-detail-value { background: #f8fbfe; border: 1px solid #e2ebf3; border-radius: .25rem; padding: .55rem .7rem; }
+.audit-detail-value small { color: #6d8199; display: block; font-size: .66rem; margin-bottom: .15rem; }
+.audit-detail-value strong { color: #1c3b68; display: block; font-size: .82rem; }
+
+.audit-section-card { background: #fff; border: 1px solid #e1eaf5; border-radius: .35rem; box-shadow: 0 2px 7px rgba(28, 69, 118, .06); margin-bottom: .65rem; padding: .8rem .9rem; }
+.audit-section-card h2 { color: #17315b; font-size: .82rem; font-weight: 700; margin: 0 0 .6rem; }
+
+.audit-tabs.nav-tabs { border-bottom: 1px solid #dbe7f3; gap: .1rem; margin-bottom: .65rem; }
+.audit-tabs.nav-tabs .nav-link { border: 1px solid transparent; border-radius: .3rem .3rem 0 0; color: #55719c; font-size: .74rem; font-weight: 600; padding: .38rem .68rem; }
+.audit-tabs.nav-tabs .nav-link.active { background: #fff; border-color: #dbe7f3 #dbe7f3 #fff; color: #142d5c; }
+.audit-tabs.nav-tabs .nav-link:hover { color: #1075f2; }
+
+.audit-finding-card, .audit-response-card { background: #f8fbfe; border: 1px solid #e2ebf3; border-radius: .3rem; margin-bottom: .5rem; padding: .6rem .75rem; }
+.audit-finding-card h3, .audit-response-card h3 { color: #1c3b68; font-size: .78rem; font-weight: 700; margin: 0 0 .3rem; }
+.audit-evidence-chain { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; }
+.audit-evidence-chain .node { background: #f2f7fd; border: 1px solid #dbe7f3; border-radius: .25rem; padding: .35rem .55rem; }
+.audit-evidence-chain .node small { color: #6d8199; display: block; font-size: .63rem; }
+.audit-evidence-chain .node strong { color: #1c3b68; font-size: .74rem; }
+.audit-evidence-chain i { color: #9ab3d1; }
+
+.audit-comment { border-bottom: 1px solid #edf2f8; padding: .5rem 0; }
+.audit-comment:last-child { border-bottom: none; }
+.audit-comment small { color: #6d8199; }
+.audit-action-bar { display: flex; flex-wrap: wrap; gap: .4rem; }
+
+.audit-calc-step { border-left: 2px solid #dbe7f3; margin-left: .4rem; padding: 0 0 .8rem .9rem; position: relative; }
+.audit-calc-step::before { background: #1075f2; border-radius: 50%; content: ''; height: 8px; left: -5px; position: absolute; top: .3rem; width: 8px; }
+.audit-calc-step:last-child { border-left-color: transparent; padding-bottom: 0; }
+.audit-calc-step small { color: #6d8199; display: block; font-size: .66rem; }
+.audit-calc-step strong { color: #142d5c; display: block; font-size: .8rem; }
+.audit-calc-step span { color: #294568; font-size: .74rem; }
+
+@media (max-width: 1250px) {
+    .audit-kpi-grid, .audit-status-strip-8 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .audit-filter-bar { grid-template-columns: repeat(4, minmax(140px, 1fr)); }
+}
+@media (max-width: 700px) {
+    .audit-kpi-grid, .audit-filter-bar, .audit-detail-grid, .audit-status-strip-8, .audit-financial-kpi-grid { grid-template-columns: 1fr; }
+    .audit-tabs.nav-tabs { flex-wrap: nowrap; overflow-x: auto; }
+}

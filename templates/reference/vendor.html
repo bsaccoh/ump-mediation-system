@@ -438,7 +438,7 @@ function buildPagination(page, pages, total) {
     const bar = document.getElementById('pagBar');
     if (pages <= 1) { bar.style.display = 'none'; return; }
     bar.style.display = 'flex';
-    document.getElementById('pagShowing').textContent = `${(page-1)*25+1}–${Math.min(page*25, total)}`;
+    document.getElementById('pagShowing').textContent = `${(page-1)*15+1}–${Math.min(page*15, total)}`;
     document.getElementById('pagTotal').textContent = total;
     let html = `<li class="page-item ${page<=1?'disabled':''}"><a class="page-link" href="#" onclick="event.preventDefault();goPage(${page-1})">‹</a></li>`;
     for (let i = Math.max(1, page-2); i <= Math.min(pages, page+2); i++)

@@ -3,6 +3,10 @@
 {% block title %}CDR Files{% endblock %}
 {% block page_title %}CDR File Manager{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/datatables.net-bs5/1.13.8/dataTables.bootstrap5.min.css">
+{% endblock %}
+
 {% block content %}
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -11,43 +15,65 @@
             <i class="bi bi-upload"></i> Upload
         </a>
     </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover table-sm mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Filename</th>
-                        <th>Source</th>
-                        <th>Decoder</th>
-                        <th>Status</th>
-                        <th>Records</th>
-                        <th>Valid</th>
-                        <th>Size</th>
-                        <th>Uploaded</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for f in files %}
+    <div class="card-body">
+        <table id="cdrFilesTable" class="table table-hover table-sm w-100">
+            <thead class="table-light">
                 <tr>
-                    <td><a href="{% url 'collection:file_detail' f.pk %}">{{ f.filename|truncatechars:40 }}</a></td>
-                    <td>{{ f.source.name|default:"-" }}</td>
-                    <td><span class="badge bg-secondary">{{ f.decoder_type }}</span></td>
-                    <td>
-                        <span class="badge bg-{% if f.status == 'COMPLETED' %}success{% elif f.status == 'FAILED' %}danger{% elif f.status == 'PROCESSING' %}warning{% else %}secondary{% endif %}">
-                            {{ f.status }}
-                        </span>
-                    </td>
-                    <td>{{ f.records_total|intcomma }}</td>
-                    <td>{{ f.records_valid|intcomma }}</td>
-                    <td>{{ f.file_size|filesizeformat }}</td>
-                    <td>{{ f.created_at|date:"M d, H:i" }}</td>
+                    <th>Filename</th>
+                    <th>Source</th>
+                    <th>Decoder</th>
+                    <th>Status</th>
+                    <th>Records</th>
+                    <th>Valid</th>
+                    <th>Size</th>
+                    <th>Uploaded</th>
                 </tr>
-                {% empty %}
-                <tr><td colspan="8" class="text-center py-4 text-muted">No files uploaded yet.</td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
+            </thead>
+            <tbody>
+            {% for f in files %}
+            <tr>
+                <td><a href="{% url 'collection:file_detail' f.pk %}">{{ f.filename|truncatechars:40 }}</a></td>
+                <td>{{ f.source.name|default:"-" }}</td>
+                <td><span class="badge bg-secondary">{{ f.decoder_type }}</span></td>
+                <td>
+                    <span class="badge bg-{% if f.status == 'COMPLETED' %}success{% elif f.status == 'FAILED' %}danger{% elif f.status == 'PROCESSING' %}warning{% else %}secondary{% endif %}">
+                        {{ f.status }}
+                    </span>
+                </td>
+                <td class="text-end">{{ f.records_total|intcomma }}</td>
+                <td class="text-end">{{ f.records_valid|intcomma }}</td>
+                <td>{{ f.file_size|filesizeformat }}</td>
+                <td data-order="{{ f.created_at|date:'Y-m-d H:i:s' }}">{{ f.created_at|date:"M d, H:i" }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/datatables.net/1.13.8/jquery.dataTables.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/datatables.net-bs5/1.13.8/dataTables.bootstrap5.min.js"></script>
+<script>
+$(document).ready(function () {
+    $('#cdrFilesTable').DataTable({
+        pageLength: 15,
+        lengthMenu: [[10, 15, 25, 50, 100, -1], [10, 15, 25, 50, 100, 'All']],
+        order: [[7, 'desc']],
+        language: {
+            search: 'Filter:',
+            lengthMenu: 'Show _MENU_ entries',
+            info: 'Showing _START_ to _END_ of _TOTAL_ files',
+            infoEmpty: 'No files found',
+            infoFiltered: '(filtered from _MAX_ total)',
+            emptyTable: 'No CDR files uploaded yet'
+        },
+        columnDefs: [
+            { targets: [4, 5], className: 'dt-body-right' }
+        ]
+    });
+});
+</script>
 {% endblock %}

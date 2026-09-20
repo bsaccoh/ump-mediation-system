@@ -10,10 +10,12 @@ import traceback
 from datetime import datetime, timezone
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
+
+_superuser_required = user_passes_test(lambda u: u.is_superuser)
 
 from .forms import ScriptForm
 from .models import Script, ScriptExecution
@@ -108,6 +110,7 @@ def script_detail(request, pk):
 
 # ── Delete ─────────────────────────────────────────────────────────────────────
 
+@_superuser_required
 @login_required
 @require_POST
 def script_delete(request, pk):
@@ -120,6 +123,7 @@ def script_delete(request, pk):
 
 # ── Run ────────────────────────────────────────────────────────────────────────
 
+@_superuser_required
 @login_required
 @require_POST
 def script_run(request, pk):
@@ -147,7 +151,12 @@ def script_run(request, pk):
                 '__builtins__': __builtins__,
                 'print': lambda *a, **kw: print(*a, file=stdout_capture, **kw),
             }
-            exec(compile(script.content, script.name, 'exec'), exec_globals)  # noqa: S102
+            from .models import ScriptRegistry
+            from .services.execution import run_registered_script
+            registry_entry = ScriptRegistry.objects.get(script_id=script.name)
+            output, stderr, _ = run_registered_script(registry_entry, request.user)
+            stdout_capture.write(output)
+            stderr_capture.write(stderr)
         else:
             stdout_capture.write(f'[INFO] Dry-run only — {script.script_type} execution not enabled in this environment.\n')
 

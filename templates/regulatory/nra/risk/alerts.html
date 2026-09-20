@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% load static %}
+{% load regulatory_tags %}
+{% block title %}Risk Alerts | NRA{% endblock %}
+{% block page_title %}Risk Alerts{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'regulatory/css/tariff_management.css' %}">
+<link rel="stylesheet" href="{% static 'regulatory/css/risk.css' %}">
+{% endblock %}
+{% block content %}
+<div class="regulatory-page risk-page">
+    <nav class="regulatory-breadcrumb">
+        <span>NRA</span><i class="bi bi-chevron-right"></i>
+        <span>Risk Management</span><i class="bi bi-chevron-right"></i>
+        <span>Risk Alerts</span>
+    </nav>
+
+    <div class="regulatory-page-header">
+        <div>
+            <h1>Risk Alerts</h1>
+            <p>Monitor and manage tax, revenue and compliance risk alerts</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'regulatory:risk_alert_export' %}?{{ query_string }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download"></i> Export</a>
+            {% if request.user.is_superuser or request.user.is_regulatory_admin %}
+            <a href="{% url 'regulatory:risk_rule_create' %}" class="btn btn-primary btn-sm regulatory-primary-action"><i class="bi bi-plus-lg"></i> Create Rule</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <section class="regulatory-kpi-grid risk-kpi-grid">
+        <div class="regulatory-kpi-card">
+            <span class="kpi-icon blue"><i class="bi bi-exclamation-triangle"></i></span>
+            <div><small>Total Alerts</small><strong>{{ summary.total }}</strong></div>
+        </div>
+        <div class="regulatory-kpi-card">
+            <span class="kpi-icon red"><i class="bi bi-exclamation-circle"></i></span>
+            <div><small>Open</small><strong>{{ summary.open }}</strong></div>
+        </div>
+        <div class="regulatory-kpi-card">
+            <span class="kpi-icon orange"><i class="bi bi-search"></i></span>
+            <div><small>Investigating</small><strong>{{ summary.investigating }}</strong></div>
+        </div>
+        <div class="regulatory-kpi-card">
+            <span class="kpi-icon green"><i class="bi bi-check-circle"></i></span>
+            <div><small>Resolved</small><strong>{{ summary.resolved }}</strong></div>
+        </div>
+    </section>
+
+    <form method="get" class="regulatory-filter-bar risk-filter-bar">
+        <select name="operator" class="form-select form-select-sm">
+            <option value="">All Operators</option>
+            {% for operator in operators %}
+            <option value="{{ operator.code }}" {% if filters.operator == operator.code %}selected{% endif %}>{{ operator.name }}</option>
+            {% endfor %}
+        </select>
+        <select name="severity" class="form-select form-select-sm">
+            <option value="">All Severity</option>
+            {% for value, label in severity_choices %}
+            <option value="{{ value }}" {% if filters.severity == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="status" class="form-select form-select-sm">
+            <option value="">All Status</option>
+            {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="alert_type" class="form-select form-select-sm">
+            <option value="">All Types</option>
+            {% for value, label in alert_type_choices %}
+            <option value="{{ value }}" {% if filters.alert_type == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <input type="date" name="start_date" value="{{ filters.start_date }}" class="form-control form-control-sm" aria-label="Start date">
+        <input type="date" name="end_date" value="{{ filters.end_date }}" class="form-control form-control-sm" aria-label="End date">
+        <div class="regulatory-search-wrap">
+            <i class="bi bi-search"></i>
+            <input name="search" value="{{ filters.search }}" class="form-control form-control-sm" placeholder="Search alerts...">
+        </div>
+        <button class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Filter</button>
+        <a href="{% url 'regulatory:risk_alert_list' %}" class="btn btn-outline-secondary btn-sm">Clear</a>
+    </form>
+
+    <section class="regulatory-table-card">
+        <div class="table-responsive">
+            <table class="table table-hover regulatory-data-table risk-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Alert ID</th>
+                        <th>Operator</th>
+                        <th>Rule</th>
+                        <th>Alert Type</th>
+                        <th>Severity</th>
+                        <th class="text-end">Metric Value</th>
+                        <th class="text-end">Threshold</th>
+                        <th>Status</th>
+                        <th>Source</th>
+                        <th>Triggered</th>
+                        <th>Assigned To</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for alert in alerts %}
+                    <tr>
+                        <td><strong>{{ alert.reference|default:alert.pk }}</strong></td>
+                        <td>{{ alert.operator_code }}</td>
+                        <td>{{ alert.rule.name|default:"—" }}</td>
+                        <td>{{ alert.get_alert_type_display }}</td>
+                        <td><span class="status-badge risk-severity-{{ alert.severity|lower }}">{{ alert.get_severity_display }}</span></td>
+                        <td class="text-end">{{ alert.metric_value|floatformat:2 }}</td>
+                        <td class="text-end">{{ alert.threshold_value|floatformat:2 }}</td>
+                        <td><span class="status-badge risk-status-{{ alert.status|lower }}">{{ alert.get_status_display }}</span></td>
+                        <td>{{ alert.get_source_type_display }}</td>
+                        <td>{{ alert.triggered_at|date:"d M Y H:i" }}</td>
+                        <td>{{ alert.assigned_to|default:"—" }}</td>
+                        <td>
+                            <div class="regulatory-row-actions">
+                                <a class="icon-action" href="{% url 'regulatory:risk_alert_detail' alert.reference|default:alert.pk %}" title="View"><i class="bi bi-eye"></i></a>
+                                {% if alert.status == 'OPEN' %}
+                                <a class="icon-action" href="{% url 'regulatory:risk_alert_detail' alert.reference|default:alert.pk %}#alert-actions" title="Assign"><i class="bi bi-person-plus"></i></a>
+                                {% endif %}
+                                <div class="dropdown d-inline-block">
+                                    <button class="icon-action" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="More actions"><i class="bi bi-three-dots-vertical"></i></button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li><a class="dropdown-item small" href="{% url 'regulatory:risk_alert_detail' alert.reference|default:alert.pk %}#alert-actions"><i class="bi bi-search me-1"></i> Investigate</a></li>
+                                        <li><a class="dropdown-item small" href="{% url 'regulatory:risk_alert_detail' alert.reference|default:alert.pk %}?tab=comments#risk-comments"><i class="bi bi-chat-left-text me-1"></i> Add Comment</a></li>
+                                        <li><a class="dropdown-item small" href="{% url 'regulatory:risk_alert_detail' alert.reference|default:alert.pk %}#alert-actions"><i class="bi bi-envelope me-1"></i> Request Operator Response</a></li>
+                                        <li><a class="dropdown-item small" href="{% url 'regulatory:risk_alert_detail' alert.reference|default:alert.pk %}#alert-actions"><i class="bi bi-check-circle me-1"></i> Resolve</a></li>
+                                        <li><a class="dropdown-item small" href="{% url 'regulatory:risk_alert_detail' alert.reference|default:alert.pk %}#alert-actions"><i class="bi bi-x-circle me-1"></i> Dismiss</a></li>
+                                        <li><a class="dropdown-item small" href="{% url 'regulatory:risk_alert_detail' alert.reference|default:alert.pk %}#alert-actions"><i class="bi bi-shield-exclamation me-1"></i> Create Audit Case</a></li>
+                                        {% risk_source_url alert as source_url %}
+                                        {% if source_url %}<li><a class="dropdown-item small" href="{{ source_url }}"><i class="bi bi-box-arrow-up-right me-1"></i> Open Source</a></li>{% endif %}
+                                    </ul>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="12">
+                            <div class="regulatory-empty-state">
+                                <i class="bi bi-shield-check"></i>
+                                <strong>No risk alerts found</strong>
+                                <span>No tax, revenue, reconciliation or compliance risks match the current filters.</span>
+                                <div class="d-flex gap-2">
+                                    {% if request.user.is_superuser or request.user.is_regulatory_admin %}
+                                    <a href="{% url 'regulatory:risk_rule_create' %}" class="btn btn-primary btn-sm">Create Rule</a>
+                                    {% endif %}
+                                    <a href="{% url 'regulatory:risk_alert_list' %}" class="btn btn-outline-secondary btn-sm">Clear Filters</a>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="regulatory-table-footer">
+            <span>{% if page_obj.paginator.count %}Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} entries{% else %}Showing 0 entries{% endif %}</span>
+            <form method="get" class="page-size-form">
+                {% for key, value in request.GET.items %}{% if key != 'page_size' and key != 'page' %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endif %}{% endfor %}
+                <select name="page_size" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="15" {% if page_size == 15 %}selected{% endif %}>15 per page</option>
+                    <option value="25" {% if page_size == 25 %}selected{% endif %}>25 per page</option>
+                    <option value="50" {% if page_size == 50 %}selected{% endif %}>50 per page</option>
+                    <option value="100" {% if page_size == 100 %}selected{% endif %}>100 per page</option>
+                </select>
+            </form>
+            {% if page_obj.paginator.num_pages > 1 %}
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+                        {% if page_obj.has_previous %}<a class="page-link" href="?{{ query_string }}&page={{ page_obj.previous_page_number }}">Previous</a>{% else %}<span class="page-link">Previous</span>{% endif %}
+                    </li>
+                    {% for number in page_obj.paginator.page_range %}
+                    {% if number == page_obj.number %}
+                    <li class="page-item active"><span class="page-link">{{ number }}</span></li>
+                    {% else %}
+                    <li class="page-item"><a class="page-link" href="?{{ query_string }}&page={{ number }}">{{ number }}</a></li>
+                    {% endif %}
+                    {% endfor %}
+                    <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+                        {% if page_obj.has_next %}<a class="page-link" href="?{{ query_string }}&page={{ page_obj.next_page_number }}">Next</a>{% else %}<span class="page-link">Next</span>{% endif %}
+                    </li>
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </section>
+</div>
+{% endblock %}

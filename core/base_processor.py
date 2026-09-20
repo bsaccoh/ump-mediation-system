@@ -13,6 +13,8 @@ from typing import Tuple, List, Optional
 from django.conf import settings
 from django.db import transaction
 
+from core.activity import log_activity
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,7 +30,7 @@ class BaseProcessor(ABC):
         success, message = processor.process(cdr_file_id=42)
     """
 
-    BATCH_SIZE = getattr(settings, 'CDR_BATCH_SIZE', 500)
+    BATCH_SIZE = getattr(settings, 'CDR_BATCH_SIZE', 2000)
 
     def __init__(self):
         self.records_total = 0
@@ -37,6 +39,7 @@ class BaseProcessor(ABC):
         self.records_duplicate = 0
         self.records_by_type = {}
         self.errors = []
+        self._errors_persisted = 0
 
     # -------------------------------------------------------------------------
     # Abstract methods - implement per stream
@@ -140,6 +143,9 @@ class BaseProcessor(ABC):
             cdr_file.processing_started = timezone.now()
             cdr_file.save(update_fields=['status', 'processing_started'])
 
+            # Move file to the processing directory if not already there
+            self._ensure_in_processing(cdr_file)
+
             # -----------------------------------------------------------
             # Choose decode path: in-memory (fast) or CSV (legacy)
             # -----------------------------------------------------------
@@ -234,6 +240,69 @@ class BaseProcessor(ABC):
                     else:
                         in_memory_out.extend(batch)
 
+            # --- Record count quality checks ---
+            if self.records_total == 0:
+                # File decoded successfully but produced zero records — mark EMPTY
+                cdr_file.status = CDRFile.Status.EMPTY
+                cdr_file.records_total = 0
+                cdr_file.records_valid = 0
+                cdr_file.records_invalid = 0
+                cdr_file.processing_completed = timezone.now()
+                cdr_file.save(update_fields=['status', 'records_total', 'records_valid',
+                                             'records_invalid', 'processing_completed'])
+                logger.warning(
+                    f'{self.__class__.__name__}: {cdr_file.filename} produced 0 records — marked EMPTY'
+                )
+                log_activity('EMPTY_FILE', 'DECODING', level='WARNING',
+                             message=f'{cdr_file.filename} produced 0 records',
+                             stream=cdr_file.decoder_type or '',
+                             operator=cdr_file.operator_code or '',
+                             cdr_file=cdr_file)
+                return False, '0 records — file is empty'
+
+            if self.records_valid == 0 and self.records_total > 0:
+                logger.warning(
+                    f'{self.__class__.__name__}: {cdr_file.filename} — all {self.records_total} '
+                    f'records invalid'
+                )
+                log_activity('ALL_RECORDS_INVALID', 'DECODING', level='WARNING',
+                             message=f'{cdr_file.filename}: all {self.records_total} records invalid',
+                             stream=cdr_file.decoder_type or '',
+                             operator=cdr_file.operator_code or '',
+                             cdr_file=cdr_file)
+            elif self.records_total > 0:
+                invalid_rate = self.records_invalid / self.records_total
+                if invalid_rate > 0.05:
+                    logger.warning(
+                        f'{self.__class__.__name__}: {cdr_file.filename} — high invalid rate '
+                        f'{invalid_rate:.1%} ({self.records_invalid}/{self.records_total})'
+                    )
+                    log_activity('HIGH_INVALID_RATE', 'DECODING', level='WARNING',
+                                 message=(f'{cdr_file.filename}: {invalid_rate:.1%} invalid '
+                                          f'({self.records_invalid}/{self.records_total})'),
+                                 stream=cdr_file.decoder_type or '',
+                                 operator=cdr_file.operator_code or '',
+                                 cdr_file=cdr_file)
+
+            # Min expected records check (if source has a minimum configured)
+            if cdr_file.source_id and self.records_valid > 0:
+                try:
+                    from collection.models import DataSource as _DS
+                    src = _DS.objects.filter(pk=cdr_file.source_id).values('min_expected_records').first()
+                    if src and src['min_expected_records'] > 0 and self.records_valid < src['min_expected_records']:
+                        logger.warning(
+                            f'{self.__class__.__name__}: {cdr_file.filename} — below minimum '
+                            f'({self.records_valid} < {src["min_expected_records"]})'
+                        )
+                        log_activity('BELOW_MIN_RECORDS', 'DECODING', level='WARNING',
+                                     message=(f'{cdr_file.filename}: {self.records_valid} valid records, '
+                                              f'minimum expected {src["min_expected_records"]}'),
+                                     stream=cdr_file.decoder_type or '',
+                                     operator=cdr_file.operator_code or '',
+                                     cdr_file=cdr_file)
+                except Exception:
+                    pass
+
             # Hook: per-stream post-processing (CDR-pair correlation, etc.)
             # Skipped in decode-only mode — it queries persisted records.
             if persist:
@@ -251,8 +320,12 @@ class BaseProcessor(ABC):
             if self.records_invalid:
                 summary += f' [{self.records_invalid} invalid]'
 
-            # Update file status
-            cdr_file.status = CDRFile.Status.COMPLETED
+            # In SERVICE_MODE the distributor service handles dispatch separately
+            # UNLESS CDR_PERSIST_RECORDS=False — then records only exist in
+            # memory right now, so we must dispatch here before they're lost.
+            service_mode = getattr(settings, 'SERVICE_MODE', False)
+            defer_dispatch = service_mode and persist
+            cdr_file.status = CDRFile.Status.DECODED if defer_dispatch else CDRFile.Status.COMPLETED
             cdr_file.records_total = self.records_total
             cdr_file.records_valid = self.records_valid
             cdr_file.records_invalid = self.records_invalid
@@ -264,17 +337,23 @@ class BaseProcessor(ABC):
             cdr_file.save()
 
             logger.info(f'{self.__class__.__name__}: {summary} from {cdr_file.filename}')
+            log_activity('DECODE_COMPLETED', 'DECODING',
+                         message=f'{self.__class__.__name__}: {summary}',
+                         stream=cdr_file.decoder_type or '',
+                         operator=cdr_file.operator_code or '',
+                         cdr_file=cdr_file)
 
-            try:
-                if persist:
-                    from core.dispatcher import dispatch_cdr_file
-                    summaries = dispatch_cdr_file(cdr_file.id)
-                else:
-                    from core.dispatcher import dispatch_in_memory
-                    summaries = dispatch_in_memory(cdr_file, in_memory_out)
-                logger.info(f'Dispatcher fired for {cdr_file.id}: {summaries}')
-            except Exception as e:
-                logger.error(f'Dispatcher trigger failed for {cdr_file.id}: {e}', exc_info=True)
+            if not defer_dispatch:
+                try:
+                    if persist:
+                        from core.dispatcher import dispatch_cdr_file
+                        summaries = dispatch_cdr_file(cdr_file.id)
+                    else:
+                        from core.dispatcher import dispatch_in_memory
+                        summaries = dispatch_in_memory(cdr_file, in_memory_out)
+                    logger.info(f'Dispatcher fired for {cdr_file.id}: {summaries}')
+                except Exception as e:
+                    logger.error(f'Dispatcher trigger failed for {cdr_file.id}: {e}', exc_info=True)
 
             return True, summary
 
@@ -283,9 +362,64 @@ class BaseProcessor(ABC):
             cdr_file.error_message = str(e)[:500]
             cdr_file.save(update_fields=['status', 'error_message'])
             logger.error(f'{self.__class__.__name__} error: {e}', exc_info=True)
+            log_activity('DECODE_FAILED', 'DECODING', level='ERROR',
+                         message=f'{self.__class__.__name__} error: {e}',
+                         stream=getattr(cdr_file, 'decoder_type', '') or '',
+                         operator=getattr(cdr_file, 'operator_code', '') or '',
+                         cdr_file=cdr_file)
             return False, str(e)
         finally:
             clear_operator()
+
+    def replay_for_downstream(self, file_path: str, cdr_file) -> list:
+        """Re-decode a CDR file and return processed in-memory records.
+
+        Runs the same decode → create → validate → enrich → normalize pipeline
+        as process(), but:
+        - Never touches cdr_file.status or any other CDRFile field
+        - Never saves records to the database
+        - Never calls dispatch_in_memory() — caller handles dispatch
+
+        Used by the selective downstream replay feature.
+        """
+        from django.conf import settings as _settings
+
+        file_to_process = file_path
+        in_memory_records = None
+
+        if self._needs_decoding(file_to_process):
+            mem_result = self.decode_to_records(file_to_process)
+            if mem_result is not None:
+                success, records_or_err, count = mem_result
+                if not success:
+                    raise RuntimeError(f'Decoding failed: {records_or_err}')
+                in_memory_records = records_or_err
+            else:
+                success, result, count = self.decode(file_to_process)
+                if not success:
+                    raise RuntimeError(f'Decoding failed: {result}')
+                file_to_process = result
+
+        record_source = (
+            iter(in_memory_records)
+            if in_memory_records is not None
+            else self.parse_records(file_to_process)
+        )
+
+        out = []
+        for raw in record_source:
+            try:
+                record = self.create_record(raw, cdr_file)
+                if record is None:
+                    continue
+                self.validate_record(record, raw)
+                self.enrich_record(record, raw)
+                self.normalize_record(record)
+                out.append(record)
+            except Exception as e:
+                logger.debug(f'replay_for_downstream: skipping record — {e}')
+
+        return out
 
     def _log_processing_error(self, cdr_file, exc: Exception,
                               record_seq=None, stage: str = 'CREATE',
@@ -297,9 +431,7 @@ class BaseProcessor(ABC):
         """
         from collection.models import ProcessingError, CDRFile
 
-        # Cap at 50 errors per file
-        existing = ProcessingError.objects.filter(cdr_file=cdr_file).count()
-        if existing >= 50:
+        if self._errors_persisted >= 50:
             return
 
         # Extract a small hex dump of the failing raw row (first 100 bytes)
@@ -327,8 +459,40 @@ class BaseProcessor(ABC):
                 raw_hex=raw_hex,
                 context=context,
             )
+            self._errors_persisted += 1
         except Exception:
             pass  # never propagate
+
+    def _ensure_in_processing(self, cdr_file) -> None:
+        """Move file from input to the processing directory if not already there."""
+        import os
+        import shutil
+        from pathlib import Path
+        try:
+            from collection.services.storage import processing_storage_dir
+            current = cdr_file.file_path
+            if not current or not os.path.isfile(current):
+                return
+            proc_dir = processing_storage_dir(
+                cdr_file.operator_code,
+                cdr_file.network_element or cdr_file.decoder_type,
+                cdr_file.decoder_type,
+                getattr(cdr_file, 'cbs_substream', None) or None,
+            )
+            proc_path = os.path.join(proc_dir, os.path.basename(current))
+            if os.path.abspath(current) == os.path.abspath(proc_path):
+                return
+            # Check if already inside the processing root
+            from django.conf import settings as _s
+            proc_root = Path(_s.UMP_PROCESSING_ROOT).resolve()
+            if Path(current).resolve().is_relative_to(proc_root):
+                return
+            shutil.move(current, proc_path)
+            cdr_file.file_path = proc_path
+            cdr_file.save(update_fields=['file_path'])
+            logger.info(f'Moved {cdr_file.filename} to processing/')
+        except Exception as e:
+            logger.warning(f'Could not move to processing: {e}')
 
     def _flush_batch(self, batch):
         """Bulk insert a batch of records."""
@@ -337,19 +501,7 @@ class BaseProcessor(ABC):
             try:
                 model_class.objects.bulk_create(batch, ignore_conflicts=False)
             except Exception as e:
-                # Debug: print details about first record that might be causing the issue
-                print(f"\n[FLUSH_BATCH ERROR] {str(e)}")
-                if batch:
-                    first_record = batch[0]
-                    print(f"[DEBUG] First record fields:")
-                    for field_name in dir(first_record):
-                        if not field_name.startswith('_') and not callable(getattr(first_record, field_name, None)):
-                            try:
-                                val = getattr(first_record, field_name)
-                                if val is not None and not isinstance(val, (bytes, type)):
-                                    print(f"  {field_name}: {type(val).__name__} = {repr(val)[:100]}")
-                            except:
-                                pass
+                logger.error(f'bulk_create failed for {model_class.__name__}: {e}')
                 raise
 
     def _needs_decoding(self, file_path: str) -> bool:

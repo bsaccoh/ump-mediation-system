@@ -10,8 +10,6 @@ Two planes:
   tables — apps ``msc/ims/pgw/sgsn/sgw/cbs``. The active operator comes from
   :func:`core.operator_context.get_operator` (set by the supervisor per file and
   by request middleware per web request).
-* **Per-service plane** (unchanged): ``interconnect`` / ``regulatory`` /
-  ``roaming`` keep their existing dedicated databases.
 
 Cross-plane ForeignKeys (e.g. a record's ``file`` -> collection.CDRFile in
 ``default``) use ``db_constraint=False`` so PG never tries to enforce them
@@ -19,12 +17,7 @@ across databases.
 """
 from django.conf import settings
 
-# app_label -> fixed (non-operator) service DB alias.
-SERVICE_DB = {
-    'interconnect': 'interconnect',
-    'regulatory':   'regulatory',
-    'roaming':      'roaming',
-}
+SERVICE_DB = {}
 
 # Decoded-record apps that live in the per-operator mediation_{op} database.
 STREAM_LABELS = {'msc', 'ims', 'pgw', 'sgsn', 'sgw', 'cbs'}
@@ -72,7 +65,6 @@ class ServiceRouter:
         """Each app migrates only into its own plane.
 
         * stream apps -> any ``mediation_*`` alias (per-operator)
-        * interconnect/regulatory/roaming -> their fixed alias
         * everything else -> ``default``
         """
         if app_label in STREAM_LABELS:

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ tariff.name }} | Tariff Management{% endblock %}
+{% block page_title %}Tariff Details{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'regulatory/css/tariff_management.css' %}">{% endblock %}
+{% block content %}
+<div class="regulatory-page tariff-detail-page">
+    <nav class="regulatory-breadcrumb"><a href="{% url 'regulatory:tariff_list' %}">NatCA</a><i class="bi bi-chevron-right"></i><a href="{% url 'regulatory:tariff_list' %}">Tariff Management</a><i class="bi bi-chevron-right"></i><span>{{ tariff.name }}</span></nav>
+    <div class="regulatory-page-header"><div><h1>{{ tariff.name }}</h1><p>Tariff version v{{ tariff.version }} for {{ tariff.operator_code|capfirst }}</p></div><a href="{% url 'regulatory:tariff_list' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Back</a></div>
+    <section class="regulatory-table-card p-4"><div class="row g-4"><div class="col-md-4"><small>Operator</small><strong>{{ tariff.operator_code|capfirst }}</strong></div><div class="col-md-4"><small>Service</small><strong>{{ tariff.get_service_type_display }}</strong></div><div class="col-md-4"><small>Traffic Type</small><strong>{{ tariff.get_traffic_type_display }}</strong></div><div class="col-md-4"><small>Rate</small><strong>{{ tariff.currency }} {{ tariff.rate|floatformat:2 }} / {{ tariff.get_charging_unit_display }}</strong></div><div class="col-md-4"><small>Effective Dates</small><strong>{{ tariff.effective_from|date:"d M Y" }}{% if tariff.effective_to %} – {{ tariff.effective_to|date:"d M Y" }}{% endif %}</strong></div><div class="col-md-4"><small>Status</small><strong><span class="status-badge status-{{ tariff.status|lower }}">{{ tariff.get_status_display }}</span></strong></div><div class="col-12"><small>Notes</small><p class="mb-0">{{ tariff.notes|default:"No notes supplied." }}</p></div></div></section>
+</div>
+{% endblock %}

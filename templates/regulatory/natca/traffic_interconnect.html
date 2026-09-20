@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}UMP | Interconnect Traffic{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/natca-dashboard.css' %}">
+{% endblock %}
+
+{% block topbar %}
+<div class="topbar">
+    <div class="topbar-left">
+        <h5 class="topbar-title">Interconnect Traffic</h5>
+        <span class="topbar-subtitle">Inter-Operator Traffic Matrix &amp; Volume Trends</span>
+    </div>
+    <div class="topbar-right">
+        <button class="btn btn-outline-light btn-sm"><i class="bi bi-download"></i> Export</button>
+        <button class="btn btn-outline-light btn-sm"><i class="bi bi-printer"></i> Print</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+
+    <!-- Filters -->
+    <form method="get" class="row g-2 mb-3">
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" name="period">
+                <option value="7"   {% if period == '7'   %}selected{% endif %}>Last 7 days</option>
+                <option value="30"  {% if period == '30'  %}selected{% endif %}>Last 30 days</option>
+                <option value="90"  {% if period == '90'  %}selected{% endif %}>Last 90 days</option>
+                <option value="365" {% if period == '365' %}selected{% endif %}>Last year</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" name="operator">
+                <option value="">All Operators</option>
+                <option value="orange"    {% if operator == 'orange'    %}selected{% endif %}>Orange</option>
+                <option value="africell"  {% if operator == 'africell'  %}selected{% endif %}>Africell</option>
+                <option value="qcell"     {% if operator == 'qcell'     %}selected{% endif %}>Qcell</option>
+                <option value="sierratel" {% if operator == 'sierratel' %}selected{% endif %}>SierraTel</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel"></i> Apply Filters</button>
+        </div>
+    </form>
+
+    <!-- KPI Cards -->
+    <div class="row g-3 mb-3">
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon bg-primary"><i class="bi bi-diagram-3"></i></div>
+                <div class="metric-content">
+                    <div class="metric-value">{{ kpis.interconnect_calls.value|default:"0" }}</div>
+                    <div class="metric-title">Interconnect Calls</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon bg-success"><i class="bi bi-clock"></i></div>
+                <div class="metric-content">
+                    <div class="metric-value">{{ kpis.interconnect_minutes.value|default:"0" }}</div>
+                    <div class="metric-title">Interconnect Minutes</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon bg-info"><i class="bi bi-arrow-down-circle"></i></div>
+                <div class="metric-content">
+                    <div class="metric-value">{{ kpis.inbound_interconnect.value|default:"0" }}</div>
+                    <div class="metric-title">Inbound (Terminating)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon bg-warning"><i class="bi bi-arrow-up-circle"></i></div>
+                <div class="metric-content">
+                    <div class="metric-value">{{ kpis.outbound_interconnect.value|default:"0" }}</div>
+                    <div class="metric-title">Outbound (Originating)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts row -->
+    <div class="row g-3 mb-3">
+        <div class="col-xl-8">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-graph-up text-primary"></i>
+                        <span>Interconnect Volume Trend</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <canvas id="interconnectTrendChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-4">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-pie-chart text-primary"></i>
+                        <span>Share by Operator</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <canvas id="operatorShareChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interconnect Detail Table -->
+    <div class="row g-3">
+        <div class="col-12">
+            <div class="dashboard-card">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-table text-primary"></i>
+                        <span>Interconnect Summary by Operator Pair</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Originating Operator</th>
+                                    <th>Terminating Operator</th>
+                                    <th class="text-end">Calls</th>
+                                    <th class="text-end">Minutes</th>
+                                    <th class="text-end">SMS</th>
+                                    <th class="text-end">% Share</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if interconnect_pairs %}
+                                {% for pair in interconnect_pairs %}
+                                <tr>
+                                    <td>{{ pair.originating }}</td>
+                                    <td>{{ pair.terminating }}</td>
+                                    <td class="text-end">{{ pair.calls }}</td>
+                                    <td class="text-end">{{ pair.minutes }}</td>
+                                    <td class="text-end">{{ pair.sms }}</td>
+                                    <td class="text-end">{{ pair.share }}%</td>
+                                </tr>
+                                {% endfor %}
+                                {% else %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted py-4">
+                                        <i class="bi bi-diagram-3" style="font-size:48px;"></i>
+                                        <p class="mb-0 mt-2">No interconnect data for selected period</p>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{{ trend|json_script:"ic-trend-data" }}
+{{ op_labels|json_script:"ic-op-labels" }}
+{{ op_pcts|json_script:"ic-op-pcts" }}
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const COLORS = ['#0d6efd','#198754','#ffc107','#dc3545','#6f42c1','#0dcaf0'];
+
+    const trend   = JSON.parse(document.getElementById('ic-trend-data').textContent);
+    const opLbls  = JSON.parse(document.getElementById('ic-op-labels').textContent);
+    const opPcts  = JSON.parse(document.getElementById('ic-op-pcts').textContent);
+
+    new Chart(document.getElementById('interconnectTrendChart'), {
+        type: 'line',
+        data: {
+            labels: trend.labels,
+            datasets: [
+                { label: 'Originating', data: trend.outbound, borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.08)', fill: true, tension: 0.4 },
+                { label: 'Terminating', data: trend.inbound,  borderColor: '#198754', backgroundColor: 'rgba(25,135,84,0.08)',  fill: true, tension: 0.4 },
+            ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } }
+    });
+
+    new Chart(document.getElementById('operatorShareChart'), {
+        type: 'doughnut',
+        data: {
+            labels: opLbls,
+            datasets: [{ data: opPcts, backgroundColor: COLORS }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+    });
+});
+</script>
+{% endblock %}

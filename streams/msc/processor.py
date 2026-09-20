@@ -110,6 +110,7 @@ def _output_record_types():
     return set(configured) if configured else DEFAULT_OUTPUT_RECORD_TYPES
 
 
+@lru_cache(maxsize=8192)
 def _is_home_subscriber(number: str) -> bool:
     """True if the number belongs to a Sierra Leone (home/national) network.
 
@@ -124,6 +125,11 @@ def _is_home_subscriber(number: str) -> bool:
 
 class MSCProcessor(BaseProcessor):
     """Processor for Huawei MSC CDR files (voice + SMS)."""
+
+    def __init__(self):
+        super().__init__()
+        from streams.msc.models import MSCRecord
+        self._MSCRecord = MSCRecord
 
     def decode_to_records(self, file_path: str):
         """Decode ASN.1 BER binary directly to in-memory dicts (fast path).
@@ -184,7 +190,7 @@ class MSCProcessor(BaseProcessor):
 
     def create_record(self, raw: dict, cdr_file):
         """Create MSCRecord from a BIG_DATA CSV row."""
-        from streams.msc.models import MSCRecord
+        MSCRecord = self._MSCRecord
 
         # Support BIG_DATA format (primary) and legacy internal format (fallback)
         is_bigdata  = 'CALL_TYPE' in raw or 'CALLING_PARTY_NUMBER' in raw
@@ -534,6 +540,10 @@ class MSCProcessor(BaseProcessor):
 
         if modified:
             record.raw_data = raw
+
+    def normalize_record(self, record) -> None:
+        # create_record already normalizes all fields — skip redundant work
+        pass
 
     # -------------------------------------------------------------------------
     # CDR-pair correlation (post-process)

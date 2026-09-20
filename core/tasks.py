@@ -66,15 +66,15 @@ def tracked_task(task_name: str):
 
     Usage::
 
-        @tracked_task('interconnect.generate_invoice')
-        def _do_generate_invoice(cycle_id, direction, user_id):
-            from interconnect.engines.invoicing import generate_invoice
+        @tracked_task('regulatory.evaluate_risk')
+        def _do_evaluate_risk(operator_code):
+            from regulatory.services.risk_engine import RiskEngine
             ...
             return {
-                'result_entity_type': 'Invoice',
-                'result_entity_id': str(inv.pk),
-                'result_url': f'/interconnect/invoices/{inv.pk}/',
-                'message': f'Generated {inv.invoice_number}',
+                'result_entity_type': 'RiskAlert',
+                'result_entity_id': str(alert.pk),
+                'result_url': f'/regulatory/nra/risk/alerts/{alert.pk}/',
+                'message': f'Created alert {alert.identifier}',
             }
 
     The first positional argument to the wrapped task is the ``job_id``

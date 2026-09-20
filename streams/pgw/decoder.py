@@ -157,57 +157,49 @@ class PGWDecoder:
                 'decode_time': datetime.now().isoformat()
             }
 
-            # Find and decode all records
-            pos = 0
             record_num = 0
-            tag_scan = 0
-            found_tags = set()
-            first_bytes = data[0:100].hex() if len(data) > 0 else 'EMPTY'
+            data_len = len(data)
+            pos = 0
 
-            while pos < len(data) - 2:
-                # Scan all tag patterns for debugging
-                two_byte_tag = data[pos:pos+2]
-                if two_byte_tag[0:1] in (b'\xbf', b'\xb0', b'\xa0'):
-                    found_tags.add(two_byte_tag.hex())
-                    tag_scan += 1
-                
-                # Look for PGW record tag (bf 4f or bf 4e)
-                if data[pos:pos+2] == b'\xbf\x4f' or data[pos:pos+2] == b'\xbf\x4e':
-                    print(f"[DECODER] Found PGW tag at position {pos}: {data[pos:pos+2].hex()}")
-                    record_type = data[pos+1]
-                    pos += 2
+            while pos < data_len - 2:
+                # Jump directly to next bf tag instead of scanning byte-by-byte
+                idx = data.find(b'\xbf', pos)
+                if idx == -1 or idx + 1 >= data_len:
+                    break
 
-                    # Get record length
-                    rec_len, len_bytes = self._parse_length(data, pos)
-                    print(f"[DECODER] Record length: {rec_len}, length_bytes: {len_bytes}, next_pos: {pos + len_bytes}")
-                    pos += len_bytes
+                next_byte = data[idx + 1]
+                if next_byte not in (0x4f, 0x4e):
+                    pos = idx + 1
+                    continue
 
-                    # Extract record data
-                    rec_data = data[pos:pos + rec_len]
+                record_type = next_byte
+                pos = idx + 2
 
-                    try:
-                        record = self._decode_record(rec_data, record_num, record_type)
-                        self.records.append(record)
-                    except Exception as e:
-                        self.errors.append({
-                            'record_num': record_num,
-                            'position': pos,
-                            'error': str(e)
-                        })
-                        logger.error(f"Error decoding record {record_num}: {e}")
+                rec_len, len_bytes = self._parse_length(data, pos)
+                pos += len_bytes
 
-                    pos += rec_len
-                    record_num += 1
-                else:
-                    pos += 1
+                if pos + rec_len > data_len:
+                    break
+
+                rec_data = data[pos:pos + rec_len]
+
+                try:
+                    record = self._decode_record(rec_data, record_num, record_type)
+                    self.records.append(record)
+                except Exception as e:
+                    self.errors.append({
+                        'record_num': record_num,
+                        'position': pos,
+                        'error': str(e)
+                    })
+                    logger.error(f"Error decoding record {record_num}: {e}")
+
+                pos += rec_len
+                record_num += 1
 
             logger.info(f"Decoded {len(self.records)} records from {filepath}")
-            logger.info(f"DEBUG: Scanned {tag_scan} potential tag locations, found tags: {found_tags}")
             if not self.records:
-                logger.warning(f"No PGW records found in {filepath}. Looking for tags 0xbf4f or 0xbf4e")
-            print(f"[DECODER] Total records decoded: {len(self.records)}")
-            print(f"[DECODER] First 100 bytes (hex): {first_bytes}")
-            print(f"[DECODER] File size: {len(data)} bytes")
+                logger.warning(f"No PGW records found in {filepath}")
             return self.records
 
         except Exception as e:

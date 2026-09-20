@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}Processing Errors - UMP Mediation{% endblock %}
+{% block page_title %}Processing Errors{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-bar { background: #f8f9fa; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
+    .file-row { font-size: 0.85rem; }
+    .file-row td { vertical-align: middle; }
+    .error-msg { max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.8rem; color: #6c757d; }
+    .status-FAILED { color: #dc3545; font-weight: 600; }
+    .status-EMPTY { color: #fd7e14; font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Summary Cards -->
+<div class="row mb-3" id="summaryCards">
+    <div class="col-md-3">
+        <div class="card text-center py-2">
+            <div class="fw-bold fs-4 text-danger" id="sumTotal">-</div>
+            <small class="text-muted">Total Errors</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center py-2">
+            <div id="statusBreakdown" class="d-flex justify-content-center gap-2 flex-wrap pt-1">-</div>
+            <small class="text-muted">By Status</small>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card py-2 px-3">
+            <small class="text-muted mb-1">By Stream</small>
+            <div id="streamBadges" class="d-flex flex-wrap gap-1">-</div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="filter-bar">
+    <form id="filterForm" class="row g-2 align-items-end">
+        <div class="col-md-2">
+            <label class="form-label small">Stream</label>
+            <select class="form-select form-select-sm" id="fStream">
+                <option value="">All</option>
+                <option value="MSC">MSC</option>
+                <option value="IMS">IMS</option>
+                <option value="PGW">PGW</option>
+                <option value="SGSN">SGSN</option>
+                <option value="SGW">SGW</option>
+                <option value="CBS">CBS</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">Status</label>
+            <select class="form-select form-select-sm" id="fStatus">
+                <option value="">All Errors</option>
+                <option value="FAILED">Failed</option>
+                <option value="EMPTY">Empty</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">From</label>
+            <input type="date" class="form-control form-control-sm" id="fStart">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">To</label>
+            <input type="date" class="form-control form-control-sm" id="fEnd">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">Search</label>
+            <input type="text" class="form-control form-control-sm" id="fSearch" placeholder="filename or error…">
+        </div>
+        <div class="col-md-auto">
+            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> Search</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btnClear"><i class="bi bi-x-circle"></i> Clear</button>
+        </div>
+    </form>
+</div>
+
+<!-- Table -->
+<div class="table-responsive">
+    <table class="table table-sm table-hover">
+        <thead class="table-light">
+            <tr>
+                <th>Filename</th>
+                <th>Stream</th>
+                <th>Operator</th>
+                <th>Status</th>
+                <th>Size</th>
+                <th>Error</th>
+                <th>Source</th>
+                <th>Time</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody"><tr><td colspan="9" class="text-center text-muted">Loading...</td></tr></tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+<nav id="pagination" class="d-flex justify-content-between align-items-center mt-2">
+    <small class="text-muted" id="pageInfo">-</small>
+    <div class="btn-group btn-group-sm" id="pageButtons"></div>
+</nav>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+    const csrf = '{{ csrf_token }}';
+    let currentPage = 1;
+
+    function formatBytes(b) {
+        if (!b) return '0 B';
+        const u = ['B','KB','MB','GB'];
+        let i = 0;
+        while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
+        return b.toFixed(i ? 1 : 0) + ' ' + u[i];
+    }
+
+    function load(page) {
+        currentPage = page || 1;
+        const fd = new FormData();
+        fd.append('csrfmiddlewaretoken', csrf);
+        fd.append('stream', document.getElementById('fStream').value);
+        fd.append('status', document.getElementById('fStatus').value);
+        fd.append('start_date', document.getElementById('fStart').value);
+        fd.append('end_date', document.getElementById('fEnd').value);
+        fd.append('search', document.getElementById('fSearch').value);
+        fd.append('page', currentPage);
+
+        document.getElementById('tableBody').innerHTML = '<tr><td colspan="9" class="text-center text-muted"><span class="spinner-border spinner-border-sm"></span> Loading…</td></tr>';
+
+        fetch('{% url "dashboard:errors_api" %}', {method:'POST', headers:{'X-CSRFToken':csrf}, body:fd})
+        .then(r => {
+            if (!r.ok) throw new Error(`Server error ${r.status}`);
+            return r.json();
+        }).then(d => {
+            if (!d.success) return;
+            const s = d.summary;
+            document.getElementById('sumTotal').textContent = s.total.toLocaleString();
+
+            document.getElementById('statusBreakdown').innerHTML = s.by_status.map(r => {
+                const cls = r.status === 'FAILED' ? 'danger' : 'warning';
+                return `<span class="badge bg-${cls}">${r.status}: ${r.count}</span>`;
+            }).join('') || '<span class="text-muted">None</span>';
+
+            document.getElementById('streamBadges').innerHTML = s.by_stream.map(
+                r => `<span class="badge bg-secondary">${r.stream}: ${r.count}</span>`
+            ).join('') || '<span class="text-muted">None</span>';
+
+            const tb = document.getElementById('tableBody');
+            if (!d.records.length) {
+                tb.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No errors found.</td></tr>';
+            } else {
+                tb.innerHTML = d.records.map(r => {
+                    const shortname = r.filename.length > 45 ? r.filename.substring(0,42)+'...' : r.filename;
+                    const errText = r.error_message ? r.error_message.substring(0,80) + (r.error_message.length > 80 ? '…' : '') : '-';
+                    const statusCls = r.status === 'FAILED' ? 'text-danger' : 'text-warning';
+                    return `<tr class="file-row">
+                        <td title="${r.filename}">${shortname}</td>
+                        <td><span class="badge bg-primary">${r.stream}</span></td>
+                        <td>${r.operator}</td>
+                        <td><span class="${statusCls}">${r.status}</span></td>
+                        <td>${formatBytes(r.file_size)}</td>
+                        <td class="error-msg" title="${r.error_message}">${errText}</td>
+                        <td>${r.source}</td>
+                        <td>${r.created_at}</td>
+                        <td>
+                            <a href="/collection/file/${r.id}/" class="btn btn-xs btn-outline-secondary" style="font-size:0.75rem;padding:1px 6px;" title="View detail">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                        </td>
+                    </tr>`;
+                }).join('');
+            }
+
+            const p = d.pagination;
+            document.getElementById('pageInfo').textContent = `Page ${p.page} of ${p.pages} (${p.total} total)`;
+            const pb = document.getElementById('pageButtons');
+            pb.innerHTML = '';
+            if (p.pages > 1) {
+                if (p.page > 1) pb.innerHTML += `<button class="btn btn-outline-primary" onclick="window._errLoad(${p.page-1})">&laquo;</button>`;
+                for (let i = Math.max(1,p.page-2); i <= Math.min(p.pages,p.page+2); i++)
+                    pb.innerHTML += `<button class="btn btn-${i===p.page?'primary':'outline-primary'}" onclick="window._errLoad(${i})">${i}</button>`;
+                if (p.page < p.pages) pb.innerHTML += `<button class="btn btn-outline-primary" onclick="window._errLoad(${p.page+1})">&raquo;</button>`;
+            }
+        }).catch(err => {
+            console.error('Errors API failed:', err);
+            document.getElementById('tableBody').innerHTML = `<tr><td colspan="9" class="text-center text-danger">Load failed: ${err.message}</td></tr>`;
+        });
+    }
+    window._errLoad = load;
+
+    document.getElementById('filterForm').addEventListener('submit', e => { e.preventDefault(); load(1); });
+    document.getElementById('btnClear').addEventListener('click', () => {
+        document.getElementById('fStream').value = '';
+        document.getElementById('fStatus').value = '';
+        document.getElementById('fStart').value = '';
+        document.getElementById('fEnd').value = '';
+        document.getElementById('fSearch').value = '';
+        load(1);
+    });
+
+    load(1);
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,7 @@
+[Unit]
+Description=UMP Mediation Platform (all services)
+After=network.target postgresql.service
+Wants=mediation-collector.service mediation-decoder.service mediation-distributor.service mediation-api.service
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,525 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Service Control - UMP Mediation{% endblock %}
+{% block page_title %}Service Control{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/service_control.css' %}">
+{% endblock %}
+
+{% block content %}
+{# Root element carries API URLs as data attributes for JS ─ no hardcoded paths #}
+<div id="serviceControlPage"
+     class="sc-wrap"
+     data-api-url="{% url 'dashboard:services_api' %}"
+     data-action-url="{% url 'dashboard:services_action' %}">
+
+    <!-- Breadcrumb -->
+    <div class="sc-breadcrumb">
+        <a href="{% url 'dashboard:index' %}">Home</a>
+        <span class="sep">&rsaquo;</span>
+        <span>Operations</span>
+        <span class="sep">&rsaquo;</span>
+        <span class="current">Service Control</span>
+    </div>
+
+    <!-- Page Header -->
+    <div class="sc-header">
+        <div>
+            <h1 class="sc-title">Service Control</h1>
+            <p class="sc-subtitle">Manage and monitor CDR collection, decoding, and distribution services.</p>
+        </div>
+        <div class="sc-header-right">
+            <div class="sc-last-updated">
+                <span class="sc-status-dot" id="scStatusDot"></span>
+                <span>Updated: <span id="scLastUpdated">{{ last_updated }}</span></span>
+            </div>
+            <button type="button" class="sc-refresh-btn" id="scRefreshBtn">
+                <i class="bi bi-arrow-clockwise" id="scRefreshIcon"></i>
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Feedback / Toast area -->
+    <div id="scFeedback"></div>
+
+    <!-- ── 3 Service Cards ──────────────────────────────────────────────────── -->
+    <div class="sc-grid">
+
+        {# ── Collection ── #}
+        {% with svc=collection %}
+        <div class="sc-card" id="collectionCard">
+            <div class="sc-card-head">
+                <div class="sc-svc-icon collector"><i class="bi bi-folder-symlink-fill"></i></div>
+                <div>
+                    <div class="sc-card-name">{{ svc.name|default:"Collection" }}</div>
+                    <div class="sc-card-desc">{{ svc.description|default:"Scans input directories and registers new CDR files for processing." }}</div>
+                </div>
+            </div>
+            <div class="sc-status-wrap">
+                <span class="sc-status-pill {{ svc.status_color|default:'unknown' }}" id="collectionHealth">
+                    <span class="sc-pill-dot"></span>
+                    <span class="sc-pill-text">{{ svc.status_label|default:"Unavailable" }}</span>
+                </span>
+            </div>
+            <div class="sc-info-row">
+                <div class="sc-info-cell">
+                    <span class="sc-info-label">Service Unit</span>
+                    <span class="sc-info-value">{{ svc.display_unit|default:"mediation-collector" }}</span>
+                    <button type="button" class="sc-copy-btn" data-copy="{{ svc.display_unit|default:'mediation-collector' }}" title="Copy"><i class="bi bi-copy"></i></button>
+                </div>
+                <div class="sc-info-cell">
+                    <span class="sc-info-label">Version</span>
+                    <span class="sc-info-value">{{ svc.version|default:"—" }}</span>
+                </div>
+                <div class="sc-info-cell">
+                    <span class="sc-info-label">Uptime</span>
+                    <span class="sc-info-value" id="collectionUptime">{{ svc.uptime|default:"—" }}</span>
+                </div>
+            </div>
+            <div class="sc-metrics" id="collectionMetrics">
+                {% for m in svc.metrics %}
+                <div class="sc-metric-row">
+                    <div class="sc-metric-icon {{ m.tone }}"><i class="bi {{ m.icon }}"></i></div>
+                    <div><span class="sc-metric-label">{{ m.label }}</span><span class="sc-metric-value">{{ m.value }}</span></div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="sc-activity">
+                <div>
+                    <span>Last Activity</span>
+                    <strong id="collectionActivity">{{ svc.last_activity|default:"No activity" }}</strong>
+                </div>
+                <div>
+                    <span>{{ svc.context_label|default:"Input Directory" }}</span>
+                    <strong id="collectionCtxValue">{{ svc.context_value|default:"—" }}</strong>
+                </div>
+                <a href="{{ svc.config_link|default:'/collection/' }}">Details <i class="bi bi-arrow-right"></i></a>
+            </div>
+            <div class="sc-actions">
+                <button type="button" class="sc-btn sc-btn-start sc-action-btn"
+                        data-service="{{ svc.id|default:'mediation-collector' }}"
+                        data-service-name="Collection"
+                        data-action="start"
+                        {% if svc.is_running or not svc.is_controllable %}disabled{% endif %}>
+                    <i class="bi bi-play-fill"></i> Start
+                </button>
+                <button type="button" class="sc-btn sc-btn-stop sc-action-btn"
+                        data-service="{{ svc.id|default:'mediation-collector' }}"
+                        data-service-name="Collection"
+                        data-action="stop"
+                        {% if not svc.is_running or not svc.is_controllable %}disabled{% endif %}>
+                    <i class="bi bi-square-fill" style="font-size:10px"></i> Stop
+                </button>
+                <button type="button" class="sc-btn sc-btn-restart sc-action-btn"
+                        data-service="{{ svc.id|default:'mediation-collector' }}"
+                        data-service-name="Collection"
+                        data-action="restart"
+                        {% if not svc.is_controllable %}disabled{% endif %}>
+                    <i class="bi bi-arrow-clockwise"></i> Restart
+                </button>
+                <button type="button" class="sc-btn sc-btn-config sc-config-btn"
+                        data-service="{{ svc.id|default:'mediation-collector' }}"
+                        data-service-name="Collection"
+                        data-unit="{{ svc.display_unit|default:'mediation-collector' }}"
+                        data-status="{{ svc.status_label|default:'Unavailable' }}"
+                        data-desc="{{ svc.description|default:'' }}"
+                        data-config-link="{{ svc.config_link|default:'/collection/' }}"
+                        data-config-link-text="{{ svc.config_link_text|default:'View Data Sources' }}">
+                    <i class="bi bi-gear"></i> Configure
+                </button>
+            </div>
+        </div>
+        {% endwith %}
+
+        {# ── Decoding ── #}
+        {% with svc=decoding %}
+        <div class="sc-card" id="decodingCard">
+            <div class="sc-card-head">
+                <div class="sc-svc-icon decoder"><i class="bi bi-cpu-fill"></i></div>
+                <div>
+                    <div class="sc-card-name">{{ svc.name|default:"Decoding" }}</div>
+                    <div class="sc-card-desc">{{ svc.description|default:"Picks up collected files, decodes CDR records, and renders output." }}</div>
+                </div>
+            </div>
+            <div class="sc-status-wrap">
+                <span class="sc-status-pill {{ svc.status_color|default:'unknown' }}" id="decodingHealth">
+                    <span class="sc-pill-dot"></span>
+                    <span class="sc-pill-text">{{ svc.status_label|default:"Unavailable" }}</span>
+                </span>
+            </div>
+            <div class="sc-info-row">
+                <div class="sc-info-cell">
+                    <span class="sc-info-label">Service Unit</span>
+                    <span class="sc-info-value">{{ svc.display_unit|default:"mediation-decoder" }}</span>
+                    <button type="button" class="sc-copy-btn" data-copy="{{ svc.display_unit|default:'mediation-decoder' }}" title="Copy"><i class="bi bi-copy"></i></button>
+                </div>
+                <div class="sc-info-cell">
+                    <span class="sc-info-label">Version</span>
+                    <span class="sc-info-value">{{ svc.version|default:"—" }}</span>
+                </div>
+                <div class="sc-info-cell">
+                    <span class="sc-info-label">Uptime</span>
+                    <span class="sc-info-value" id="decodingUptime">{{ svc.uptime|default:"—" }}</span>
+                </div>
+            </div>
+            <div class="sc-metrics" id="decodingMetrics">
+                {% for m in svc.metrics %}
+                <div class="sc-metric-row">
+                    <div class="sc-metric-icon {{ m.tone }}"><i class="bi {{ m.icon }}"></i></div>
+                    <div><span class="sc-metric-label">{{ m.label }}</span><span class="sc-metric-value">{{ m.value }}</span></div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="sc-activity">
+                <div>
+                    <span>Last Activity</span>
+                    <strong id="decodingActivity">{{ svc.last_activity|default:"No activity" }}</strong>
+                </div>
+                <div>
+                    <span>{{ svc.context_label|default:"Processing Queue" }}</span>
+                    <strong id="decodingCtxValue">{{ svc.context_value|default:"—" }}</strong>
+                </div>
+                <a href="{{ svc.config_link|default:'/reference/source-patterns/' }}">Details <i class="bi bi-arrow-right"></i></a>
+            </div>
+            <div class="sc-actions">
+                <button type="button" class="sc-btn sc-btn-start sc-action-btn"
+                        data-service="{{ svc.id|default:'mediation-decoder' }}"
+                        data-service-name="Decoding"
+                        data-action="start"
+                        {% if svc.is_running or not svc.is_controllable %}disabled{% endif %}>
+                    <i class="bi bi-play-fill"></i> Start
+                </button>
+                <button type="button" class="sc-btn sc-btn-stop sc-action-btn"
+                        data-service="{{ svc.id|default:'mediation-decoder' }}"
+                        data-service-name="Decoding"
+                        data-action="stop"
+                        {% if not svc.is_running or not svc.is_controllable %}disabled{% endif %}>
+                    <i class="bi bi-square-fill" style="font-size:10px"></i> Stop
+                </button>
+                <button type="button" class="sc-btn sc-btn-restart sc-action-btn"
+                        data-service="{{ svc.id|default:'mediation-decoder' }}"
+                        data-service-name="Decoding"
+                        data-action="restart"
+                        {% if not svc.is_controllable %}disabled{% endif %}>
+                    <i class="bi bi-arrow-clockwise"></i> Restart
+                </button>
+                <button type="button" class="sc-btn sc-btn-config sc-config-btn"
+                        data-service="{{ svc.id|default:'mediation-decoder' }}"
+                        data-service-name="Decoding"
+                        data-unit="{{ svc.display_unit|default:'mediation-decoder' }}"
+                        data-status="{{ svc.status_label|default:'Unavailable' }}"
+                        data-desc="{{ svc.description|default:'' }}"
+                        data-config-link="{{ svc.config_link|default:'/reference/source-patterns/' }}"
+                        data-config-link-text="{{ svc.config_link_text|default:'View Source Patterns' }}">
+                    <i class="bi bi-gear"></i> Configure
+                </button>
+            </div>
+        </div>
+        {% endwith %}
+
+        {# ── Distribution ── #}
+        {% with svc=distribution %}
+        <div class="sc-card" id="distributionCard">
+            <div class="sc-card-head">
+                <div class="sc-svc-icon distributor"><i class="bi bi-send-fill"></i></div>
+                <div>
+                    <div class="sc-card-name">{{ svc.name|default:"Distribution" }}</div>
+                    <div class="sc-card-desc">{{ svc.description|default:"Dispatches decoded files to configured output portals." }}</div>
+                </div>
+            </div>
+            <div class="sc-status-wrap">
+                <span class="sc-status-pill {{ svc.status_color|default:'unknown' }}" id="distributionHealth">
+                    <span class="sc-pill-dot"></span>
+                    <span class="sc-pill-text">{{ svc.status_label|default:"Unavailable" }}</span>
+                </span>
+            </div>
+            <div class="sc-info-row">
+                <div class="sc-info-cell">
+                    <span class="sc-info-label">Service Unit</span>
+                    <span class="sc-info-value">{{ svc.display_unit|default:"mediation-distributor" }}</span>
+                    <button type="button" class="sc-copy-btn" data-copy="{{ svc.display_unit|default:'mediation-distributor' }}" title="Copy"><i class="bi bi-copy"></i></button>
+                </div>
+                <div class="sc-info-cell">
+                    <span class="sc-info-label">Version</span>
+                    <span class="sc-info-value">{{ svc.version|default:"—" }}</span>
+                </div>
+                <div class="sc-info-cell">
+                    <span class="sc-info-label">Uptime</span>
+                    <span class="sc-info-value" id="distributionUptime">{{ svc.uptime|default:"—" }}</span>
+                </div>
+            </div>
+            <div class="sc-metrics" id="distributionMetrics">
+                {% for m in svc.metrics %}
+                <div class="sc-metric-row">
+                    <div class="sc-metric-icon {{ m.tone }}"><i class="bi {{ m.icon }}"></i></div>
+                    <div><span class="sc-metric-label">{{ m.label }}</span><span class="sc-metric-value">{{ m.value }}</span></div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="sc-activity">
+                <div>
+                    <span>Last Activity</span>
+                    <strong id="distributionActivity">{{ svc.last_activity|default:"No activity" }}</strong>
+                </div>
+                <div>
+                    <span>{{ svc.context_label|default:"Output Targets" }}</span>
+                    <strong id="distributionCtxValue">{{ svc.context_value|default:"—" }}</strong>
+                </div>
+                <a href="{{ svc.config_link|default:'/portals/output-portal/' }}">Details <i class="bi bi-arrow-right"></i></a>
+            </div>
+            <div class="sc-actions">
+                <button type="button" class="sc-btn sc-btn-start sc-action-btn"
+                        data-service="{{ svc.id|default:'mediation-distributor' }}"
+                        data-service-name="Distribution"
+                        data-action="start"
+                        {% if svc.is_running or not svc.is_controllable %}disabled{% endif %}>
+                    <i class="bi bi-play-fill"></i> Start
+                </button>
+                <button type="button" class="sc-btn sc-btn-stop sc-action-btn"
+                        data-service="{{ svc.id|default:'mediation-distributor' }}"
+                        data-service-name="Distribution"
+                        data-action="stop"
+                        {% if not svc.is_running or not svc.is_controllable %}disabled{% endif %}>
+                    <i class="bi bi-square-fill" style="font-size:10px"></i> Stop
+                </button>
+                <button type="button" class="sc-btn sc-btn-restart sc-action-btn"
+                        data-service="{{ svc.id|default:'mediation-distributor' }}"
+                        data-service-name="Distribution"
+                        data-action="restart"
+                        {% if not svc.is_controllable %}disabled{% endif %}>
+                    <i class="bi bi-arrow-clockwise"></i> Restart
+                </button>
+                <button type="button" class="sc-btn sc-btn-config sc-config-btn"
+                        data-service="{{ svc.id|default:'mediation-distributor' }}"
+                        data-service-name="Distribution"
+                        data-unit="{{ svc.display_unit|default:'mediation-distributor' }}"
+                        data-status="{{ svc.status_label|default:'Unavailable' }}"
+                        data-desc="{{ svc.description|default:'' }}"
+                        data-config-link="{{ svc.config_link|default:'/portals/output-portal/' }}"
+                        data-config-link-text="{{ svc.config_link_text|default:'View Output Portals' }}">
+                    <i class="bi bi-gear"></i> Configure
+                </button>
+            </div>
+        </div>
+        {% endwith %}
+
+    </div>{# end .sc-grid #}
+
+    <!-- Bulk Actions -->
+    <div class="sc-bulk-card">
+        <div class="sc-bulk-left">
+            <div class="sc-bulk-icon"><i class="bi bi-gear-wide-connected"></i></div>
+            <div>
+                <div class="sc-bulk-title">Bulk Actions</div>
+                <div class="sc-bulk-sub">Apply one action to all three mediation services simultaneously.</div>
+            </div>
+        </div>
+        <div class="sc-bulk-right">
+            <button type="button" class="sc-bulk-btn sc-bulk-start sc-bulk-action-btn" data-action="start">
+                <i class="bi bi-play-fill"></i> Start All
+            </button>
+            <button type="button" class="sc-bulk-btn sc-bulk-stop sc-bulk-action-btn" data-action="stop">
+                <i class="bi bi-square-fill" style="font-size:11px"></i> Stop All
+            </button>
+            <button type="button" class="sc-bulk-btn sc-bulk-restart sc-bulk-action-btn" data-action="restart">
+                <i class="bi bi-arrow-clockwise"></i> Restart All
+            </button>
+        </div>
+    </div>
+
+    <!-- Emergency Intake Pause -->
+    <div class="sc-intake-card {% if intake_paused %}sc-intake-active{% endif %}" id="scIntakeCard">
+        <div class="sc-intake-left">
+            <div class="sc-intake-icon {% if intake_paused %}paused{% endif %}">
+                <i class="bi {% if intake_paused %}bi-pause-circle-fill{% else %}bi-shield-check{% endif %}"></i>
+            </div>
+            <div>
+                <div class="sc-intake-title">
+                    Emergency Intake Pause
+                    {% if intake_paused %}
+                    <span class="sc-intake-badge paused">ACTIVE</span>
+                    {% else %}
+                    <span class="sc-intake-badge normal">NORMAL</span>
+                    {% endif %}
+                </div>
+                <div class="sc-intake-sub">
+                    {% if intake_paused %}
+                        All upstream file intake is <strong>suspended</strong>. No new CDR files will be collected until resumed.
+                        {% if intake_paused_reason %}<br><span class="text-muted small">Reason: {{ intake_paused_reason }}</span>{% endif %}
+                        {% if intake_paused_by %}<br><span class="text-muted small">Paused by {{ intake_paused_by }}{% if intake_paused_at %} at {{ intake_paused_at|date:"N j, Y H:i" }}{% endif %}</span>{% endif %}
+                    {% else %}
+                        Instantly halt all incoming CDR file collection from every upstream source without stopping individual services. Use during disk space crises or maintenance windows.
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="sc-intake-right">
+            {% if intake_paused %}
+            <button type="button" class="sc-intake-btn resume" id="scIntakeResumeBtn">
+                <i class="bi bi-play-circle-fill"></i> Resume Intake
+            </button>
+            {% else %}
+            <button type="button" class="sc-intake-btn pause" id="scIntakePauseBtn">
+                <i class="bi bi-pause-circle-fill"></i> Pause Intake
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+</div>{# end #serviceControlPage #}
+
+<!-- Hidden CSRF form for JS fetch calls -->
+<form id="scCsrfForm" style="display:none">{% csrf_token %}</form>
+
+<!-- Intake Pause Confirmation Modal -->
+<div class="modal fade" id="scIntakeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:460px">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:12px;overflow:hidden">
+            <div class="modal-body p-4">
+                <div class="text-center mb-3">
+                    <div class="d-inline-flex align-items-center justify-content-center mb-3"
+                         style="width:56px;height:56px;border-radius:50%;background:#FEF3C7">
+                        <i class="bi bi-pause-circle-fill fs-3 text-warning"></i>
+                    </div>
+                    <h5 class="fw-bold mb-1">Pause All Incoming Files?</h5>
+                    <p class="text-muted small mb-0">Services remain running but will not pick up any new CDR files until intake is resumed.</p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold text-muted text-uppercase" style="font-size:.72rem;letter-spacing:.5px">Reason (optional)</label>
+                    <textarea class="form-control form-control-sm" id="scIntakeReason" rows="2" placeholder="e.g. Disk space issue on /opt/ump/data — investigating"></textarea>
+                </div>
+                <div class="d-flex gap-2 justify-content-center">
+                    <button type="button" class="btn btn-light px-4 fw-semibold" data-bs-dismiss="modal" style="border:1px solid #DCE6F1;color:#475569;border-radius:8px">Cancel</button>
+                    <button type="button" class="btn px-4 fw-semibold text-white" id="scIntakeConfirmBtn" style="background:#DC2626;border:none;border-radius:8px">
+                        <i class="bi bi-pause-circle-fill me-1"></i> Pause Intake
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- General Action Confirmation Modal -->
+<div class="modal fade" id="scConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:440px">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:12px;overflow:hidden">
+            <div class="modal-body p-4 text-center">
+                <div id="scConfirmIcon" class="mb-3 d-inline-flex align-items-center justify-content-center" style="width:52px;height:52px;border-radius:50%">
+                    <i class="bi bi-exclamation-triangle fs-3"></i>
+                </div>
+                <h5 class="fw-bold text-dark mb-2" id="scConfirmTitle">Confirm Action</h5>
+                <p class="text-muted small mb-4" id="scConfirmDesc">Are you sure?</p>
+                <div class="d-flex gap-2 justify-content-center">
+                    <button type="button" class="btn btn-light px-4 fw-semibold" data-bs-dismiss="modal" style="border:1px solid #DCE6F1;color:#475569;border-radius:8px">Cancel</button>
+                    <button type="button" class="btn px-4 fw-semibold text-white" id="scConfirmBtn" style="border-radius:8px">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Service Configuration Modal -->
+<div class="modal fade" id="scConfigModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:520px">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:12px;overflow:hidden">
+            <div class="modal-header border-bottom py-3 px-4" style="background:#F8FAFD;border-color:#E2E8F0!important">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-gear text-primary fs-5"></i>
+                    <h6 class="modal-title fw-bold text-dark mb-0" id="scConfigModalLabel">Service Configuration</h6>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-semibold text-uppercase mb-1" style="font-size:.72rem;letter-spacing:.5px">Systemd Service Unit</label>
+                    <input type="text" class="form-control form-control-sm bg-light font-monospace" id="scCfgUnit" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-semibold text-uppercase mb-1" style="font-size:.72rem;letter-spacing:.5px">Description</label>
+                    <p class="small text-secondary mb-0" id="scCfgDesc"></p>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <label class="form-label text-muted small fw-semibold text-uppercase mb-1" style="font-size:.72rem;letter-spacing:.5px">Current State</label>
+                        <div><span class="badge bg-success-subtle text-success fw-semibold" id="scCfgState">—</span></div>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label text-muted small fw-semibold text-uppercase mb-1" style="font-size:.72rem;letter-spacing:.5px">Boot Auto-Start</label>
+                        <div><span class="badge bg-primary-subtle text-primary fw-semibold">Enabled (systemd)</span></div>
+                    </div>
+                </div>
+                <div class="p-3 bg-light rounded-3 mb-1 border" style="border-color:#E2E8F0!important">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="d-block fw-semibold text-dark small" id="scCfgTitle">Configuration Module</span>
+                            <span class="text-muted small">Manage directories, patterns, and processing rules.</span>
+                        </div>
+                        <a href="#" id="scCfgDeepLink" class="btn btn-sm btn-outline-primary fw-semibold px-3" style="border-radius:6px">
+                            Configure <i class="bi bi-arrow-right ms-1"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top py-2 px-4" style="border-color:#E2E8F0!important">
+                <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/service_control.js' %}"></script>
+<script>
+(function () {
+    'use strict';
+    const TOGGLE_URL = '{% url "dashboard:intake_toggle" %}';
+    const csrf = () => document.querySelector('#scCsrfForm input[name="csrfmiddlewaretoken"]').value;
+
+    function showFeedback(msg, isError) {
+        const el = document.getElementById('scFeedback');
+        if (!el) return;
+        const cls = isError ? 'alert-danger' : 'alert-warning';
+        el.innerHTML = `<div class="alert ${cls} alert-dismissible fade show mb-4" role="alert">${msg}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
+    }
+
+    function doToggle(pause, reason) {
+        fetch(TOGGLE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+            body: JSON.stringify({ action: pause ? 'pause' : 'resume', reason: reason || '' }),
+        })
+        .then(r => r.json())
+        .then(d => { if (d.success) location.reload(); else showFeedback(d.error || 'Toggle failed', true); })
+        .catch(() => showFeedback('Request failed — check network', true));
+    }
+
+    // Pause button → open modal
+    const pauseBtn = document.getElementById('scIntakePauseBtn');
+    if (pauseBtn) {
+        pauseBtn.addEventListener('click', function () {
+            new bootstrap.Modal(document.getElementById('scIntakeModal')).show();
+        });
+    }
+
+    // Confirm pause
+    const confirmBtn = document.getElementById('scIntakeConfirmBtn');
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', function () {
+            bootstrap.Modal.getInstance(document.getElementById('scIntakeModal')).hide();
+            doToggle(true, document.getElementById('scIntakeReason').value.trim());
+        });
+    }
+
+    // Resume button
+    const resumeBtn = document.getElementById('scIntakeResumeBtn');
+    if (resumeBtn) {
+        resumeBtn.addEventListener('click', function () { doToggle(false, ''); });
+    }
+})();
+</script>
+{% endblock %}

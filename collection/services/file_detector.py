@@ -7,6 +7,9 @@ from core.enums import DecoderType
 
 # Filename patterns (checked FIRST - more specific than extensions)
 FILENAME_PATTERNS = {
+    # MSC patterns — Huawei MSC filenames start with bFTMSX / FTMSX (FT = Frontier Technologies).
+    'ftmsx':   DecoderType.MSC,   # bFTMSX01..., FTMSX02..., etc.
+    'msx':     DecoderType.MSC,
     # IMS / ATS9900 patterns — check before generic 'pgw' / 'sgw' to avoid misclassification.
     # Real Huawei ATS9900 filenames start with bFTATS01 / FTATS01 (FT = Frontier Technologies).
     'ftats':   DecoderType.IMS,   # bFTATS01..., FTATS02..., etc.

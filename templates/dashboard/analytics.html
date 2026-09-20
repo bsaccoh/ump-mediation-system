@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load humanize %}
+{% load humanize static %}
 {% block title %}Analytics — UMP Mediation{% endblock %}
 {% block page_title %}Analytics{% endblock %}
 
@@ -296,8 +296,8 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script src="{% static 'vendor/chartjs/chartjs-adapter-date-fns.bundle.min.js' %}"></script>
 <script>
 // ============================================================================
 // Grafana palette — tuned for white background readability

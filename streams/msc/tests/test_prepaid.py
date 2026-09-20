@@ -13,7 +13,7 @@ from streams.msc.decoder import (
 
 
 class DerivePrepaidFlagTruthTableTests(TestCase):
-    databases = {"default", "interconnect", "regulatory", "roaming"}
+    databases = {"default"}
 
     def test_both_none_is_postpaid(self):
         self.assertEqual(derive_msc_prepaid_flag(None, None), 'POSTPAID')
@@ -73,7 +73,7 @@ class DerivePrepaidFlagTruthTableTests(TestCase):
 
 class DecoderApplyPrepaidFlagTests(TestCase):
     """``_apply_prepaid_flag`` writes '0'/'1' into the decoded record dict."""
-    databases = {"default", "interconnect", "regulatory", "roaming"}
+    databases = {"default"}
 
     def test_neither_field_present_writes_zero(self):
         rec = {'CHARGED_PARTY_IMSI': '619031234567890'}  # IMSI now irrelevant

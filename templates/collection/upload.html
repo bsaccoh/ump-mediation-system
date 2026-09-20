@@ -1,101 +1,575 @@
 {% extends "base.html" %}
-{% block title %}Upload CDR File{% endblock %}
+{% load static %}
+
+{% block title %}Upload CDR File - UMP Mediation{% endblock %}
 {% block page_title %}Upload CDR File{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/ump-pages.css' %}?v=2">
+<style>
+/* Tab switcher */
+.upload-tabs { display: flex; gap: 0; border-bottom: 2px solid #dee2e6; margin-bottom: 1.5rem; }
+.upload-tab-btn {
+    padding: .55rem 1.4rem;
+    font-size: .875rem;
+    font-weight: 600;
+    border: none;
+    background: none;
+    color: #6c757d;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+}
+.upload-tab-btn.active { color: #0d6efd; border-bottom-color: #0d6efd; }
+.upload-tab-btn i { margin-right: .4rem; }
+.upload-tab-panel { display: none; }
+.upload-tab-panel.active { display: block; }
+
+/* Replay results list */
+.replay-results { margin-top: 1.25rem; }
+.replay-result-row {
+    display: flex;
+    align-items: flex-start;
+    gap: .75rem;
+    padding: .55rem .75rem;
+    border-radius: .4rem;
+    font-size: .85rem;
+    margin-bottom: .35rem;
+    background: #f8f9fa;
+}
+.replay-result-row.queued  { background: #e8f4fd; border-left: 3px solid #0d6efd; }
+.replay-result-row.rejected { background: #fff3cd; border-left: 3px solid #ffc107; }
+.replay-result-row.error   { background: #fde8e8; border-left: 3px solid #dc3545; }
+.replay-result-icon { font-size: 1rem; flex-shrink: 0; margin-top: .05rem; }
+.replay-result-filename { font-weight: 600; word-break: break-all; }
+.replay-result-reason { color: #6c757d; font-size: .8rem; }
+.replay-result-task { font-size: .75rem; color: #6c757d; margin-top: .15rem; font-family: monospace; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header"><i class="bi bi-upload"></i> Upload CDR File</div>
-            <div class="card-body">
-                <form method="post" enctype="multipart/form-data" action="{% url 'collection:upload' %}">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Upload Mode</label>
-                        <div class="mb-2">
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="upload_mode" id="modeFiles" value="files" checked>
-                                <label class="form-check-label" for="modeFiles">Multiple Files</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="upload_mode" id="modeFolder" value="folder">
-                                <label class="form-check-label" for="modeFolder">Entire Folder</label>
-                            </div>
-                        </div>
-                        <label class="form-label fw-bold">Select CDR File(s) / Folder</label>
-                        <input type="file" name="files" id="fileInput" class="form-control" required multiple
-                               accept=".dat,.bin,.cdr,.csv,.txt,.asn,.ber,.unl,.add">
-                        <small class="text-muted">Supported: .dat, .bin, .cdr, .csv, .txt, .asn, .ber</small>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label fw-bold">Input Source</label>
-                            <select name="source_id" class="form-select">
-                                <option value="">-- Select Source --</option>
-                                {% for src in sources %}
-                                <option value="{{ src.id }}">{{ src.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label fw-bold">Decoder Type</label>
-                            <select name="decoder_type" class="form-select">
-                                <option value="AUTO">Auto-detect</option>
-                                <option value="MSC">MSC (Huawei ASN.1/BER)</option>
-                                <option value="PGW">PGW (3GPP PS Domain)</option>
-                                <option value="SGSN">SGSN (3GPP PS Domain)</option>
-                                <option value="SGW">SGW (3GPP PS Domain)</option>
-                                <option value="CSV">Pre-decoded CSV</option>
-                            </select>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-cloud-upload"></i> Upload & Process
-                    </button>
-                </form>
-            </div>
+<div class="ump-master-wrap">
+    <!-- Breadcrumb -->
+    <div class="ump-master-breadcrumb">
+        <a href="{% url 'dashboard:index' %}">Home</a>
+        <span class="sep">&gt;</span>
+        <a href="{% url 'dashboard:file_registry' %}">File Registry</a>
+        <span class="sep">&gt;</span>
+        <span class="current">Upload CDR File</span>
+    </div>
+
+    <!-- Page Header -->
+    <div class="ump-master-header">
+        <div>
+            <h1 class="ump-master-title">Upload CDR File</h1>
+            <p class="ump-master-subtitle">Upload and process CDR files for decoding and mediation, or replay missing files to a specific downstream.</p>
+        </div>
+        <div>
+            <a href="{% url 'collection:file_list' %}" class="ump-master-history-btn">
+                <i class="bi bi-clock"></i>
+                <span>View Processing History</span>
+            </a>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">Filename Detection</div>
-            <div class="card-body">
-                <small>
-                    <p>Files are auto-detected by name:</p>
-                    <ul class="mb-0">
-                        <li><code>bFTMSX*.dat</code> → MSC</li>
-                        <li><code>*pgw*.dat</code> → PGW</li>
-                        <li><code>*sgsn*.dat</code> → SGSN</li>
-                        <li><code>*sgw*.dat</code> → SGW</li>
-                    </ul>
-                </small>
+
+    <!-- Tab switcher -->
+    <div class="upload-tabs">
+        <button class="upload-tab-btn active" data-tab="normal">
+            <i class="bi bi-cloud-arrow-up"></i>Upload &amp; Process
+        </button>
+        <button class="upload-tab-btn" data-tab="replay">
+            <i class="bi bi-arrow-repeat"></i>Replay to Downstream
+        </button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         TAB 1 — Normal Upload & Process
+    ════════════════════════════════════════════════════════════════ -->
+    <div class="upload-tab-panel active" id="tab-normal">
+        <div class="ump-master-grid">
+            <!-- Left Column: Upload Card -->
+            <div class="ump-master-left">
+                <div class="ump-master-card">
+                    <!-- Card Header -->
+                    <div class="ump-upload-card-header">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="ump-step-badge">1</span>
+                            <span class="ump-upload-card-title">Upload Files</span>
+                        </div>
+                        <div class="ump-process-steps">
+                            <div class="ump-process-step active">
+                                <span class="circle">1</span>
+                                <span>Upload</span>
+                            </div>
+                            <span class="ump-process-divider"></span>
+                            <div class="ump-process-step">
+                                <span class="circle">2</span>
+                                <span>Configure</span>
+                            </div>
+                            <span class="ump-process-divider"></span>
+                            <div class="ump-process-step">
+                                <span class="circle">3</span>
+                                <span>Process</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Form -->
+                    <form method="post" enctype="multipart/form-data" action="{% url 'collection:upload' %}" id="uploadForm">
+                        {% csrf_token %}
+                        <input type="file" name="files" id="fileInput" style="display: none;" multiple
+                               accept=".dat,.bin,.cdr,.csv,.txt,.asn,.ber,.unl,.add,.xml,.gz,.zip">
+
+                        <div class="ump-master-dropzone" id="dropzone">
+                            <i class="bi bi-cloud-arrow-up ump-drop-icon"></i>
+                            <div class="ump-drop-main-text">Drag &amp; drop CDR files here</div>
+                            <div class="ump-drop-sub-text">or click to browse files</div>
+                            <button type="button" class="ump-drop-btn" id="chooseFilesBtn">
+                                <i class="bi bi-folder-fill"></i>
+                                <span>Choose Files</span>
+                            </button>
+                            <div class="ump-drop-formats">Supported formats: .dat, .bin, .cdr, .csv, .txt, .asn, .ber</div>
+                            <div class="ump-drop-hint">You can select multiple files at once</div>
+                        </div>
+
+                        <div id="selectedFilesSummary" class="ump-selected-files-box d-none">
+                            <div>
+                                <i class="bi bi-file-earmark-check text-primary me-2"></i>
+                                <strong id="selectedFilesCount">0 files</strong> selected (<span id="selectedFilesSize">0 B</span>):
+                                <span id="selectedFilesNames" class="text-muted small ms-1"></span>
+                            </div>
+                            <button type="button" class="btn btn-link btn-sm text-danger text-decoration-none p-0" id="clearSelectionLink">
+                                <i class="bi bi-x-circle me-1"></i>Clear
+                            </button>
+                        </div>
+
+                        <div class="ump-settings-row">
+                            <div>
+                                <label class="ump-settings-label">Upload Mode</label>
+                                <div class="ump-radio-group">
+                                    <label class="ump-radio-label" for="modeFiles">
+                                        <input type="radio" name="upload_mode" id="modeFiles" value="files" checked>
+                                        <span>Multiple Files</span>
+                                    </label>
+                                    <label class="ump-radio-label" for="modeFolder">
+                                        <input type="radio" name="upload_mode" id="modeFolder" value="folder">
+                                        <span>Entire Folder</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="ump-settings-label" for="sourceSelect">Input Source</label>
+                                <select name="source_id" id="sourceSelect" class="form-select ump-settings-select">
+                                    <option value="">-- Select Source --</option>
+                                    {% for src in sources %}
+                                    <option value="{{ src.id }}">{{ src.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="ump-settings-label" for="decoderSelect">
+                                    <span>Decoder Type</span>
+                                    <i class="bi bi-info-circle text-muted" style="font-size: 13px;" title="File type and decoder will be automatically detected based on filename. You can override the selection if needed."></i>
+                                </label>
+                                <select name="decoder_type" id="decoderSelect" class="form-select ump-settings-select">
+                                    <option value="AUTO" selected>Auto-detect</option>
+                                    {% for code, label in decoder_choices %}
+                                    {% if code != 'AUTO' %}
+                                    <option value="{{ code }}">{{ label }}</option>
+                                    {% endif %}
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="ump-master-tip">
+                            <i class="bi bi-info-circle-fill"></i>
+                            <span><strong>Tip:</strong> File type and decoder will be automatically detected based on filename. You can override the selection if needed.</span>
+                        </div>
+
+                        <div class="ump-master-buttons">
+                            <button type="submit" class="ump-btn-upload" id="submitBtn">
+                                <i class="bi bi-cloud-arrow-up fs-5"></i>
+                                <span>Upload &amp; Process</span>
+                            </button>
+                            <button type="button" class="ump-btn-clear" id="clearBtn">
+                                <span>Clear</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Right Column: Filename Detection & Supported Vendors -->
+            <div class="ump-master-right">
+                <div class="ump-master-card ump-right-card">
+                    <div class="ump-right-card-header">
+                        <i class="bi bi-file-earmark-text-fill"></i>
+                        <span>Filename Detection</span>
+                    </div>
+                    <div class="ump-right-card-subtitle">Files are auto-detected by name:</div>
+                    <table class="ump-detection-table">
+                        <thead>
+                            <tr>
+                                <th>Pattern</th>
+                                <th style="text-align: right;">Detected Type</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for rule in filename_rules %}
+                            <tr>
+                                <td><code>{{ rule.pattern }}</code></td>
+                                <td style="text-align: right;">
+                                    <span class="ump-type-pill">{{ rule.detected_type }}</span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="ump-master-card ump-right-card">
+                    <div class="ump-right-card-header">
+                        <i class="bi bi-database-fill"></i>
+                        <span>Supported Vendors</span>
+                    </div>
+                    <div class="ump-right-card-subtitle">Compatible with major telecom vendors:</div>
+                    <div class="ump-vendor-row">
+                        <div class="ump-vendor-box">
+                            <svg width="28" height="24" viewBox="0 0 32 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M16 2.5C15.6 2.5 15.3 4.2 15.3 6.8C15.3 9.4 15.6 11.5 16 11.5C16.4 11.5 16.7 9.4 16.7 6.8C16.7 4.2 16.4 2.5 16 2.5Z" fill="#ED1C24"/>
+                                <path d="M12.8 4C12.4 3.8 11.2 5.2 10.4 7.6C9.5 10 9.8 11.8 10.2 12C10.6 12.2 11.7 10.8 12.6 8.4C13.4 6 13.1 4.2 12.8 4Z" fill="#ED1C24"/>
+                                <path d="M19.2 4C19.5 4.2 19.3 6 18.4 8.4C17.6 10.8 16.4 12.2 16.1 12C15.7 11.8 16 10 16.8 7.6C17.7 5.2 18.8 3.8 19.2 4Z" fill="#ED1C24"/>
+                                <path d="M10 7C9.7 6.7 8 7.6 6.8 9.9C5.5 12.1 5.4 13.9 5.8 14.1C6.2 14.3 7.8 13.4 9 11.2C10.2 8.9 10.4 7.2 10 7Z" fill="#ED1C24"/>
+                                <path d="M22 7C21.6 7.2 21.8 8.9 23 11.2C24.2 13.4 25.8 14.3 26.2 14.1C26.6 13.9 26.5 12.1 25.2 9.9C24 7.6 22.3 6.7 22 7Z" fill="#ED1C24"/>
+                                <path d="M8.2 11.2C7.9 11 5.9 11.3 4.2 13.2C2.6 15 2.3 16.8 2.6 17C2.9 17.2 4.9 16.9 6.5 15C8.1 13.2 8.5 11.5 8.2 11.2Z" fill="#ED1C24"/>
+                                <path d="M23.8 11.2C23.5 11.5 23.9 13.2 25.5 15C27.1 16.9 29.1 17.2 29.4 17C29.7 16.8 29.4 15 27.8 13.2C26.1 11.3 24.1 11 23.8 11.2Z" fill="#ED1C24"/>
+                            </svg>
+                            <span class="vendor-name">Huawei</span>
+                        </div>
+                        <div class="ump-vendor-box">
+                            <svg width="24" height="22" viewBox="0 0 28 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="2" y="3" width="22" height="4" rx="2" transform="rotate(-20 2 3)" fill="#002561"/>
+                                <rect x="2" y="10" width="22" height="4" rx="2" transform="rotate(-20 2 10)" fill="#002561"/>
+                                <rect x="2" y="17" width="22" height="4" rx="2" transform="rotate(-20 2 17)" fill="#002561"/>
+                            </svg>
+                            <span class="vendor-name">Ericsson</span>
+                        </div>
+                        <div class="ump-vendor-box">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M4 4H8L16 16V4H20V20H16L8 8V20H4V4Z" fill="#124191"/>
+                            </svg>
+                            <span class="vendor-name">Nokia</span>
+                        </div>
+                        <div class="ump-vendor-box">
+                            <svg width="34" height="22" viewBox="0 0 48 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <text x="50%" y="70%" dominant-baseline="middle" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-weight="900" font-size="19" fill="#0066B3" letter-spacing="-0.5">ZTE</text>
+                            </svg>
+                            <span class="vendor-name">ZTE</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
+    </div><!-- /tab-normal -->
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         TAB 2 — Replay to Downstream
+    ════════════════════════════════════════════════════════════════ -->
+    <div class="upload-tab-panel" id="tab-replay">
+        <div class="ump-master-grid">
+            <!-- Left: Replay upload card -->
+            <div class="ump-master-left">
+                <div class="ump-master-card">
+                    <div class="ump-upload-card-header">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="ump-step-badge"><i class="bi bi-arrow-repeat" style="font-size:.9rem;"></i></span>
+                            <span class="ump-upload-card-title">Replay Files to Downstream</span>
+                        </div>
+                    </div>
+
+                    <!-- Replay dropzone -->
+                    <input type="file" id="replayFileInput" style="display:none;" multiple
+                           accept=".dat,.bin,.cdr,.csv,.txt,.asn,.ber,.unl,.add,.xml,.gz,.zip">
+
+                    <div class="ump-master-dropzone" id="replayDropzone">
+                        <i class="bi bi-arrow-repeat ump-drop-icon" style="color:#6c757d;"></i>
+                        <div class="ump-drop-main-text">Drag &amp; drop the missing CDR files here</div>
+                        <div class="ump-drop-sub-text">These must be files already processed by the system</div>
+                        <button type="button" class="ump-drop-btn" id="replayChooseBtn">
+                            <i class="bi bi-folder-fill"></i>
+                            <span>Choose Files</span>
+                        </button>
+                        <div class="ump-drop-formats">Only previously processed files can be replayed</div>
+                    </div>
+
+                    <div id="replayFilesSummary" class="ump-selected-files-box d-none">
+                        <div>
+                            <i class="bi bi-file-earmark-check text-primary me-2"></i>
+                            <strong id="replayFilesCount">0 files</strong> selected (<span id="replayFilesSize">0 B</span>):
+                            <span id="replayFilesNames" class="text-muted small ms-1"></span>
+                        </div>
+                        <button type="button" class="btn btn-link btn-sm text-danger text-decoration-none p-0" id="replayClearBtn">
+                            <i class="bi bi-x-circle me-1"></i>Clear
+                        </button>
+                    </div>
+
+                    <!-- Target portal row -->
+                    <div class="ump-settings-row" style="grid-template-columns: 1fr;">
+                        <div>
+                            <label class="ump-settings-label" for="replayPortalSelect">
+                                Target Downstream Portal
+                                <i class="bi bi-info-circle text-muted" style="font-size:13px;"
+                                   title="Only files that were previously processed successfully can be replayed."></i>
+                            </label>
+                            <select id="replayPortalSelect" class="form-select ump-settings-select">
+                                <option value="">-- Select Downstream Portal --</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="ump-master-tip">
+                        <i class="bi bi-shield-check-fill text-success"></i>
+                        <span><strong>Safe replay:</strong> CDR file status stays COMPLETED. Other portals are not affected. Only the selected downstream receives the re-delivered output.</span>
+                    </div>
+
+                    <div class="ump-master-buttons">
+                        <button type="button" class="ump-btn-upload" id="replaySubmitBtn" disabled>
+                            <i class="bi bi-arrow-repeat fs-5"></i>
+                            <span>Replay Files</span>
+                        </button>
+                        <button type="button" class="ump-btn-clear" id="replayClearAllBtn">
+                            <span>Clear</span>
+                        </button>
+                    </div>
+
+                    <!-- Results panel -->
+                    <div id="replayResultsWrap" style="display:none;" class="replay-results">
+                        <div style="font-size:.8rem;font-weight:700;color:#495057;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem;">
+                            Replay Results
+                        </div>
+                        <div id="replayResultsList"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: How replay works -->
+            <div class="ump-master-right">
+                <div class="ump-master-card ump-right-card">
+                    <div class="ump-right-card-header">
+                        <i class="bi bi-question-circle-fill"></i>
+                        <span>How Replay Works</span>
+                    </div>
+                    <div class="ump-right-card-subtitle">Use replay when a downstream missed files</div>
+                    <div style="font-size:.85rem;color:#495057;line-height:1.6;">
+                        <div style="display:flex;gap:.6rem;margin-bottom:.75rem;">
+                            <span style="color:#0d6efd;font-weight:700;flex-shrink:0;">1.</span>
+                            <span>Upload the exact CDR files the downstream is missing (get them from your archive or re-download from the source).</span>
+                        </div>
+                        <div style="display:flex;gap:.6rem;margin-bottom:.75rem;">
+                            <span style="color:#0d6efd;font-weight:700;flex-shrink:0;">2.</span>
+                            <span>Select the downstream portal that needs to receive the files.</span>
+                        </div>
+                        <div style="display:flex;gap:.6rem;margin-bottom:.75rem;">
+                            <span style="color:#0d6efd;font-weight:700;flex-shrink:0;">3.</span>
+                            <span>Click <strong>Replay Files</strong>. The system re-decodes each file and delivers the output only to the selected portal.</span>
+                        </div>
+                        <div style="display:flex;gap:.6rem;">
+                            <span style="color:#198754;font-weight:700;flex-shrink:0;">✓</span>
+                            <span>Other portals are untouched. Ongoing mediation is unaffected.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ump-master-card ump-right-card">
+                    <div class="ump-right-card-header">
+                        <i class="bi bi-exclamation-triangle-fill" style="color:#ffc107;"></i>
+                        <span>File Status Rules</span>
+                    </div>
+                    <div class="ump-right-card-subtitle">Only certain files can be replayed</div>
+                    <table class="ump-detection-table">
+                        <thead>
+                            <tr><th>File Status</th><th style="text-align:right;">Action</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge bg-success">COMPLETED</span></td>
+                                <td style="text-align:right;"><span class="ump-type-pill">Replay allowed</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-danger">FAILED</span></td>
+                                <td style="text-align:right;color:#6c757d;font-size:.8rem;">Use Reprocess</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-warning text-dark">PROCESSING</span></td>
+                                <td style="text-align:right;color:#6c757d;font-size:.8rem;">Wait for completion</td>
+                            </tr>
+                            <tr>
+                                <td><em style="color:#6c757d;">Not found</em></td>
+                                <td style="text-align:right;color:#6c757d;font-size:.8rem;">Use normal Upload</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div><!-- /tab-replay -->
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script src="{% static 'js/upload_cdr.js' %}"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const fileInput = document.getElementById('fileInput');
-        const modeFiles = document.getElementById('modeFiles');
-        const modeFolder = document.getElementById('modeFolder');
+(function () {
+    'use strict';
 
-        function updateInputMode() {
-            if (modeFolder.checked) {
-                fileInput.setAttribute('webkitdirectory', '');
-                fileInput.setAttribute('directory', '');
-            } else {
-                fileInput.removeAttribute('webkitdirectory');
-                fileInput.removeAttribute('directory');
-            }
-            // Clear input when switching modes to avoid confusion
-            fileInput.value = '';
-        }
-
-        modeFiles.addEventListener('change', updateInputMode);
-        modeFolder.addEventListener('change', updateInputMode);
+    // ── Tab switcher ──────────────────────────────────────────────────────
+    document.querySelectorAll('.upload-tab-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('.upload-tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.upload-tab-panel').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        });
     });
+
+    // ── Replay: load portals ──────────────────────────────────────────────
+    const replayPortalSelect = document.getElementById('replayPortalSelect');
+    fetch("{% url 'collection:output_portals_api' %}", {credentials: 'same-origin'})
+        .then(r => r.json())
+        .then(data => {
+            data.portals.forEach(function (p) {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.name + '  (' + p.output_format + ')';
+                replayPortalSelect.appendChild(opt);
+            });
+        })
+        .catch(function () {
+            replayPortalSelect.innerHTML = '<option value="">-- Could not load portals --</option>';
+        });
+
+    // ── Replay: file selection ────────────────────────────────────────────
+    let replayFiles = [];
+
+    function fmtSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+
+    function updateReplaySummary() {
+        const summary = document.getElementById('replayFilesSummary');
+        const submitBtn = document.getElementById('replaySubmitBtn');
+        if (!replayFiles.length) {
+            summary.classList.add('d-none');
+            submitBtn.disabled = true;
+            return;
+        }
+        const totalSize = replayFiles.reduce((s, f) => s + f.size, 0);
+        document.getElementById('replayFilesCount').textContent = replayFiles.length + ' file' + (replayFiles.length > 1 ? 's' : '');
+        document.getElementById('replayFilesSize').textContent = fmtSize(totalSize);
+        document.getElementById('replayFilesNames').textContent = replayFiles.slice(0, 3).map(f => f.name).join(', ') + (replayFiles.length > 3 ? ' …' : '');
+        summary.classList.remove('d-none');
+        submitBtn.disabled = !(replayFiles.length && replayPortalSelect.value);
+    }
+
+    document.getElementById('replayChooseBtn').addEventListener('click', function () {
+        document.getElementById('replayFileInput').click();
+    });
+
+    document.getElementById('replayFileInput').addEventListener('change', function () {
+        replayFiles = Array.from(this.files);
+        updateReplaySummary();
+    });
+
+    document.getElementById('replayClearBtn').addEventListener('click', function () {
+        replayFiles = [];
+        document.getElementById('replayFileInput').value = '';
+        updateReplaySummary();
+    });
+
+    document.getElementById('replayClearAllBtn').addEventListener('click', function () {
+        replayFiles = [];
+        document.getElementById('replayFileInput').value = '';
+        replayPortalSelect.value = '';
+        updateReplaySummary();
+        document.getElementById('replayResultsWrap').style.display = 'none';
+        document.getElementById('replayResultsList').innerHTML = '';
+    });
+
+    replayPortalSelect.addEventListener('change', updateReplaySummary);
+
+    // Drag-and-drop on replay dropzone
+    const replayDz = document.getElementById('replayDropzone');
+    replayDz.addEventListener('dragover', function (e) { e.preventDefault(); replayDz.classList.add('dragover'); });
+    replayDz.addEventListener('dragleave', function () { replayDz.classList.remove('dragover'); });
+    replayDz.addEventListener('drop', function (e) {
+        e.preventDefault();
+        replayDz.classList.remove('dragover');
+        replayFiles = Array.from(e.dataTransfer.files);
+        updateReplaySummary();
+    });
+
+    // ── Replay: submit ────────────────────────────────────────────────────
+    document.getElementById('replaySubmitBtn').addEventListener('click', function () {
+        const portalId = replayPortalSelect.value;
+        if (!portalId || !replayFiles.length) return;
+
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Submitting…';
+
+        const formData = new FormData();
+        formData.append('portal_id', portalId);
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+        replayFiles.forEach(function (f) { formData.append('files', f); });
+
+        fetch("{% url 'collection:replay_upload' %}", {
+            method: 'POST',
+            credentials: 'same-origin',
+            body: formData,
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            renderReplayResults(data.results || []);
+        })
+        .catch(function (err) {
+            renderReplayResults([{filename: 'Request failed', status: 'ERROR', reason: String(err)}]);
+        })
+        .finally(function () {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-repeat fs-5"></i><span>Replay Files</span>';
+        });
+    });
+
+    function renderReplayResults(results) {
+        const wrap = document.getElementById('replayResultsWrap');
+        const list = document.getElementById('replayResultsList');
+        list.innerHTML = '';
+        results.forEach(function (r) {
+            const cls = r.status === 'QUEUED' ? 'queued' : r.status === 'REJECTED' ? 'rejected' : 'error';
+            const icon = r.status === 'QUEUED'
+                ? '<i class="bi bi-check-circle-fill text-primary replay-result-icon"></i>'
+                : r.status === 'REJECTED'
+                ? '<i class="bi bi-exclamation-circle-fill text-warning replay-result-icon"></i>'
+                : '<i class="bi bi-x-circle-fill text-danger replay-result-icon"></i>';
+            const taskLine = r.task_id
+                ? '<div class="replay-result-task">Task: ' + r.task_id + (r.portal ? ' → ' + r.portal : '') + '</div>'
+                : '';
+            const row = document.createElement('div');
+            row.className = 'replay-result-row ' + cls;
+            row.innerHTML = icon +
+                '<div>' +
+                  '<div class="replay-result-filename">' + r.filename + '</div>' +
+                  (r.reason ? '<div class="replay-result-reason">' + r.reason + '</div>' : '') +
+                  taskLine +
+                '</div>';
+            list.appendChild(row);
+        });
+        wrap.style.display = results.length ? 'block' : 'none';
+    }
+})();
 </script>
 {% endblock %}

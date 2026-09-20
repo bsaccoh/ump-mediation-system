@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{% if rule %}Edit{% else %}Create{% endif %} Risk Rule | NRA{% endblock %}
+{% block page_title %}{% if rule %}Edit Risk Rule{% else %}Create Risk Rule{% endif %}{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'regulatory/css/tariff_management.css' %}">
+<link rel="stylesheet" href="{% static 'regulatory/css/declarations.css' %}">
+{% endblock %}
+{% block content %}
+<div class="regulatory-page">
+    <nav class="regulatory-breadcrumb">
+        <span>NRA</span><i class="bi bi-chevron-right"></i>
+        <a href="{% url 'regulatory:risk_alert_list' %}">Risk Management</a><i class="bi bi-chevron-right"></i>
+        <span>{% if rule %}Edit Rule{% else %}Create Rule{% endif %}</span>
+    </nav>
+
+    <div class="declaration-form-card">
+        <h1 class="h5 mb-1">{% if rule %}Edit Risk Rule{% else %}Create Risk Rule{% endif %}</h1>
+        <p class="text-muted small mb-3">Risk rules are configuration-driven — thresholds, comparison operators and severity can be changed at any time without code changes. Editing a threshold, metric, comparison operator, unit or severity preserves the prior configuration as a version so historical alerts stay traceable to the rule that triggered them.</p>
+        <form method="post">
+            {% csrf_token %}
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Rule Name *</label>
+                    <input type="text" class="form-control" name="name" value="{{ rule.name|default:'' }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Rule Code *</label>
+                    <input type="text" class="form-control" name="code" value="{{ rule.code|default:'' }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Alert Type *</label>
+                    <select class="form-select" name="alert_type" required>
+                        {% for value, label in alert_type_choices %}<option value="{{ value }}" {% if rule.alert_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Metric *</label>
+                    <input type="text" class="form-control" name="metric" value="{{ rule.metric|default:'' }}" placeholder="e.g. revenue_variance_pct" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Operator Scope</label>
+                    <select class="form-select" name="operator_code">
+                        <option value="">All Operators</option>
+                        {% for op in operators %}<option value="{{ op.code }}" {% if rule.operator_code == op.code %}selected{% endif %}>{{ op.name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Service Scope</label>
+                    <input type="text" class="form-control" name="service_scope" value="{{ rule.service_scope|default:'' }}" placeholder="Blank = all services">
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Comparison Operator *</label>
+                    <select class="form-select" name="comparison_operator" required>
+                        {% for value, label in comparison_choices %}<option value="{{ value }}" {% if rule.comparison_operator == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Threshold *</label>
+                    <input type="number" step="0.0001" class="form-control" name="threshold_value" value="{{ rule.threshold_value|default:'' }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Threshold Unit *</label>
+                    <select class="form-select" name="threshold_unit" required>
+                        {% for value, label in unit_choices %}<option value="{{ value }}" {% if rule.threshold_unit == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Severity *</label>
+                    <select class="form-select" name="severity" required>
+                        {% for value, label in severity_choices %}<option value="{{ value }}" {% if rule.severity == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Status *</label>
+                    <select class="form-select" name="status" required>
+                        {% for value, label in status_choices %}<option value="{{ value }}" {% if rule.status == value %}selected{% endif %}{% if not rule and value == 'DRAFT' %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label">Description</label>
+                    <textarea class="form-control" name="description" rows="2">{{ rule.description|default:'' }}</textarea>
+                </div>
+
+                <div class="col-12"><hr class="my-1"><p class="small text-muted mb-0">Optional</p></div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Minimum Duration (min)</label>
+                    <input type="number" class="form-control" name="min_duration" value="{{ rule.min_duration|default:'' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Minimum Occurrences</label>
+                    <input type="number" class="form-control" name="min_occurrences" value="{{ rule.min_occurrences|default:'' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Lookback Period (days)</label>
+                    <input type="number" class="form-control" name="lookback_period" value="{{ rule.lookback_period|default:'' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Escalation Threshold</label>
+                    <input type="number" class="form-control" name="escalation_threshold" value="{{ rule.escalation_threshold|default:'' }}">
+                </div>
+
+                <div class="col-md-4">
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="auto_create_alert" name="auto_create_alert" {% if not rule or rule.auto_create_alert %}checked{% endif %}>
+                        <label class="form-check-label" for="auto_create_alert">Auto Create Alert</label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="auto_escalate" name="auto_escalate" {% if rule.auto_escalate %}checked{% endif %}>
+                        <label class="form-check-label" for="auto_escalate">Auto Escalate to Audit Case</label>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-3">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check-lg"></i> {% if rule %}Update Rule{% else %}Create Rule{% endif %}</button>
+                <a href="{% url 'regulatory:risk_alert_list' %}" class="btn btn-outline-secondary btn-sm">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

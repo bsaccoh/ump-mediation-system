@@ -1,5 +1,6 @@
 """UMP Mediation System - URL Configuration"""
 from django.contrib import admin
+from django.http import JsonResponse
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
@@ -8,7 +9,13 @@ admin.site.site_header = 'UMP Mediation System'
 admin.site.site_title = 'UMP Mediation'
 admin.site.index_title = 'Administration'
 
+def health(request):
+    from django.db import connection
+    connection.ensure_connection()
+    return JsonResponse({'status': 'ok'})
+
 urlpatterns = [
+    path('health/', health, name='health'),
     path('admin/', admin.site.urls),
     path('accounts/', include('django.contrib.auth.urls')),
     path('', include('core.urls', namespace='core')),
@@ -20,12 +27,10 @@ urlpatterns = [
     path('sgsn/', include('streams.sgsn.urls')),
     path('sgw/', include('streams.sgw.urls')),
     path('reference/', include('reference.urls')),
-    path('interconnect/', include('interconnect.urls', namespace='interconnect')),
-    path('regulatory/', include('regulatory.urls', namespace='regulatory')),
-    path('roaming/', include('roaming.urls', namespace='roaming')),
     path('portals/', include('portals.urls', namespace='portals')),
     path('scripts/', include('scripts.urls', namespace='scripts')),
     path('business-logic/', include('businesslogic.urls', namespace='businesslogic')),
+    path('regulatory/', include('regulatory.urls', namespace='regulatory')),
     path('', include('dashboard.urls')),
 ]
 

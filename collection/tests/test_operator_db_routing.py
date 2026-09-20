@@ -1,4 +1,6 @@
 """DJ Phase 3 — per-operator database routing + isolation."""
+from datetime import datetime
+
 from django.test import TestCase
 
 from config.db_router import ServiceRouter
@@ -6,13 +8,53 @@ from core.operator_context import operator_context, get_operator
 from collection.models import CDRFile
 from streams.msc.models import MSCRecord
 
-from interconnect.tests._fixtures import make_msc_record
+
+def make_msc_record(record_type, file=None):
+    """Create a minimal MSCRecord for routing tests."""
+    if file is None:
+        file = CDRFile.objects.create(
+            filename='test.dat', file_path='/dev/null', file_size=1,
+            status='COMPLETED', operator_code='test', vendor='huawei',
+            network_element='msc',
+        )
+    return MSCRecord.objects.create(
+        file=file,
+        record_type=record_type,
+        service_type='voice',
+        network_record_id='NR001',
+        call_reference='CR001',
+        call_direction='MO',
+        calling_number='23276000001',
+        called_number='23276000002',
+        dialed_number='23276000002',
+        charged_msisdn='23276000001',
+        imsi='61901000000001',
+        prepaid_flag='prepaid',
+        imei='350000000000001',
+        imsi_b='',
+        imei_b='',
+        cell_id='CELL01',
+        lac='1001',
+        tac='001',
+        msc_id='MSC01',
+        smsc_address='',
+        rat_type='3G',
+        originating_trunk='TR-IN-01',
+        terminating_trunk='TR-OUT-01',
+        teleservice_code='11',
+        bearer_service_code='',
+        result_code='0',
+        roaming_indicator='',
+        forwarded_number='',
+        redirecting_number='',
+        call_category='national',
+        start_time=datetime(2026, 1, 1, 12, 0, 0),
+    )
 
 
 class OperatorDbRoutingTests(TestCase):
     databases = {
         'default', 'mediation_orange', 'mediation_africell', 'mediation_qcell',
-        'interconnect', 'regulatory', 'roaming',
     }
 
     def test_router_picks_mediation_alias_by_active_operator(self):

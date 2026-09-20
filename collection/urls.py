@@ -10,8 +10,13 @@ urlpatterns = [
     path('file/<int:pk>/reprocess/', views.reprocess_file, name='reprocess'),
     path('sftp-poll/<int:source_id>/', views.poll_sftp_now, name='sftp_poll'),
     path('distribution/', views.distribution_dashboard, name='distribution_dashboard'),
+    path('distribution/export/', views.distribution_export, name='distribution_export'),
+    path('distribution/api/retry/', views.distribution_log_retry_api, name='distribution_log_retry_api'),
+    path('distribution/api/bulk-retry/', views.distribution_log_bulk_retry_api, name='distribution_log_bulk_retry_api'),
     path('distribution/<int:log_id>/view/', views.distribution_log_view, name='distribution_log_view'),
     path('distribution/<int:log_id>/download/', views.distribution_log_download, name='distribution_log_download'),
     path('distribution/<int:log_id>/retry/', views.distribution_log_retry, name='distribution_log_retry'),
     path('distribution/bulk-retry/', views.distribution_log_bulk_retry, name='distribution_log_bulk_retry'),
+    path('replay/upload/', views.replay_upload, name='replay_upload'),
+    path('replay/portals/', views.output_portals_api, name='output_portals_api'),
 ]

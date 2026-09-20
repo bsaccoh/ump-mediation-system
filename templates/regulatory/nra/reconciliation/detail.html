@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}UMP | Reconciliation Results{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+
+{% block topbar %}
+<div class="topbar">
+    <div class="topbar-left">
+        <h5 class="topbar-title">Reconciliation Results</h5>
+        <span class="topbar-subtitle">National Revenue Authority</span>
+    </div>
+    <div class="topbar-right">
+        <a href="{% url 'regulatory:reconciliation_list' %}" class="btn btn-outline-light btn-sm">
+            <i class="bi bi-arrow-left"></i> Back
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Run Summary -->
+    <div class="dashboard-card mb-3">
+        <div class="card-heading">
+            <span>Run Summary</span>
+        </div>
+        <div class="card-content">
+            <div class="row g-3">
+                <div class="col-md-2">
+                    <label class="text-muted small">Operator</label>
+                    <div class="fw-bold">{{ run.operator_code }}</div>
+                </div>
+                <div class="col-md-2">
+                    <label class="text-muted small">Level</label>
+                    <div class="fw-bold">{{ run.level }}</div>
+                </div>
+                <div class="col-md-3">
+                    <label class="text-muted small">Period</label>
+                    <div class="fw-bold">{{ run.period_start }} to {{ run.period_end }}</div>
+                </div>
+                <div class="col-md-2">
+                    <label class="text-muted small">Status</label>
+                    <div class="fw-bold">
+                        {% if run.status == 'RUNNING' %}
+                        <span class="badge bg-info">Running</span>
+                        {% elif run.status == 'COMPLETED' %}
+                        <span class="badge bg-success">Completed</span>
+                        {% elif run.status == 'FAILED' %}
+                        <span class="badge bg-danger">Failed</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="text-muted small">Declaration</label>
+                    <div class="fw-bold">{{ run.declaration|default:"-" }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Table -->
+    <div class="dashboard-card">
+        <div class="card-heading">
+            <span>Per-Service Results</span>
+        </div>
+        <div class="card-content">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Service Type</th>
+                            <th>Mediated Count</th>
+                            <th>Declared Count</th>
+                            <th>Mediated Revenue</th>
+                            <th>Declared Revenue</th>
+                            <th>Variance</th>
+                            <th>Variance %</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for result in results %}
+                        <tr>
+                            <td>{{ result.service_type }}</td>
+                            <td>{{ result.mediated_count|default:"-" }}</td>
+                            <td>{{ result.declared_count|default:"-" }}</td>
+                            <td>SLE {{ result.mediated_revenue|floatformat:2 }}</td>
+                            <td>SLE {{ result.declared_revenue|floatformat:2 }}</td>
+                            <td>SLE {{ result.variance_revenue|floatformat:2 }}</td>
+                            <td>{{ result.variance_pct|floatformat:1 }}%</td>
+                            <td>
+                                {% if result.match_status == 'MATCHED' %}
+                                <span class="badge bg-success">Matched</span>
+                                {% elif result.match_status == 'MINOR' %}
+                                <span class="badge bg-warning">Minor</span>
+                                {% elif result.match_status == 'MAJOR' %}
+                                <span class="badge bg-danger">Major</span>
+                                {% elif result.match_status == 'CRITICAL' %}
+                                <span class="badge bg-danger">Critical</span>
+                                {% elif result.match_status == 'NO_DECL' %}
+                                <span class="badge bg-secondary">No Declaration</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if result.discrepancies.exists %}
+                                <a href="{% url 'regulatory:discrepancy_detail' result.discrepancies.first.pk %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-exclamation-triangle"></i> View
+                                </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">
+                                No results yet
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

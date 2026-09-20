@@ -1,0 +1,25 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}{{ title }} | UMP Mediation Admin{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'admin/css/custom_admin.css' %}">
+{% endblock %}
+
+{% block branding %}
+<h1 id="site-name">
+    <a href="{% url 'admin:index' %}">
+        <span style="margin-right:8px;">&#9670;</span>UMP Mediation Admin
+    </a>
+</h1>
+{% endblock %}
+
+{% block nav-global %}
+<div style="background:rgba(0,0,0,0.15); padding:6px 24px; font-size:0.78rem;">
+    <a href="/" style="color:rgba(255,255,255,0.7); text-decoration:none; margin-right:16px;">
+        &larr; Back to Dashboard
+    </a>
+</div>
+{% endblock %}

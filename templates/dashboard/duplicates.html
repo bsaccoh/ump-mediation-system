@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title %}Duplicate Management - UMP Mediation{% endblock %}
+{% block page_title %}Duplicate Management{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-bar { background: #f8f9fa; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
+    .file-row { font-size: 0.85rem; }
+    .file-row td { vertical-align: middle; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Summary Cards -->
+<div class="row mb-3" id="summaryCards">
+    <div class="col-md-3">
+        <div class="card text-center py-2">
+            <div class="fw-bold fs-4 text-warning" id="sumTotal">-</div>
+            <small class="text-muted">Total Duplicates</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center py-2">
+            <div class="fw-bold fs-4 text-info" id="sumSize">-</div>
+            <small class="text-muted">Disk Space Used</small>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card py-2 px-3">
+            <small class="text-muted mb-1">By Stream</small>
+            <div id="streamBadges" class="d-flex flex-wrap gap-1">-</div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="filter-bar">
+    <form id="filterForm" class="row g-2 align-items-end">
+        <div class="col-md-2">
+            <label class="form-label small">Stream</label>
+            <select class="form-select form-select-sm" id="fStream">
+                <option value="">All</option>
+                <option value="MSC">MSC</option>
+                <option value="IMS">IMS</option>
+                <option value="PGW">PGW</option>
+                <option value="SGSN">SGSN</option>
+                <option value="SGW">SGW</option>
+                <option value="CBS">CBS</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">From</label>
+            <input type="date" class="form-control form-control-sm" id="fStart">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">To</label>
+            <input type="date" class="form-control form-control-sm" id="fEnd">
+        </div>
+        <div class="col-md-auto">
+            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> Search</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btnClear"><i class="bi bi-x-circle"></i> Clear</button>
+        </div>
+        <div class="col-md-auto ms-auto">
+            <button type="button" class="btn btn-danger btn-sm" id="btnDelete"><i class="bi bi-trash"></i> Delete Filtered</button>
+        </div>
+    </form>
+</div>
+
+<!-- Table -->
+<div class="table-responsive">
+    <table class="table table-sm table-hover">
+        <thead class="table-light">
+            <tr>
+                <th><input type="checkbox" id="checkAll"></th>
+                <th>Filename</th>
+                <th>Stream</th>
+                <th>Operator</th>
+                <th>Size</th>
+                <th>Hash</th>
+                <th>Source</th>
+                <th>Detected</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody"><tr><td colspan="8" class="text-center text-muted">Loading...</td></tr></tbody>
+    </table>
+</div>
+
+<!-- Last searched indicator -->
+<div id="searchStatus" class="text-muted small mb-1" style="display:none;"></div>
+
+<!-- Pagination -->
+<nav id="pagination" class="d-flex justify-content-between align-items-center mt-2">
+    <small class="text-muted" id="pageInfo">-</small>
+    <div class="btn-group btn-group-sm" id="pageButtons"></div>
+</nav>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header"><h6 class="modal-title">Confirm Deletion</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body"><p id="deleteMsg">Are you sure?</p></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+            <button class="btn btn-danger btn-sm" id="btnConfirmDelete">Delete</button>
+        </div>
+    </div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+    const csrf = '{{ csrf_token }}';
+    let currentPage = 1, deleteMode = null, deleteIds = [];
+
+    function formatBytes(b) {
+        if (!b) return '0 B';
+        const u = ['B','KB','MB','GB'];
+        let i = 0;
+        while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
+        return b.toFixed(i ? 1 : 0) + ' ' + u[i];
+    }
+
+    function load(page) {
+        currentPage = page || 1;
+        const fd = new FormData();
+        fd.append('csrfmiddlewaretoken', csrf);
+        fd.append('stream', document.getElementById('fStream').value);
+        fd.append('start_date', document.getElementById('fStart').value);
+        fd.append('end_date', document.getElementById('fEnd').value);
+        fd.append('page', currentPage);
+
+        const tb0 = document.getElementById('tableBody');
+        tb0.innerHTML = '<tr><td colspan="8" class="text-center text-muted"><span class="spinner-border spinner-border-sm me-1"></span> Searching…</td></tr>';
+
+        fetch('{% url "dashboard:duplicates_api" %}', {method:'POST', headers:{'X-CSRFToken':csrf}, body:fd})
+        .then(r => {
+            if (!r.ok) throw new Error(`Server error ${r.status}`);
+            return r.json();
+        }).then(d => {
+            const ss = document.getElementById('searchStatus');
+            ss.textContent = `Last searched: ${new Date().toLocaleTimeString()}`;
+            ss.style.display = '';
+            if (!d.success) { console.warn('duplicates_api returned success=false', d); return; }
+            const s = d.summary;
+            document.getElementById('sumTotal').textContent = s.total.toLocaleString();
+            document.getElementById('sumSize').textContent = formatBytes(s.total_size);
+            document.getElementById('streamBadges').innerHTML = s.by_stream.map(
+                r => `<span class="badge bg-secondary">${r.stream}: ${r.count}</span>`
+            ).join('') || '<span class="text-muted">None</span>';
+
+            const tb = document.getElementById('tableBody');
+            if (!d.records.length) {
+                tb.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No duplicates found.</td></tr>';
+            } else {
+                tb.innerHTML = d.records.map(r => `<tr class="file-row">
+                    <td><input type="checkbox" class="row-check" value="${r.id}"></td>
+                    <td title="${r.filename}">${r.filename.length > 50 ? r.filename.substring(0,47)+'...' : r.filename}</td>
+                    <td><span class="badge bg-primary">${r.stream}</span></td>
+                    <td>${r.operator}</td>
+                    <td>${formatBytes(r.file_size)}</td>
+                    <td><code title="${r.file_hash}">${r.file_hash.substring(0,10)}...</code></td>
+                    <td>${r.source}</td>
+                    <td>${r.created_at}</td>
+                </tr>`).join('');
+            }
+
+            const p = d.pagination;
+            document.getElementById('pageInfo').textContent = `Page ${p.page} of ${p.pages} (${p.total} total)`;
+            const pb = document.getElementById('pageButtons');
+            pb.innerHTML = '';
+            if (p.pages > 1) {
+                if (p.page > 1) pb.innerHTML += `<button class="btn btn-outline-primary" onclick="window._dupLoad(${p.page-1})">&laquo;</button>`;
+                for (let i = Math.max(1,p.page-2); i <= Math.min(p.pages,p.page+2); i++)
+                    pb.innerHTML += `<button class="btn btn-${i===p.page?'primary':'outline-primary'}" onclick="window._dupLoad(${i})">${i}</button>`;
+                if (p.page < p.pages) pb.innerHTML += `<button class="btn btn-outline-primary" onclick="window._dupLoad(${p.page+1})">&raquo;</button>`;
+            }
+        }).catch(err => {
+            console.error('Search failed:', err);
+            document.getElementById('tableBody').innerHTML = `<tr><td colspan="8" class="text-center text-danger">Search failed: ${err.message}</td></tr>`;
+        });
+    }
+    window._dupLoad = load;
+
+    document.getElementById('filterForm').addEventListener('submit', e => { e.preventDefault(); load(1); });
+    document.getElementById('btnClear').addEventListener('click', () => {
+        document.getElementById('fStream').value = '';
+        document.getElementById('fStart').value = '';
+        document.getElementById('fEnd').value = '';
+        load(1);
+    });
+    document.getElementById('checkAll').addEventListener('change', function() {
+        document.querySelectorAll('.row-check').forEach(c => c.checked = this.checked);
+    });
+
+    document.getElementById('btnDelete').addEventListener('click', () => {
+        const checked = [...document.querySelectorAll('.row-check:checked')].map(c => c.value);
+        if (checked.length) {
+            deleteMode = 'selected'; deleteIds = checked;
+            document.getElementById('deleteMsg').textContent = `Delete ${checked.length} selected duplicate(s)?`;
+        } else {
+            deleteMode = 'filtered'; deleteIds = [];
+            const total = document.getElementById('sumTotal').textContent;
+            document.getElementById('deleteMsg').textContent = `Delete ALL ${total} duplicates matching current filter?`;
+        }
+        new bootstrap.Modal(document.getElementById('deleteModal')).show();
+    });
+
+    document.getElementById('btnConfirmDelete').addEventListener('click', () => {
+        const fd = new FormData();
+        if (deleteMode === 'selected') {
+            deleteIds.forEach(id => fd.append('ids', id));
+        } else {
+            fd.append('stream', document.getElementById('fStream').value);
+            fd.append('start_date', document.getElementById('fStart').value);
+            fd.append('end_date', document.getElementById('fEnd').value);
+        }
+        fetch('{% url "dashboard:duplicates_delete" %}', {method:'POST', headers:{'X-CSRFToken':csrf}, body:fd})
+        .then(r => r.json()).then(d => {
+            bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+            if (d.success) {
+                alert(`Deleted ${d.deleted} duplicate(s). Freed ${formatBytes(d.freed_bytes)}.`);
+                load(1);
+            }
+        });
+    });
+
+    load(1);
+})();
+</script>
+{% endblock %}

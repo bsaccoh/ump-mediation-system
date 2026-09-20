@@ -1,8 +1,8 @@
 """Delete decoded CDR records (across all operator databases) for testing.
 
 Wipes every stream's records in each operator's DB (home operator -> default,
-others -> mediation_{op}) plus the CDRFile tracker. Use --files to also empty
-the data directories.
+others -> mediation_{op}) plus the CDRFile tracker and regulatory aggregates.
+Use --files to also empty the data directories.
 
     python manage.py clear_cdr
     python manage.py clear_cdr --operator africell
@@ -15,7 +15,8 @@ import shutil
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from collection.models import CDRFile
+from collection.models import CDRFile, DistributionLog, ProcessingError
+from core.models import ActivityLog
 from core.operator_context import operator_context
 
 STREAM_MODELS = [
@@ -59,9 +60,45 @@ class Command(BaseCommand):
                     if deleted:
                         self.stdout.write(f'[{op}] {model.__name__}: deleted {deleted}')
 
-        # CDRFile is control-plane (shared default DB) — delete once.
+        # Control-plane tables (shared default DB) — delete once.
+        dist_count = DistributionLog.objects.all().delete()[0]
+        self.stdout.write(f'DistributionLog: deleted {dist_count}')
+
+        err_count = ProcessingError.objects.all().delete()[0]
+        self.stdout.write(f'ProcessingError: deleted {err_count}')
+
+        activity_count = ActivityLog.objects.all().delete()[0]
+        self.stdout.write(f'ActivityLog: deleted {activity_count}')
+
         file_count = CDRFile.objects.all().delete()[0]
         self.stdout.write(f'CDRFile: deleted {file_count}')
+
+        # Regulatory aggregate tables — clear KPI data produced from CDR records.
+        REGULATORY_MODELS = [
+            ('regulatory.models', 'TrafficSummary'),
+            ('regulatory.models', 'RevenueSnapshot'),
+            ('regulatory.models', 'RatedAggregate'),
+            ('regulatory.models', 'RiskAlert'),
+            ('regulatory.models', 'TariffComplianceResult'),
+            ('regulatory.models', 'ReconciliationResult'),
+            ('regulatory.models', 'Discrepancy'),
+            ('regulatory.models', 'ReconciliationRun'),
+            ('regulatory.models', 'DeclarationAttachment'),
+            ('regulatory.models', 'DeclarationReview'),
+            ('regulatory.models', 'DeclarationLineItem'),
+            ('regulatory.models', 'OperatorDeclaration'),
+        ]
+        for mod, name in REGULATORY_MODELS:
+            try:
+                model = getattr(importlib.import_module(mod), name)
+                count = model.objects.all().delete()[0]
+                if count:
+                    self.stdout.write(f'{name}: deleted {count}')
+            except (ImportError, AttributeError):
+                pass  # regulatory app not installed or model doesn't exist
+            except Exception as exc:
+                self.stdout.write(self.style.WARNING(
+                    f'{name}: skipped ({str(exc).splitlines()[0][:80]})'))
 
         if opts.get('files'):
             self._clean_dirs()

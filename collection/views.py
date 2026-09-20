@@ -1,14 +1,25 @@
 """Collection views - file upload, listing, and management."""
+import logging
 import os
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import Http404, HttpResponse
+import json
+import csv
+from datetime import timedelta
+from core.decorators import operator_required
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
+from django.core.paginator import Paginator
+from django.db.models import Q
+from django.urls import reverse
+from django.utils import timezone
 
-from .models import DataSource, CDRFile, DistributionLog
+from .models import DataSource, CDRFile, DistributionLog, ReplayLog
 from .services.file_detector import detect_decoder_type, classify_file
 from .services.storage import input_storage_dir
 from .services.deduplication import get_file_hash, check_duplicate
@@ -28,7 +39,7 @@ def file_list(request):
     if source_id:
         files = files.filter(source_id=source_id)
 
-    files = files[:100]
+    files = files.order_by('-created_at')[:500]
     sources = DataSource.objects.filter(enabled=True)
 
     return render(request, 'collection/file_list.html', {
@@ -39,27 +50,65 @@ def file_list(request):
     })
 
 
-@login_required
+@operator_required
 def upload_file(request):
     """Handle CDR file upload."""
     if request.method != 'POST':
         sources = DataSource.objects.filter(enabled=True)
-        return render(request, 'collection/upload.html', {'sources': sources})
+        from core.enums import DecoderType
 
-    uploaded_files = request.FILES.getlist('files')
+        # Real canonical UMP filename detection rules (from file_detector / reference)
+        filename_rules = [
+            {'pattern': 'bFTMSX*.dat', 'detected_type': 'MSC'},
+            {'pattern': '*pgw*.dat', 'detected_type': 'PGW'},
+            {'pattern': '*sgsn*.dat', 'detected_type': 'SGSN'},
+            {'pattern': '*sgw*.dat', 'detected_type': 'SGW'},
+            {'pattern': '*ims*.dat', 'detected_type': 'IMS'},
+            {'pattern': '*ocs*.dat', 'detected_type': 'OCS'},
+            {'pattern': '*cbs*.dat', 'detected_type': 'CBS'},
+        ]
+
+        decoder_choices = [
+            (DecoderType.MSC, 'MSC (Huawei ASN.1/BER)'),
+            (DecoderType.PGW, 'PGW (3GPP PS Domain)'),
+            (DecoderType.SGSN, 'SGSN (3GPP PS Domain)'),
+            (DecoderType.SGW, 'SGW (3GPP PS Domain)'),
+            (DecoderType.IMS, 'IMS (Huawei ATS9900 VoLTE/VoBB)'),
+            (DecoderType.OCS, 'OCS Input'),
+            (DecoderType.CBS, 'CBS Output'),
+            (DecoderType.CSV, 'Pre-decoded CSV'),
+        ]
+
+        context = {
+            'sources': sources,
+            'decoder_choices': decoder_choices,
+            'filename_rules': filename_rules,
+        }
+        return render(request, 'collection/upload.html', context)
+
+    uploaded_files = request.FILES.getlist('files') or request.FILES.getlist('cdr_files')
     if not uploaded_files:
         messages.error(request, 'No files selected.')
         return redirect('collection:upload')
 
-    source_id = request.POST.get('source_id')
+    source_id = request.POST.get('source_id') or None
     base_decoder_type = request.POST.get('decoder_type', 'AUTO')
-    
+
+    # Auto-resolve DataSource from decoder type when none selected
+    def _resolve_source(decoder):
+        if source_id:
+            return source_id
+        ds = DataSource.objects.filter(
+            decoder_type=decoder, enabled=True,
+        ).first()
+        return ds.pk if ds else None
+
     success_count = 0
     duplicate_count = 0
     skipped_extensions = 0
     
     # Allowed extensions for safety during folder uploads
-    ALLOWED_EXTENSIONS = ('.dat', '.bin', '.cdr', '.csv', '.txt', '.asn', '.ber', '.unl', '.add')
+    ALLOWED_EXTENSIONS = ('.dat', '.bin', '.cdr', '.csv', '.txt', '.asn', '.asn1', '.ber', '.unl', '.add', '.xml', '.gz', '.zip')
 
     for uploaded in uploaded_files:
         # Skip unsupported files during folder upload
@@ -87,6 +136,13 @@ def upload_file(request):
                 dest.write(chunk)
 
         file_size = os.path.getsize(file_path)
+
+        # Reject zero-byte files immediately
+        if file_size == 0:
+            os.remove(file_path)
+            messages.warning(request, f'{uploaded.name}: rejected — file is empty (0 bytes).')
+            continue
+
         file_hash = get_file_hash(file_path)
 
         # Check for duplicate
@@ -97,7 +153,7 @@ def upload_file(request):
 
         # Create CDRFile record (signal will trigger processing)
         CDRFile.objects.create(
-            source_id=source_id if source_id else None,
+            source_id=_resolve_source(decoder_type),
             filename=uploaded.name,
             file_path=file_path,
             file_size=file_size,
@@ -107,7 +163,7 @@ def upload_file(request):
             vendor=cls.vendor or '',
             network_element=cls.network_element or '',
             uploaded_by=request.user,
-            status=CDRFile.Status.PENDING,
+            status=CDRFile.Status.COLLECTED,
         )
         success_count += 1
 
@@ -184,7 +240,7 @@ def file_detail(request, pk):
             record_total = qs.count()
             records = list(qs[:50])
     except Exception:
-        pass
+        logger.debug("Could not load CDR records for file detail", exc_info=True)
 
     # Pair-completeness stats (used by the File Detail badge)
     pair_pct = 0
@@ -273,20 +329,33 @@ def distribution_log_download(request, log_id):
     return response
 
 
-@login_required
-def distribution_log_retry(request, log_id):
-    """Re-run a single rule's delivery for the original CDR file.
+def _format_file_size(bytes_val):
+    """Format bytes into a human-readable string (B, KB, MB, GB)."""
+    if not bytes_val or bytes_val <= 0:
+        return "—"
+    if bytes_val < 1024:
+        return f"{bytes_val} B"
+    elif bytes_val < 1024 * 1024:
+        return f"{bytes_val / 1024:.1f} KB"
+    elif bytes_val < 1024 * 1024 * 1024:
+        return f"{bytes_val / (1024 * 1024):.1f} MB"
+    else:
+        return f"{bytes_val / (1024 * 1024 * 1024):.1f} GB"
 
-    Replays the rule end-to-end so a new SUCCESS log row is added (the original
-    FAILED row is preserved as audit history).
-    """
-    log = get_object_or_404(DistributionLog.objects.select_related('rule', 'output_portal', 'cdr_file'), pk=log_id)
-    if not log.rule or not log.cdr_file:
-        messages.error(request, 'Cannot retry: original rule or file is missing.')
-        return redirect(request.META.get('HTTP_REFERER', 'collection:file_list'))
+
+def _do_retry_single_log(log_id):
+    """Re-run a single rule's delivery for the original CDR file."""
     from core.dispatcher import dispatch_cdr_file
-    # Filter dispatcher to this single rule by temporarily disabling other active rules
     from portals.models import DistributionRule
+
+    try:
+        log = DistributionLog.objects.select_related('rule', 'output_portal', 'cdr_file').get(pk=log_id)
+    except DistributionLog.DoesNotExist:
+        return False, 'Delivery record not found.'
+
+    if not log.rule or not log.cdr_file:
+        return False, 'Cannot retry: original rule or file is missing.'
+
     other_active = list(DistributionRule.objects.filter(is_active=True).exclude(pk=log.rule.pk))
     DistributionRule.objects.filter(pk__in=[r.pk for r in other_active]).update(is_active=False)
     try:
@@ -295,30 +364,21 @@ def distribution_log_retry(request, log_id):
         result = dispatch_cdr_file(log.cdr_file_id)
     finally:
         DistributionRule.objects.filter(pk__in=[r.pk for r in other_active]).update(is_active=True)
+
     summary = next((r for r in result if r.get('rule') == log.rule.name), None)
     if summary and summary.get('status') == 'SUCCESS':
-        messages.success(request, f'Retry succeeded — {summary.get("records",0)} records delivered.')
+        return True, f'Retry succeeded — {summary.get("records", 0)} records delivered.'
     else:
         err = (summary or {}).get('error', 'unknown error')
-        messages.error(request, f'Retry failed — {err}')
-    return redirect(request.META.get('HTTP_REFERER') or 'collection:file_detail', pk=log.cdr_file_id)
+        return False, f'Retry failed — {err}'
 
 
-@login_required
-def distribution_log_bulk_retry(request):
+def _do_retry_bulk_logs(log_ids):
     """Retry multiple FAILED deliveries selected from the dashboard."""
-    if request.method != 'POST':
-        return redirect('collection:distribution_dashboard')
-
-    log_ids = request.POST.getlist('log_ids')
-    if not log_ids:
-        messages.warning(request, 'No deliveries selected.')
-        return redirect('collection:distribution_dashboard')
-
     from core.dispatcher import dispatch_cdr_file
     from portals.models import DistributionRule
+    from collections import defaultdict
 
-    # Only retry FAILED logs that still have a rule + cdr_file
     logs = list(
         DistributionLog.objects
         .filter(pk__in=log_ids, status=DistributionLog.Status.FAILED)
@@ -328,14 +388,11 @@ def distribution_log_bulk_retry(request):
     skipped = len(logs) - len(actionable)
 
     if not actionable:
-        messages.error(request, 'None of the selected rows are retryable (missing rule or file).')
-        return redirect('collection:distribution_dashboard')
+        return False, 'None of the selected rows are retryable (missing rule or file).'
 
     success = failed = 0
     errors = []
-    # Group by cdr_file so we minimise dispatcher calls per file
-    from collections import defaultdict
-    by_file = defaultdict(list)  # {cdr_file_id: [rule_id, ...]}
+    by_file = defaultdict(list)
     rule_name_by_id = {}
     for l in actionable:
         by_file[l.cdr_file_id].append(l.rule_id)
@@ -343,7 +400,6 @@ def distribution_log_bulk_retry(request):
 
     for cdr_file_id, rule_ids in by_file.items():
         target_rule_ids = set(rule_ids)
-        # Disable other active rules during dispatch so only the targets fire
         other_active = list(
             DistributionRule.objects.filter(is_active=True).exclude(pk__in=target_rule_ids)
         )
@@ -354,7 +410,6 @@ def distribution_log_bulk_retry(request):
         finally:
             DistributionRule.objects.filter(pk__in=[r.pk for r in other_active]).update(is_active=True)
 
-        # Tally per rule
         for rule_id in target_rule_ids:
             name = rule_name_by_id.get(rule_id, '?')
             summary = next((r for r in result if r.get('rule') == name), None)
@@ -370,52 +425,286 @@ def distribution_log_bulk_retry(request):
     if skipped:
         parts.append(f'{skipped} non-retryable skipped')
     msg = ', '.join(parts) + '.'
-    if failed:
-        messages.warning(request, msg + ' First errors: ' + '; '.join(errors[:3]))
-    else:
+    if failed and success == 0:
+        msg += ' First errors: ' + '; '.join(errors[:3])
+        return False, msg
+    elif failed:
+        msg += ' First errors: ' + '; '.join(errors[:3])
+        return True, msg
+    return True, msg
+
+
+@login_required
+def distribution_log_retry(request, log_id):
+    """Re-run a single rule's delivery for the original CDR file (HTML redirect flow)."""
+    success, msg = _do_retry_single_log(log_id)
+    if success:
         messages.success(request, msg)
+    else:
+        messages.error(request, msg)
     return redirect(request.META.get('HTTP_REFERER') or 'collection:distribution_dashboard')
 
 
 @login_required
-def distribution_dashboard(request):
-    """Top-level distribution log listing with filters."""
-    from portals.models import OutputPortal, DistributionRule
-    qs = DistributionLog.objects.select_related('cdr_file', 'rule', 'output_portal').order_by('-delivered_at')
-    status = request.GET.get('status', '')
-    portal_id = request.GET.get('portal', '')
-    stream = request.GET.get('stream', '')
-    days = request.GET.get('days', '7')
-    if status:
-        qs = qs.filter(status=status)
-    if portal_id:
-        qs = qs.filter(output_portal_id=portal_id)
-    if stream:
-        qs = qs.filter(rule__stream_type=stream)
-    if days and days != 'all':
-        from django.utils import timezone
-        from datetime import timedelta
-        try:
-            qs = qs.filter(delivered_at__gte=timezone.now() - timedelta(days=int(days)))
-        except ValueError:
-            pass
-    totals = {
-        'all': DistributionLog.objects.count(),
-        'success': DistributionLog.objects.filter(status='SUCCESS').count(),
-        'failed': DistributionLog.objects.filter(status='FAILED').count(),
-        'skipped': DistributionLog.objects.filter(status='SKIPPED').count(),
-    }
-    logs = list(qs[:500])
-    return render(request, 'collection/distribution_dashboard.html', {
-        'logs': logs,
-        'totals': totals,
-        'portals': OutputPortal.objects.all().order_by('name'),
-        'streams': ['MSC', 'PGW', 'SGSN', 'SGW'],
-        'filters': {'status': status, 'portal': portal_id, 'stream': stream, 'days': days},
-    })
+def distribution_log_bulk_retry(request):
+    """Retry multiple FAILED deliveries selected from the dashboard (HTML form flow)."""
+    if request.method != 'POST':
+        return redirect('collection:distribution_dashboard')
+
+    log_ids = request.POST.getlist('log_ids')
+    if not log_ids:
+        messages.warning(request, 'No deliveries selected.')
+        return redirect('collection:distribution_dashboard')
+
+    success, msg = _do_retry_bulk_logs(log_ids)
+    if success:
+        messages.success(request, msg)
+    else:
+        messages.error(request, msg)
+    return redirect(request.META.get('HTTP_REFERER') or 'collection:distribution_dashboard')
 
 
 @login_required
+def distribution_log_retry_api(request):
+    """AJAX endpoint to retry a single failed distribution."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'POST required'}, status=405)
+
+    log_id = None
+    if request.body:
+        try:
+            payload = json.loads(request.body.decode('utf-8'))
+            log_id = payload.get('id')
+        except Exception:
+            logger.debug("Could not parse JSON body for retry request", exc_info=True)
+    if not log_id:
+        log_id = request.POST.get('id')
+
+    if not log_id:
+        return JsonResponse({'success': False, 'message': 'Missing delivery ID'}, status=400)
+
+    success, msg = _do_retry_single_log(log_id)
+    return JsonResponse({'success': success, 'message': msg}, status=200 if success else 400)
+
+
+@login_required
+def distribution_log_bulk_retry_api(request):
+    """AJAX endpoint to retry selected failed distributions."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'POST required'}, status=405)
+
+    ids = None
+    if request.body:
+        try:
+            payload = json.loads(request.body.decode('utf-8'))
+            ids = payload.get('ids')
+        except Exception:
+            logger.debug("Could not parse JSON body for bulk retry", exc_info=True)
+    if not ids:
+        ids = request.POST.getlist('ids') or request.POST.getlist('log_ids')
+
+    if not ids:
+        return JsonResponse({'success': False, 'message': 'No deliveries selected'}, status=400)
+
+    success, msg = _do_retry_bulk_logs(ids)
+    return JsonResponse({'success': success, 'message': msg}, status=200 if success else 400)
+
+
+def _get_distribution_filtered_data(request):
+    """Filter distribution logs and compute period stats."""
+    status = request.GET.get('status', '').strip()
+    portal = request.GET.get('portal', '').strip()
+    stream = request.GET.get('stream', '').strip()
+    period = request.GET.get('period', '7d').strip()
+    filename = request.GET.get('filename', '').strip()
+
+    now = timezone.now()
+    start_dt = None
+    if period == 'today':
+        start_dt = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == '24h':
+        start_dt = now - timedelta(hours=24)
+    elif period == '7d':
+        start_dt = now - timedelta(days=7)
+    elif period == '30d':
+        start_dt = now - timedelta(days=30)
+    # If period == 'all' or empty, start_dt stays None
+
+    base_qs = DistributionLog.objects.select_related('cdr_file', 'rule', 'output_portal')
+    period_qs = base_qs
+    if start_dt:
+        period_qs = period_qs.filter(delivered_at__gte=start_dt)
+
+    total_deliveries = period_qs.count()
+    success_deliveries = period_qs.filter(status=DistributionLog.Status.SUCCESS).count()
+    failed_deliveries = period_qs.filter(status=DistributionLog.Status.FAILED).count()
+    skipped_deliveries = period_qs.filter(status=DistributionLog.Status.SKIPPED).count()
+
+    def calc_rate(count, tot):
+        if tot <= 0:
+            return 0
+        val = (count / tot) * 100
+        return int(round(val)) if val == int(val) else round(val, 1)
+
+    stats = {
+        'total': total_deliveries,
+        'success': success_deliveries,
+        'failed': failed_deliveries,
+        'skipped': skipped_deliveries,
+        'success_rate': calc_rate(success_deliveries, total_deliveries),
+        'failure_rate': calc_rate(failed_deliveries, total_deliveries),
+        'skipped_rate': calc_rate(skipped_deliveries, total_deliveries),
+    }
+
+    filtered_qs = period_qs
+    if status:
+        filtered_qs = filtered_qs.filter(status=status)
+    if portal:
+        filtered_qs = filtered_qs.filter(output_portal_id=portal)
+    if stream:
+        filtered_qs = filtered_qs.filter(Q(rule__stream_type=stream) | Q(cdr_file__decoder_type=stream))
+    if filename:
+        filtered_qs = filtered_qs.filter(Q(filename__icontains=filename) | Q(cdr_file__filename__icontains=filename))
+
+    filtered_qs = filtered_qs.order_by('-delivered_at')
+
+    filters = {
+        'status': status,
+        'portal': portal,
+        'stream': stream,
+        'period': period,
+        'filename': filename,
+    }
+    return filtered_qs, stats, filters
+
+
+@login_required
+def distribution_export(request):
+    """Export deliveries matching current filters or selected IDs to CSV."""
+    ids_str = request.GET.get('ids', '').strip()
+    if ids_str:
+        id_list = [int(i.strip()) for i in ids_str.split(',') if i.strip().isdigit()]
+        qs = DistributionLog.objects.filter(pk__in=id_list).select_related('rule', 'output_portal', 'cdr_file').order_by('-delivered_at')
+    else:
+        qs, _, _ = _get_distribution_filtered_data(request)
+
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+    response['Content-Disposition'] = f'attachment; filename="distribution_deliveries_{timestamp}.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow([
+        'Delivered',
+        'Rule',
+        'Stream',
+        'Portal',
+        'Filename',
+        'Records',
+        'Size',
+        'Retries',
+        'Status',
+    ])
+
+    for log in qs:
+        rule_name = log.rule.name if log.rule else (log.output_portal.name if log.output_portal else "—")
+        stream_name = log.rule.stream_type if (log.rule and log.rule.stream_type) else (log.cdr_file.decoder_type if (log.cdr_file and log.cdr_file.decoder_type) else "—")
+        portal_name = log.output_portal.name if log.output_portal else "—"
+        retry_num = log.retry_count or (log.cdr_file.retry_count if log.cdr_file else 0)
+        writer.writerow([
+            log.delivered_at.strftime('%Y-%m-%d %H:%M:%S') if log.delivered_at else '—',
+            rule_name,
+            stream_name,
+            portal_name,
+            log.filename or (log.cdr_file.filename if log.cdr_file else '—'),
+            log.record_count if log.record_count is not None else 0,
+            _format_file_size(log.file_size),
+            retry_num if retry_num else '—',
+            log.status,
+        ])
+
+    return response
+
+
+@login_required
+def distribution_dashboard(request):
+    """Distribution Dashboard matching master reference design."""
+    from portals.models import OutputPortal
+
+    filtered_qs, stats, filters = _get_distribution_filtered_data(request)
+
+    try:
+        per_page = int(request.GET.get('per_page', 10))
+        if per_page not in (10, 25, 50, 100):
+            per_page = 10
+    except (ValueError, TypeError):
+        per_page = 10
+
+    paginator = Paginator(filtered_qs, per_page)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+
+    deliveries = []
+    for log in page_obj.object_list:
+        rule_name = log.rule.name if log.rule else (log.output_portal.name if log.output_portal else "—")
+        stream_name = log.rule.stream_type if (log.rule and log.rule.stream_type) else (log.cdr_file.decoder_type if (log.cdr_file and log.cdr_file.decoder_type) else "—")
+        portal_name = log.output_portal.name if log.output_portal else "—"
+        deliveries.append({
+            'id': log.id,
+            'delivered_at': log.delivered_at,
+            'rule_name': rule_name,
+            'stream': stream_name,
+            'portal_name': portal_name,
+            'filename': log.filename or (log.cdr_file.filename if log.cdr_file else "—"),
+            'record_count': log.record_count if log.record_count is not None else 0,
+            'formatted_size': _format_file_size(log.file_size),
+            'retry_count': log.retry_count or (log.cdr_file.retry_count if log.cdr_file else 0),
+            'status': log.status,
+            'detail_url': reverse('collection:distribution_log_view', args=[log.id]),
+            'download_url': reverse('collection:distribution_log_download', args=[log.id]),
+        })
+
+    output_portals = OutputPortal.objects.all().order_by('name')
+    streams = [
+        {'code': 'MSC', 'name': 'MSC'},
+        {'code': 'PGW', 'name': 'PGW'},
+        {'code': 'SGSN', 'name': 'SGSN'},
+        {'code': 'SGW', 'name': 'SGW'},
+        {'code': 'IMS', 'name': 'IMS'},
+        {'code': 'OCS', 'name': 'OCS'},
+        {'code': 'CBS', 'name': 'CBS'},
+    ]
+
+    total_records = paginator.count
+    page_start = page_obj.start_index() if total_records > 0 else 0
+    page_end = page_obj.end_index() if total_records > 0 else 0
+
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
+    preserved_query_string = query_params.urlencode()
+
+    context = {
+        'stats': stats,
+        'deliveries': deliveries,
+        'portals': output_portals,
+        'streams': streams,
+        'filters': filters,
+        'total_records': total_records,
+        'page_start': page_start,
+        'page_end': page_end,
+        'page_obj': page_obj,
+        'per_page': per_page,
+        'query_string': preserved_query_string,
+        'distribution_url': reverse('collection:distribution_dashboard'),
+        'files_url': reverse('collection:file_list'),
+        'retry_distribution_url': reverse('collection:distribution_log_retry_api'),
+        'retry_selected_url': reverse('collection:distribution_log_bulk_retry_api'),
+        'export_distribution_url': reverse('collection:distribution_export'),
+    }
+
+    return render(request, 'collection/distribution_dashboard.html', context)
+
+
+@operator_required
 def reprocess_file(request, pk):
     """Re-process a file: delete existing records and run the processor again.
 
@@ -423,8 +712,6 @@ def reprocess_file(request, pk):
     idempotent (no duplicates), then triggers the per-stream processor
     synchronously in a background thread so the request returns fast.
     """
-    import threading
-
     cdr_file = get_object_or_404(CDRFile, pk=pk)
     if cdr_file.status not in (CDRFile.Status.FAILED, CDRFile.Status.COMPLETED):
         messages.warning(
@@ -450,13 +737,9 @@ def reprocess_file(request, pk):
     cdr_file.processing_completed = None
     cdr_file.save()
 
-    # 3. Run the processor in a background thread so the UI doesn't block
-    from collection.signals import _process_sync
-    threading.Thread(
-        target=_process_sync,
-        args=(decoder, cdr_file.pk, cdr_file.filename),
-        daemon=True,
-    ).start()
+    # 3. Dispatch via Celery or queue worker (avoids ad-hoc threads)
+    from collection.signals import dispatch_processing
+    dispatch_processing(decoder, cdr_file.pk, cdr_file.filename)
 
     messages.success(
         request,
@@ -501,11 +784,11 @@ def _clear_records_for_file(cdr_file, decoder: str) -> int:
         from collection.models import DistributionLog
         DistributionLog.objects.filter(cdr_file=cdr_file).delete()
     except Exception:
-        pass
+        logger.debug("Could not clean distribution logs for file", exc_info=True)
     return count
 
 
-@login_required
+@operator_required
 def poll_sftp_now(request, source_id):
     """Manually trigger SFTP poll for a data source."""
     source = get_object_or_404(DataSource, pk=source_id)
@@ -527,3 +810,125 @@ def poll_sftp_now(request, source_id):
         messages.error(request, f'SFTP poll failed: {e}')
 
     return redirect('collection:file_list')
+
+
+# ---------------------------------------------------------------------------
+# Selective downstream replay
+# ---------------------------------------------------------------------------
+
+@login_required
+def output_portals_api(request):
+    """GET: return list of active OutputPortals for the replay portal dropdown."""
+    from portals.models import OutputPortal
+    portals = (
+        OutputPortal.objects
+        .filter(is_active=True)
+        .values('id', 'name', 'portal_type', 'output_format')
+        .order_by('name')
+    )
+    return JsonResponse({'portals': list(portals)})
+
+
+@login_required
+def replay_upload(request):
+    """POST: accept uploaded CDR files + portal_id and queue selective replay tasks.
+
+    For each uploaded file the view:
+    1. Looks up an existing COMPLETED CDRFile by filename (most recent match).
+    2. Saves the uploaded bytes to a per-session temp directory.
+    3. Queues replay_uploaded_file Celery task.
+
+    Returns JSON with per-file results so the UI can show inline status.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    portal_id = request.POST.get('portal_id')
+    if not portal_id:
+        return JsonResponse({'error': 'portal_id is required'}, status=400)
+
+    try:
+        portal_id = int(portal_id)
+    except (ValueError, TypeError):
+        return JsonResponse({'error': 'portal_id must be an integer'}, status=400)
+
+    from portals.models import OutputPortal
+    portal = OutputPortal.objects.filter(pk=portal_id, is_active=True).first()
+    if not portal:
+        return JsonResponse({'error': 'Portal not found or inactive'}, status=404)
+
+    uploaded_files = request.FILES.getlist('files')
+    if not uploaded_files:
+        return JsonResponse({'error': 'No files uploaded'}, status=400)
+
+    import tempfile, uuid
+    temp_dir = os.path.join(tempfile.gettempdir(), 'ump_replay')
+    os.makedirs(temp_dir, exist_ok=True)
+
+    from collection.tasks import replay_uploaded_file as replay_task
+
+    results = []
+    for f in uploaded_files:
+        filename = os.path.basename(f.name)
+
+        existing = (
+            CDRFile.objects
+            .filter(filename=filename)
+            .order_by('-created_at')
+            .first()
+        )
+
+        if not existing:
+            results.append({
+                'filename': filename,
+                'status': 'REJECTED',
+                'reason': 'No processing history — use normal Upload & Process',
+            })
+            continue
+
+        if existing.status == CDRFile.Status.FAILED:
+            results.append({
+                'filename': filename,
+                'status': 'REJECTED',
+                'reason': 'File previously failed — use Reprocess, not Replay',
+            })
+            continue
+
+        if existing.status != CDRFile.Status.COMPLETED:
+            results.append({
+                'filename': filename,
+                'status': 'REJECTED',
+                'reason': f'File is currently {existing.status} — wait for it to complete',
+            })
+            continue
+
+        suffix = os.path.splitext(filename)[1] or '.dat'
+        temp_path = os.path.join(temp_dir, f'{uuid.uuid4().hex}{suffix}')
+        try:
+            with open(temp_path, 'wb') as tmp:
+                for chunk in f.chunks():
+                    tmp.write(chunk)
+        except OSError as e:
+            results.append({
+                'filename': filename,
+                'status': 'ERROR',
+                'reason': f'Could not save temp file: {e}',
+            })
+            continue
+
+        task = replay_task.delay(
+            cdr_file_id=existing.pk,
+            temp_path=temp_path,
+            portal_id=portal_id,
+            requested_by=str(request.user),
+        )
+
+        results.append({
+            'filename': filename,
+            'status': 'QUEUED',
+            'task_id': task.id,
+            'original_file_id': existing.pk,
+            'portal': portal.name,
+        })
+
+    return JsonResponse({'results': results})

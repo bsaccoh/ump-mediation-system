@@ -23,9 +23,6 @@ def _sqlite_test_db():
 
 DATABASES = {
     'default':      _sqlite_test_db(),
-    'interconnect': _sqlite_test_db(),
-    'regulatory':   _sqlite_test_db(),
-    'roaming':      _sqlite_test_db(),
 }
 
 # Per-operator mediation databases (mirror the dynamic aliases settings.py

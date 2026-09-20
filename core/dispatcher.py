@@ -21,8 +21,34 @@ from xml.sax.saxutils import escape as xml_escape
 
 from core.enums import DecoderType
 from core.transports import get_transport
+from core.activity import log_activity
+from collection.services.storage import output_archive_storage_dir
+from collection.services.transfer import publish_bytes as _archive_publish_bytes
 
 logger = logging.getLogger(__name__)
+
+
+def _archive_output(payload: bytes, filename: str, portal, context: dict) -> str | None:
+    """Archive a copy of the delivered output into the date-partitioned archive tree.
+
+    Returns the archive path on success, None on failure (archive failures
+    must never block distribution).
+    """
+    try:
+        archive_dir = output_archive_storage_dir(
+            downstream=context.get('downstream'),
+            operator=context.get('operator'),
+            network_element=context.get('network_element'),
+            decoder_type=None,
+            cbs_substream=context.get('cbs_substream'),
+        )
+        staging_dir = os.path.join(archive_dir, 'staging')
+        result = _archive_publish_bytes(payload, staging_dir, archive_dir, filename)
+        logger.debug(f'Archived output {filename} to {result}')
+        return str(result)
+    except Exception:
+        logger.warning(f'Output archive failed for {filename}', exc_info=True)
+        return None
 
 
 def _get_record_model(decoder_type: str):
@@ -114,13 +140,18 @@ def _resolve(record, source_field: str):
 
 _EXCLUDED_DEFAULT_FIELDS = {'id', 'raw_data', 'created_at', 'updated_at', 'file', 'file_id'}
 
+# Per-model field list cache — computed once, reused for every record of that type.
+_FIELD_NAMES_CACHE: dict = {}
+
 
 def _default_field_names(record) -> list:
     """All concrete model fields except internal ones, in model declaration order."""
-    return [
-        f.name for f in record._meta.concrete_fields
-        if f.name not in _EXCLUDED_DEFAULT_FIELDS
-    ]
+    cls = type(record)
+    names = _FIELD_NAMES_CACHE.get(cls)
+    if names is None:
+        names = [f.name for f in cls._meta.concrete_fields if f.name not in _EXCLUDED_DEFAULT_FIELDS]
+        _FIELD_NAMES_CACHE[cls] = names
+    return names
 
 
 def _apply_mapping(record, mapping) -> 'OrderedDict[str, object]':
@@ -395,6 +426,8 @@ def dispatch_cdr_file(cdr_file_id: int) -> list:
                 'operator': getattr(cdr_file, 'operator_code', None),
                 'vendor': getattr(cdr_file, 'vendor', None),
                 'network_element': getattr(cdr_file, 'network_element', None),
+                'cbs_substream': getattr(cdr_file, 'cbs_substream', None),
+                'downstream': portal.name,
             }
 
             # Per-rule retry policy (falls back to module defaults)
@@ -419,6 +452,8 @@ def dispatch_cdr_file(cdr_file_id: int) -> list:
             if last_error is not None:
                 raise last_error
 
+            _archive_output(payload, filename, portal, deliver_context)
+
             DistributionLog.objects.create(
                 cdr_file=cdr_file, rule=rule, output_portal=portal,
                 filename=filename, record_count=record_count,
@@ -426,6 +461,11 @@ def dispatch_cdr_file(cdr_file_id: int) -> list:
                 status=DistributionLog.Status.SUCCESS,
                 retry_count=attempts - 1,
             )
+            log_activity('DISPATCH_RULE_SUCCESS', 'DISTRIBUTION',
+                         message=f'Rule {rule.name} -> {portal.name}: {record_count} records',
+                         stream=cdr_file.decoder_type or '',
+                         operator=cdr_file.operator_code or '',
+                         cdr_file=cdr_file)
             summaries.append({
                 'rule': rule.name, 'portal': portal.name,
                 'records': record_count, 'bytes': len(payload),
@@ -440,26 +480,32 @@ def dispatch_cdr_file(cdr_file_id: int) -> list:
                 error=str(e)[:1000],
                 retry_count=max(0, int(getattr(rule, 'max_retries', None) or DELIVERY_MAX_ATTEMPTS) - 1),
             )
+            log_activity('DISPATCH_RULE_FAILED', 'DISTRIBUTION', level='ERROR',
+                         message=f'Rule {rule.name} failed: {e}',
+                         stream=cdr_file.decoder_type or '',
+                         operator=cdr_file.operator_code or '',
+                         cdr_file=cdr_file)
             summaries.append({'rule': rule.name, 'status': 'FAILED', 'error': str(e)[:200]})
 
     return summaries
 
 
-def dispatch_in_memory(cdr_file, records: list) -> list:
-    """Decode-only dispatch: render + deliver output directly from in-memory
-    decoded records (saved=False), with NO database round-trip.
+def dispatch_selective(cdr_file, records: list, portal_id: int) -> list:
+    """Replay delivery to ONE specific output portal only.
 
-    Used when settings.CDR_PERSIST_RECORDS is False. Per-rule ``filter_logic``
-    is applied in memory via :func:`_record_matches` (e.g. a postpaid-only
-    downstream gets only its rows). CSV/JSON/TEXT/XML are supported; RAW
-    delivers the original source file (unfiltered).
+    Identical to dispatch_in_memory() but filters DistributionRule queryset to
+    rules that target ``portal_id``.  The regulatory tap is intentionally
+    omitted — aggregation already ran when the file was first processed.
+
+    Used by the selective downstream replay feature so a single downstream can
+    receive missing files without re-triggering delivery to other portals.
     """
     from collection.models import DistributionLog
     from portals.models import DistributionRule
 
     rules = (
         DistributionRule.objects
-        .filter(is_active=True)
+        .filter(is_active=True, output_portal_id=portal_id)
         .select_related('output_portal', 'output_schema')
         .order_by('priority', 'name')
     )
@@ -467,6 +513,7 @@ def dispatch_in_memory(cdr_file, records: list) -> list:
         'operator': getattr(cdr_file, 'operator_code', None),
         'vendor': getattr(cdr_file, 'vendor', None),
         'network_element': getattr(cdr_file, 'network_element', None),
+        'cbs_substream': getattr(cdr_file, 'cbs_substream', None),
     }
 
     summaries = []
@@ -475,21 +522,17 @@ def dispatch_in_memory(cdr_file, records: list) -> list:
             continue
         portal = rule.output_portal
         schema = rule.output_schema
+        deliver_context['downstream'] = portal.name if portal else None
         if not portal or not portal.is_active:
             summaries.append({'rule': rule.name, 'status': 'SKIPPED'})
             continue
         try:
             fkw = rule.filter_kwargs()
             if portal.output_format == 'RAW':
-                if fkw:
-                    logger.warning(
-                        f'dispatch_in_memory: rule {rule.name} has a filter but '
-                        f'RAW output delivers the source file unfiltered.')
                 with open(cdr_file.file_path, 'rb') as f:
                     payload = f.read()
                 record_count = len(records)
             else:
-                # Apply the rule's filter in memory (e.g. prepaid_flag=POSTPAID).
                 rule_records = (
                     [r for r in records if _record_matches(r, fkw)] if fkw else records
                 )
@@ -508,6 +551,126 @@ def dispatch_in_memory(cdr_file, records: list) -> list:
                     record_count = len(rows)
             filename = _build_filename(cdr_file, portal, portal.output_format)
             get_transport(portal.portal_type).deliver(payload, filename, portal, deliver_context)
+            _archive_output(payload, filename, portal, deliver_context)
+            DistributionLog.objects.create(
+                cdr_file=cdr_file, rule=rule, output_portal=portal,
+                filename=filename, record_count=record_count, file_size=len(payload),
+                status=DistributionLog.Status.SUCCESS,
+            )
+            summaries.append({'rule': rule.name, 'records': record_count, 'status': 'SUCCESS'})
+        except Exception as e:
+            logger.error(f'dispatch_selective failed for rule {rule.name}: {e}', exc_info=True)
+            try:
+                DistributionLog.objects.create(
+                    cdr_file=cdr_file, rule=rule, output_portal=portal,
+                    filename=_build_filename(cdr_file, portal, portal.output_format),
+                    record_count=0, file_size=0,
+                    status=DistributionLog.Status.FAILED,
+                    error=str(e)[:500],
+                )
+            except Exception:
+                logger.debug('Could not create failure DistributionLog', exc_info=True)
+            summaries.append({'rule': rule.name, 'status': 'FAILED', 'error': str(e)[:200]})
+
+    return summaries
+
+
+def dispatch_in_memory(cdr_file, records: list) -> list:
+    """Decode-only dispatch: render + deliver output directly from in-memory
+    decoded records (saved=False), with NO database round-trip.
+
+    Used when settings.CDR_PERSIST_RECORDS is False. Per-rule ``filter_logic``
+    is applied in memory via :func:`_record_matches` (e.g. a postpaid-only
+    downstream gets only its rows). CSV/JSON/TEXT/XML are supported; RAW
+    delivers the original source file (unfiltered).
+    """
+    from collection.models import DistributionLog
+    from portals.models import DistributionRule
+
+    if not records:
+        logger.warning(
+            f'dispatch_in_memory: {cdr_file.filename} — skipping dispatch, records list is empty '
+            f'(RAW portals will still receive the source file via their rules below)'
+        )
+
+    rules = (
+        DistributionRule.objects
+        .filter(is_active=True)
+        .select_related('output_portal', 'output_schema')
+        .order_by('priority', 'name')
+    )
+    deliver_context = {
+        'operator': getattr(cdr_file, 'operator_code', None),
+        'vendor': getattr(cdr_file, 'vendor', None),
+        'network_element': getattr(cdr_file, 'network_element', None),
+        'cbs_substream': getattr(cdr_file, 'cbs_substream', None),
+    }
+
+    dispatch_start = time.time()
+    # Render cache: same (output_format, mapping, fkw, schema options) → reuse payload.
+    # Avoids re-serialising the same 100k+ records for every rule that shares the schema.
+    _render_cache: dict = {}
+
+    def _cached_render(rule_records, fkw, schema, portal_fmt):
+        mapping = (schema.mapping_json if schema else {}) or {}
+        if isinstance(mapping, str):
+            try:
+                mapping = json.loads(mapping)
+            except Exception:
+                mapping = {}
+        # Key is fully content-based so two rules with different schema PKs but
+        # identical mapping/format/fkw share the same rendered payload.
+        cache_key = (
+            (portal_fmt or 'CSV').upper(),
+            json.dumps(mapping, sort_keys=True) if mapping else '',
+            json.dumps(fkw,     sort_keys=True) if fkw     else '',
+            (schema.delimiter or ',')           if schema else ',',
+            bool(schema.include_header)         if schema else True,
+            bool(schema.quote_all)              if schema else False,
+            (schema.line_terminator or '\n')    if schema else '\n',
+        )
+        if cache_key in _render_cache:
+            return _render_cache[cache_key]
+        fmt = (portal_fmt or 'CSV').upper()
+        if fmt == 'CSV':
+            result = _render_records_csv(rule_records, mapping, schema)
+        else:
+            rows = [_apply_mapping(rec, mapping) for rec in rule_records]
+            result = (_render(rows, portal_fmt, schema), len(rows))
+        _render_cache[cache_key] = result
+        return result
+
+    summaries = []
+    for rule in rules:
+        if not _stream_matches(rule.stream_type, cdr_file.decoder_type):
+            continue
+        portal = rule.output_portal
+        schema = rule.output_schema
+        deliver_context['downstream'] = portal.name if portal else None
+        if not portal or not portal.is_active:
+            summaries.append({'rule': rule.name, 'status': 'SKIPPED'})
+            continue
+        try:
+            fkw = rule.filter_kwargs()
+            if portal.output_format == 'RAW':
+                if fkw:
+                    logger.warning(
+                        f'dispatch_in_memory: rule {rule.name} has a filter but '
+                        f'RAW output delivers the source file unfiltered.')
+                with open(cdr_file.file_path, 'rb') as f:
+                    payload = f.read()
+                record_count = len(records)
+            elif not records:
+                summaries.append({'rule': rule.name, 'status': 'SKIPPED', 'reason': 'no_records'})
+                continue
+            else:
+                rule_records = (
+                    [r for r in records if _record_matches(r, fkw)] if fkw else records
+                )
+                payload, record_count = _cached_render(rule_records, fkw, schema, portal.output_format)
+            filename = _build_filename(cdr_file, portal, portal.output_format)
+            get_transport(portal.portal_type).deliver(payload, filename, portal, deliver_context)
+            _archive_output(payload, filename, portal, deliver_context)
             DistributionLog.objects.create(
                 cdr_file=cdr_file, rule=rule, output_portal=portal,
                 filename=filename, record_count=record_count, file_size=len(payload),
@@ -516,5 +679,74 @@ def dispatch_in_memory(cdr_file, records: list) -> list:
             summaries.append({'rule': rule.name, 'records': record_count, 'status': 'SUCCESS'})
         except Exception as e:
             logger.error(f'dispatch_in_memory failed for rule {rule.name}: {e}', exc_info=True)
+            try:
+                DistributionLog.objects.create(
+                    cdr_file=cdr_file, rule=rule, output_portal=portal,
+                    filename=_build_filename(cdr_file, portal, portal.output_format),
+                    record_count=0, file_size=0,
+                    status=DistributionLog.Status.FAILED,
+                    error=str(e)[:500],
+                )
+            except Exception:
+                logger.debug('Could not create failure DistributionLog', exc_info=True)
             summaries.append({'rule': rule.name, 'status': 'FAILED', 'error': str(e)[:200]})
+
+    cache_hits = len(_render_cache)
+    logger.info(
+        f'dispatch_in_memory: {len(summaries)} rules in {time.time() - dispatch_start:.2f}s '
+        f'({cache_hits} unique CSV render(s) for {len(records)} records)'
+    )
+
+    # Regulatory tap — NatCA/NRA aggregation.
+    # Runs ONLY when REGULATORY_TAP_ENABLED=True (off by default).
+    # Always fires in a background thread so dispatch latency is zero.
+    from django.conf import settings as _cfg
+    if getattr(_cfg, 'REGULATORY_TAP_ENABLED', False):
+        _fire_regulatory_tap(cdr_file, records)
+
     return summaries
+
+
+def _fire_regulatory_tap(cdr_file, records: list) -> None:
+    """Launch the regulatory aggregation tap in a daemon thread.
+
+    The thread receives the already-decoded records list by reference.
+    Dispatch has already returned by the time the thread runs, so there
+    is zero impact on processing latency.  DB connections are managed
+    per-thread by Django automatically.
+    """
+    import threading
+    from django.db import close_old_connections
+
+    cdr_file_id = cdr_file.pk
+    operator_code = getattr(cdr_file, 'operator_code', None)
+
+    def _run():
+        close_old_connections()
+        try:
+            from core.operator_context import set_operator, clear_operator
+            if operator_code:
+                set_operator(operator_code)
+            try:
+                from regulatory.services.aggregation import process_regulatory_tap
+                from collection.models import CDRFile as _CDRFile
+                _cf = _CDRFile.objects.filter(pk=cdr_file_id).first() or cdr_file
+                tap_start = time.time()
+                stats = process_regulatory_tap(_cf, records)
+                logger.info(
+                    f'Regulatory tap [{cdr_file_id}] done in {time.time() - tap_start:.2f}s — '
+                    f'{stats.get("total_records", 0)} records, '
+                    f'{stats.get("rated_records", 0)} rated, '
+                    f'{stats.get("error_records", 0)} errors'
+                )
+            finally:
+                if operator_code:
+                    clear_operator()
+        except Exception:
+            logger.exception(f'Regulatory tap [{cdr_file_id}] failed — mediation unaffected')
+        finally:
+            close_old_connections()
+
+    thread = threading.Thread(target=_run, name=f'reg-tap-{cdr_file_id}', daemon=True)
+    thread.start()
+    logger.debug(f'Regulatory tap thread started for CDRFile {cdr_file_id}')

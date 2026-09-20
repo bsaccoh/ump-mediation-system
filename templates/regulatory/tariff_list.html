@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Tariff Management | NatCA{% endblock %}
+{% block page_title %}Tariff Management{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'regulatory/css/tariff_management.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="regulatory-page tariff-management-page">
+    <nav class="regulatory-breadcrumb" aria-label="Breadcrumb">
+        <span>NatCA</span><i class="bi bi-chevron-right"></i><span>Tariff Management</span>
+    </nav>
+
+    <div class="regulatory-page-header">
+        <div>
+            <h1>Tariff Management</h1>
+            <p>Manage operator tariffs with approval workflow</p>
+        </div>
+        {% if request.user.is_superuser or request.user.is_regulatory_admin %}
+        <a href="{% url 'regulatory:tariff_create' %}" class="btn btn-primary btn-sm regulatory-primary-action">
+            <i class="bi bi-plus-lg"></i> Create Tariff
+        </a>
+        {% endif %}
+    </div>
+
+    <section class="regulatory-kpi-grid" aria-label="Tariff summary">
+        <div class="regulatory-kpi-card"><span class="kpi-icon blue"><i class="bi bi-receipt"></i></span><div><small>Total Tariffs</small><strong>{{ kpis.total }}</strong></div></div>
+        <div class="regulatory-kpi-card"><span class="kpi-icon purple"><i class="bi bi-send-check"></i></span><div><small>Submitted</small><strong>{{ kpis.submitted }}</strong></div></div>
+        <div class="regulatory-kpi-card"><span class="kpi-icon orange"><i class="bi bi-hourglass-split"></i></span><div><small>Under Review</small><strong>{{ kpis.reviewed }}</strong></div></div>
+        <div class="regulatory-kpi-card"><span class="kpi-icon green"><i class="bi bi-patch-check"></i></span><div><small>Approved</small><strong>{{ kpis.approved }}</strong></div></div>
+        <div class="regulatory-kpi-card"><span class="kpi-icon red"><i class="bi bi-x-octagon"></i></span><div><small>Expired / Deactivated</small><strong>{{ kpis.expired }}</strong></div></div>
+    </section>
+
+    <form method="get" class="regulatory-filter-bar" aria-label="Filter tariffs">
+        <select name="operator" class="form-select form-select-sm" aria-label="Operator">
+            <option value="">All Operators</option>
+            {% for code, name in operators %}<option value="{{ code }}" {% if filter_operator == code %}selected{% endif %}>{{ name }}</option>{% endfor %}
+        </select>
+        <select name="service" class="form-select form-select-sm" aria-label="Service">
+            <option value="">All Services</option>
+            {% for value, label in service_types %}<option value="{{ value }}" {% if filter_service == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        <select name="traffic" class="form-select form-select-sm" aria-label="Traffic type">
+            <option value="">All Traffic Types</option>
+            {% for value, label in traffic_types %}<option value="{{ value }}" {% if filter_traffic == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        <select name="status" class="form-select form-select-sm" aria-label="Status">
+            <option value="">All Statuses</option>
+            {% for value, label in status_choices %}<option value="{{ value }}" {% if filter_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        <select name="sort" class="form-select form-select-sm" aria-label="Sort tariffs">
+            <option value="name" {% if sort == 'name' %}selected{% endif %}>Name (A–Z)</option>
+            <option value="-name" {% if sort == '-name' %}selected{% endif %}>Name (Z–A)</option>
+            <option value="operator" {% if sort == 'operator' %}selected{% endif %}>Operator</option>
+            <option value="effective" {% if sort == 'effective' %}selected{% endif %}>Newest effective date</option>
+            <option value="status" {% if sort == 'status' %}selected{% endif %}>Status</option>
+        </select>
+        <div class="regulatory-search-wrap"><i class="bi bi-search"></i><input name="search" value="{{ filter_search }}" class="form-control form-control-sm" placeholder="Search tariffs…" aria-label="Search tariffs"></div>
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Filter</button>
+        <a href="{% url 'regulatory:tariff_list' %}" class="btn btn-outline-secondary btn-sm">Clear</a>
+    </form>
+
+    <section class="regulatory-table-card">
+        <div class="table-responsive">
+            <table class="table table-hover regulatory-data-table mb-0">
+                <thead><tr><th>Name</th><th>Operator</th><th>Service</th><th>Traffic Type</th><th>Subscriber</th><th class="text-end">Rate</th><th>Unit</th><th>Effective</th><th>Ver</th><th>Status</th><th class="text-center">Actions</th></tr></thead>
+                <tbody>
+                    {% for tariff in tariffs %}
+                    <tr>
+                        <td class="fw-semibold">{{ tariff.name }}</td><td>{{ tariff.operator_code|capfirst }}</td><td>{{ tariff.get_service_type_display }}</td><td>{{ tariff.get_traffic_type_display }}</td><td>{{ tariff.get_subscriber_type_display }}</td>
+                        <td class="text-end">{{ tariff.currency }} {{ tariff.rate|floatformat:2 }}</td><td>{{ tariff.get_charging_unit_display }}</td>
+                        <td>{{ tariff.effective_from|date:"d M Y" }}</td><td>v{{ tariff.version }}</td>
+                        <td><span class="status-badge status-{{ tariff.status|lower }}">{{ tariff.get_status_display }}</span></td>
+                        <td><div class="regulatory-row-actions">
+                            <a class="icon-action" href="{% url 'regulatory:tariff_detail' tariff.pk %}" title="View tariff" aria-label="View tariff"><i class="bi bi-eye"></i></a>
+                            {% if request.user.is_superuser or request.user.is_regulatory_admin %}
+                                {% if tariff.status == 'DRAFT' %}
+                                <a class="icon-action" href="{% url 'regulatory:tariff_edit' tariff.pk %}" title="Edit tariff" aria-label="Edit tariff"><i class="bi bi-pencil"></i></a>
+                                <form method="post" action="{% url 'regulatory:tariff_workflow' tariff.pk 'submit' %}">{% csrf_token %}<button class="icon-action" title="Submit for review" aria-label="Submit for review"><i class="bi bi-send"></i></button></form>
+                                {% elif tariff.status == 'SUBMITTED' %}
+                                <form method="post" action="{% url 'regulatory:tariff_workflow' tariff.pk 'review' %}">{% csrf_token %}<button class="icon-action" title="Mark under review" aria-label="Mark under review"><i class="bi bi-check2"></i></button></form>
+                                <form method="post" action="{% url 'regulatory:tariff_workflow' tariff.pk 'reject' %}">{% csrf_token %}<button class="icon-action danger" title="Return to draft" aria-label="Return to draft"><i class="bi bi-x-lg"></i></button></form>
+                                {% elif tariff.status == 'REVIEWED' %}
+                                <form method="post" action="{% url 'regulatory:tariff_workflow' tariff.pk 'approve' %}">{% csrf_token %}<button class="icon-action success" title="Approve tariff" aria-label="Approve tariff"><i class="bi bi-patch-check"></i></button></form>
+                                <form method="post" action="{% url 'regulatory:tariff_workflow' tariff.pk 'reject' %}">{% csrf_token %}<button class="icon-action danger" title="Return to draft" aria-label="Return to draft"><i class="bi bi-x-lg"></i></button></form>
+                                {% elif tariff.status == 'APPROVED' %}
+                                <form method="post" action="{% url 'regulatory:tariff_workflow' tariff.pk 'activate' %}">{% csrf_token %}<button class="icon-action success" title="Activate tariff" aria-label="Activate tariff"><i class="bi bi-lightning"></i></button></form>
+                                {% elif tariff.status == 'ACTIVE' %}
+                                <form method="post" action="{% url 'regulatory:tariff_new_version' tariff.pk %}">{% csrf_token %}<button class="icon-action" title="Create new version" aria-label="Create new version"><i class="bi bi-files"></i></button></form>
+                                <form method="post" action="{% url 'regulatory:tariff_deactivate' tariff.pk %}">{% csrf_token %}<button class="icon-action danger" title="Deactivate tariff" aria-label="Deactivate tariff"><i class="bi bi-slash-circle"></i></button></form>
+                                {% endif %}
+                            {% endif %}
+                        </div></td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="11"><div class="regulatory-empty-state"><i class="bi bi-receipt-cutoff"></i><strong>No tariffs found</strong><span>Adjust the filters or create a tariff to begin the approval workflow.</span>{% if request.user.is_superuser or request.user.is_regulatory_admin %}<a href="{% url 'regulatory:tariff_create' %}" class="btn btn-primary btn-sm">Create Tariff</a>{% endif %}</div></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="regulatory-table-footer">
+            <span>Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} entries</span>
+            <form method="get" class="page-size-form">
+                {% for key, value in request.GET.items %}{% if key != 'page_size' and key != 'page' %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endif %}{% endfor %}
+                <select name="page_size" class="form-select form-select-sm" onchange="this.form.submit()" aria-label="Rows per page"><option value="15" {% if page_size == 15 %}selected{% endif %}>15 per page</option><option value="25" {% if page_size == 25 %}selected{% endif %}>25 per page</option><option value="50" {% if page_size == 50 %}selected{% endif %}>50 per page</option><option value="100" {% if page_size == 100 %}selected{% endif %}>100 per page</option></select>
+            </form>
+            {% if page_obj.paginator.num_pages > 1 %}<nav aria-label="Tariff pagination"><ul class="pagination pagination-sm mb-0"><li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">{% if page_obj.has_previous %}<a class="page-link" href="?{{ query_string }}{% if query_string %}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>{% else %}<span class="page-link">Previous</span>{% endif %}</li>{% for page_number in page_obj.paginator.page_range %}{% if page_number == page_obj.number %}<li class="page-item active"><span class="page-link">{{ page_number }}</span></li>{% elif page_number <= 3 or page_number > page_obj.paginator.num_pages|add:'-3' or page_number >= page_obj.number|add:'-1' and page_number <= page_obj.number|add:'1' %}<li class="page-item"><a class="page-link" href="?{{ query_string }}{% if query_string %}&{% endif %}page={{ page_number }}">{{ page_number }}</a></li>{% endif %}{% endfor %}<li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">{% if page_obj.has_next %}<a class="page-link" href="?{{ query_string }}{% if query_string %}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>{% else %}<span class="page-link">Next</span>{% endif %}</li></ul></nav>{% endif %}
+        </div>
+    </section>
+</div>
+{% endblock %}

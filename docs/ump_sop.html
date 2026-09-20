@@ -1,0 +1,1324 @@
+<title>UMP Service Configuration SOP</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --navy: #1B2A4A;
+  --steel: #2D5F8A;
+  --steel-light: #3A7CB8;
+  --ice: #E8EEF4;
+  --red: #D4432F;
+  --green: #2A7B3F;
+  --amber: #C68A00;
+  --paper: #F7F8FA;
+  --ink: #1B2A4A;
+  --ink-secondary: #4A5E78;
+  --border: #D0D8E4;
+  --surface: #FFFFFF;
+  --surface-alt: #F0F3F7;
+  --code-bg: #EDF1F7;
+  --toc-bg: #F4F6FA;
+  --toc-active: #2D5F8A;
+  --highlight: #FFF8E1;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --navy: #C8D6E8;
+    --steel: #6AADDF;
+    --steel-light: #7CC0F0;
+    --ice: #1A2233;
+    --paper: #0F1520;
+    --ink: #D8E2EE;
+    --ink-secondary: #8A9BB4;
+    --border: #2A3A52;
+    --surface: #162030;
+    --surface-alt: #1A2840;
+    --code-bg: #1A2840;
+    --toc-bg: #131D2E;
+    --toc-active: #6AADDF;
+    --highlight: #2A2510;
+    --red: #E86A5A;
+    --green: #4EBB6A;
+    --amber: #E8B840;
+  }
+}
+:root[data-theme="dark"] {
+  --navy: #C8D6E8;
+  --steel: #6AADDF;
+  --steel-light: #7CC0F0;
+  --ice: #1A2233;
+  --paper: #0F1520;
+  --ink: #D8E2EE;
+  --ink-secondary: #8A9BB4;
+  --border: #2A3A52;
+  --surface: #162030;
+  --surface-alt: #1A2840;
+  --code-bg: #1A2840;
+  --toc-bg: #131D2E;
+  --toc-active: #6AADDF;
+  --highlight: #2A2510;
+  --red: #E86A5A;
+  --green: #4EBB6A;
+  --amber: #E8B840;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Source Sans 3', 'Source Sans Pro', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+  margin: 0;
+  display: flex;
+}
+
+/* ── Sidebar TOC ── */
+.toc-sidebar {
+  position: fixed;
+  top: 0; left: 0;
+  width: 260px;
+  height: 100vh;
+  background: var(--toc-bg);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 24px 0 40px;
+  z-index: 100;
+  scrollbar-width: thin;
+}
+.toc-brand {
+  padding: 0 20px 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+.toc-brand h2 {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--steel);
+  margin: 0 0 2px;
+}
+.toc-brand .doc-id {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--ink-secondary);
+  letter-spacing: 0.04em;
+}
+.toc-sidebar nav a {
+  display: block;
+  padding: 5px 20px 5px 24px;
+  color: var(--ink-secondary);
+  text-decoration: none;
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.4;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.toc-sidebar nav a:hover,
+.toc-sidebar nav a.active {
+  color: var(--toc-active);
+  border-left-color: var(--toc-active);
+  background: var(--surface);
+}
+.toc-sidebar nav .toc-section {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+  padding: 14px 20px 4px 24px;
+  margin-top: 4px;
+}
+
+/* ── Main Content ── */
+.main-content {
+  margin-left: 260px;
+  max-width: 860px;
+  padding: 40px 48px 80px;
+  flex: 1;
+}
+
+/* ── Cover Header ── */
+.cover {
+  border: 2px solid var(--steel);
+  border-radius: 2px;
+  padding: 36px 40px;
+  margin-bottom: 40px;
+  background: var(--surface);
+}
+.cover-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--steel);
+  margin-bottom: 8px;
+}
+.cover h1 {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 6px;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+.cover .subtitle {
+  font-size: 16px;
+  color: var(--ink-secondary);
+  margin-bottom: 20px;
+}
+.cover-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.cover-meta dt {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-secondary);
+  margin-bottom: 2px;
+}
+.cover-meta dd {
+  margin: 0 0 8px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* ── Section Headings ── */
+h2.section-heading {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 48px 0 8px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--steel);
+}
+h3.procedure-title {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--steel);
+  margin: 32px 0 12px;
+}
+h4.sub-procedure {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 20px 0 8px;
+}
+
+/* ── Procedure Steps ── */
+.step-block {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--steel);
+  border-radius: 2px;
+}
+.step-num {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--steel);
+  min-width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ice);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.step-body { flex: 1; }
+.step-body p { margin: 0 0 6px; }
+
+/* ── Config Tables ── */
+.config-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0 20px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.config-table th {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 8px 10px;
+  background: var(--steel);
+  color: #FFFFFF;
+  white-space: nowrap;
+}
+.config-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.config-table tr:nth-child(even) td {
+  background: var(--surface-alt);
+}
+.config-table code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  background: var(--code-bg);
+  padding: 1px 5px;
+  border-radius: 2px;
+}
+.config-table .req {
+  color: var(--red);
+  font-weight: 700;
+  font-size: 11px;
+}
+.config-table .opt {
+  color: var(--ink-secondary);
+  font-size: 11px;
+}
+
+/* ── Callout Boxes ── */
+.callout {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  margin: 16px 0;
+  border-radius: 2px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.callout-icon {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding-top: 1px;
+}
+.callout.note {
+  background: var(--ice);
+  border-left: 3px solid var(--steel);
+}
+.callout.note .callout-icon { color: var(--steel); }
+.callout.caution {
+  background: var(--highlight);
+  border-left: 3px solid var(--amber);
+}
+.callout.caution .callout-icon { color: var(--amber); }
+.callout.warning {
+  background: #FDE8E6;
+  border-left: 3px solid var(--red);
+}
+.callout.warning .callout-icon { color: var(--red); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .callout.warning { background: #2A1515; }
+}
+:root[data-theme="dark"] .callout.warning { background: #2A1515; }
+
+/* ── Code Blocks ── */
+pre.cmd {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  padding: 12px 16px;
+  border-radius: 2px;
+  overflow-x: auto;
+  margin: 10px 0 16px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  background: var(--code-bg);
+  padding: 1px 5px;
+  border-radius: 2px;
+}
+
+/* ── Flow Diagram ── */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin: 20px 0;
+  overflow-x: auto;
+  padding: 12px 0;
+}
+.flow-box {
+  padding: 10px 16px;
+  background: var(--surface);
+  border: 2px solid var(--steel);
+  border-radius: 3px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--ink);
+  min-width: 90px;
+}
+.flow-box.active {
+  background: var(--steel);
+  color: #FFF;
+}
+.flow-arrow {
+  font-size: 18px;
+  color: var(--steel);
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+/* ── Badge ── */
+.badge {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+.badge-req { background: #FDECEA; color: var(--red); }
+.badge-opt { background: var(--ice); color: var(--ink-secondary); }
+.badge-default { background: var(--ice); color: var(--steel); }
+
+/* ── Revision Table ── */
+.revision-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 8px 0 24px;
+}
+.revision-table th {
+  text-align: left;
+  padding: 6px 10px;
+  background: var(--surface-alt);
+  border-bottom: 2px solid var(--border);
+  font-weight: 600;
+}
+.revision-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .toc-sidebar { display: none; }
+  .main-content { margin-left: 0; padding: 24px 20px 60px; }
+}
+
+/* ── Scroll offsets for anchors ── */
+[id] { scroll-margin-top: 20px; }
+
+/* ── Print ── */
+@media print {
+  .toc-sidebar { display: none; }
+  .main-content { margin-left: 0; max-width: 100%; }
+  .step-block { break-inside: avoid; }
+}
+</style>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- SIDEBAR TOC -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<aside class="toc-sidebar">
+  <div class="toc-brand">
+    <h2>UMP Mediation</h2>
+    <div class="doc-id">SOP-UMP-CFG-001 &middot; Rev 1.0</div>
+  </div>
+  <nav>
+    <div class="toc-section">General</div>
+    <a href="#purpose">Purpose &amp; Scope</a>
+    <a href="#prereqs">Prerequisites</a>
+    <a href="#arch">System Architecture</a>
+    <a href="#pipeline">Processing Pipeline</a>
+
+    <div class="toc-section">Reference Data</div>
+    <a href="#operators">Operators</a>
+    <a href="#source-patterns">Source Patterns</a>
+    <a href="#mcc-mnc">MCC / MNC</a>
+    <a href="#imsi-prefix">IMSI Prefix</a>
+    <a href="#numbering-plan">Numbering Plan</a>
+    <a href="#trunks">Trunk Groups</a>
+    <a href="#vendors">Vendors</a>
+
+    <div class="toc-section">Portals &amp; Collection</div>
+    <a href="#data-sources">Data Sources</a>
+    <a href="#input-portals">Input Portals</a>
+    <a href="#output-portals">Output Portals</a>
+    <a href="#output-schemas">Output Schemas</a>
+    <a href="#dist-rules">Distribution Rules</a>
+    <a href="#passthrough">Pass-Through Mode</a>
+
+    <div class="toc-section">Processing</div>
+    <a href="#file-upload">File Upload</a>
+    <a href="#decoder">Decoder Service</a>
+    <a href="#distributor">Distributor Service</a>
+    <a href="#collector">Collector Service</a>
+
+    <div class="toc-section">Business Logic</div>
+    <a href="#business-rules">Business Rules</a>
+    <a href="#scripts-ide">Scripts IDE</a>
+
+    <div class="toc-section">Operations</div>
+    <a href="#dashboard">Dashboard</a>
+    <a href="#file-registry">File Registry</a>
+    <a href="#reports">Reports &amp; Analytics</a>
+    <a href="#activity-log">Activity Log</a>
+    <a href="#users">User Management</a>
+
+    <div class="toc-section">Appendix</div>
+    <a href="#env-vars">Environment Variables</a>
+    <a href="#systemd">Systemd Services</a>
+    <a href="#verification">Post-Config Verification</a>
+    <a href="#revision">Revision History</a>
+  </nav>
+</aside>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- MAIN CONTENT -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<main class="main-content">
+
+<!-- Cover -->
+<div class="cover" id="cover">
+  <div class="cover-eyebrow">Standard Operating Procedure</div>
+  <h1>UMP Mediation System &mdash; Service Configuration Guide</h1>
+  <p class="subtitle">Step-by-step procedures for initial service configuration, reference data provisioning, portal setup, and distribution rule management.</p>
+  <dl class="cover-meta">
+    <div><dt>Document ID</dt><dd>SOP-UMP-CFG-001</dd></div>
+    <div><dt>Revision</dt><dd>1.0</dd></div>
+    <div><dt>Classification</dt><dd>Internal &mdash; Operations</dd></div>
+    <div><dt>Effective Date</dt><dd>2026-09-08</dd></div>
+    <div><dt>Platform</dt><dd>Django 4.2 / Python 3.11</dd></div>
+    <div><dt>Database</dt><dd>PostgreSQL 15 (prod) / SQLite (dev)</dd></div>
+  </dl>
+</div>
+
+<!-- ═══════════════════ 1. PURPOSE ═══════════════════ -->
+<h2 class="section-heading" id="purpose">1 &nbsp; Purpose &amp; Scope</h2>
+<p>This SOP provides the step-by-step procedures required to configure the <strong>Universal Mediation Platform (UMP)</strong> for production service. It covers all UI-configurable services from initial reference data provisioning through to end-to-end CDR distribution.</p>
+
+<p>The document is organized in the order a new deployment should be configured:</p>
+<ol>
+  <li><strong>Reference Data</strong> &mdash; Operators, source patterns, numbering plan, MCC/MNC, IMSI prefixes, trunk groups, vendors</li>
+  <li><strong>Portals &amp; Collection</strong> &mdash; Data sources, input portals, output portals, output schemas, distribution rules</li>
+  <li><strong>Processing Services</strong> &mdash; File upload, decoder, distributor, collector daemons</li>
+  <li><strong>Business Logic</strong> &mdash; Validation, enrichment, transformation, filtering rules</li>
+  <li><strong>Operations</strong> &mdash; Dashboard, file registry, reports, user management</li>
+</ol>
+
+<div class="callout note">
+  <div class="callout-icon">Note</div>
+  <div>This SOP assumes the application has been deployed and the database schema has been applied via <code>python manage.py migrate</code>. For installation procedures, refer to the Deployment Guide (SOP-UMP-DEP-001).</div>
+</div>
+
+<!-- ═══════════════════ 2. PREREQUISITES ═══════════════════ -->
+<h2 class="section-heading" id="prereqs">2 &nbsp; Prerequisites</h2>
+
+<table class="config-table">
+  <thead><tr><th>Item</th><th>Requirement</th><th>Verification</th></tr></thead>
+  <tbody>
+    <tr><td>Application Status</td><td>UMP web application running and accessible</td><td>Navigate to <code>http://&lt;host&gt;:8000/</code></td></tr>
+    <tr><td>Database</td><td>PostgreSQL 15+ (production) or SQLite (development)</td><td><code>python manage.py check --database default</code></td></tr>
+    <tr><td>Migrations</td><td>All migrations applied</td><td><code>python manage.py showmigrations --list</code></td></tr>
+    <tr><td>Superuser</td><td>At least one admin account exists</td><td><code>python manage.py createsuperuser</code> if needed</td></tr>
+    <tr><td>Environment</td><td><code>DJANGO_SECRET_KEY</code>, <code>DB_PASSWORD</code> set</td><td>Application starts without <code>ImproperlyConfigured</code></td></tr>
+    <tr><td>Dependencies</td><td><code>cryptography</code>, <code>paramiko</code>, <code>psycopg2-binary</code></td><td><code>pip list | grep -i cryptography</code></td></tr>
+  </tbody>
+</table>
+
+<!-- ═══════════════════ 3. ARCHITECTURE ═══════════════════ -->
+<h2 class="section-heading" id="arch">3 &nbsp; System Architecture</h2>
+
+<p>The UMP platform is composed of a Django web application for configuration and monitoring, and three long-running background services for automated CDR processing:</p>
+
+<table class="config-table">
+  <thead><tr><th>Component</th><th>Type</th><th>Function</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Web Application</strong></td><td>Gunicorn + Nginx</td><td>Configuration UI, file upload, dashboards, reports, admin panel</td></tr>
+    <tr><td><strong>Collector</strong></td><td>Systemd daemon</td><td>Polls input portals (SFTP/FTP/local) for new CDR files</td></tr>
+    <tr><td><strong>Decoder</strong></td><td>Systemd daemon</td><td>Decodes collected files (ASN.1, CSV, etc.) into normalized records</td></tr>
+    <tr><td><strong>Distributor</strong></td><td>Systemd daemon</td><td>Delivers decoded files to output portals per distribution rules</td></tr>
+  </tbody>
+</table>
+
+<!-- ═══════════════════ 4. PIPELINE ═══════════════════ -->
+<h2 class="section-heading" id="pipeline">4 &nbsp; Processing Pipeline</h2>
+
+<p>Every CDR file progresses through the following lifecycle stages:</p>
+
+<div class="flow-diagram">
+  <div class="flow-box">Collect</div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-box">Classify</div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-box active">Decode</div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-box">Validate</div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-box">Enrich</div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-box active">Distribute</div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-box">Complete</div>
+</div>
+
+<table class="config-table">
+  <thead><tr><th>Status</th><th>Description</th><th>Responsible Service</th></tr></thead>
+  <tbody>
+    <tr><td><code>COLLECTED</code></td><td>File received (via upload, SFTP poll, or local scan)</td><td>Collector / Upload UI</td></tr>
+    <tr><td><code>PROCESSING</code></td><td>Decoder has picked up the file and is actively decoding</td><td>Decoder</td></tr>
+    <tr><td><code>DECODED</code></td><td>Decoding complete; records extracted and validated</td><td>Decoder</td></tr>
+    <tr><td><code>DISPATCHING</code></td><td>Distributor is delivering to output portals</td><td>Distributor</td></tr>
+    <tr><td><code>COMPLETED</code></td><td>All distribution rules satisfied; file fully processed</td><td>Distributor</td></tr>
+    <tr><td><code>FAILED</code></td><td>Processing error; see <code>error_message</code> field</td><td>Any</td></tr>
+    <tr><td><code>DUPLICATE</code></td><td>File hash matches an already-processed file</td><td>Decoder</td></tr>
+  </tbody>
+</table>
+
+<!-- ═══════════════════ 5. REFERENCE DATA ═══════════════════ -->
+<h2 class="section-heading" id="ref-data">5 &nbsp; Reference Data Configuration</h2>
+<p>Reference data must be provisioned before files can be processed. Configure in the order presented below, as later steps depend on earlier data.</p>
+
+<p><strong>Navigation:</strong> Sidebar &rarr; <em>Reference Data</em> &rarr; select the subsection.</p>
+
+<!-- 5.1 Operators -->
+<h3 class="procedure-title" id="operators">5.1 &nbsp; Operators</h3>
+<p>An Operator represents a mobile network tenant. Multi-operator deployments require one record per operator. The operator <code>code</code> determines the per-operator directory tree and database routing.</p>
+
+<p><strong>Path:</strong> Reference Data &rarr; Operators &rarr; <em>+ Add Operator</em></p>
+
+<table class="config-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>code</code></td><td>Slug <span class="req">Required</span></td><td>Lowercase slug used in directory paths and DB aliases</td><td><code>orange</code></td></tr>
+    <tr><td><code>name</code></td><td>Text <span class="req">Required</span></td><td>Full operator name</td><td>Orange Sierra Leone</td></tr>
+    <tr><td><code>home_plmn</code></td><td>Text <span class="req">Required</span></td><td>MCC + MNC concatenated (5&ndash;6 digits)</td><td><code>61901</code></td></tr>
+    <tr><td><code>home_mcc</code></td><td>Text <span class="req">Required</span></td><td>Mobile Country Code (3 digits)</td><td><code>619</code></td></tr>
+    <tr><td><code>home_mnc</code></td><td>Text <span class="req">Required</span></td><td>Mobile Network Code (2&ndash;3 digits)</td><td><code>01</code></td></tr>
+    <tr><td><code>country_code</code></td><td>Text</td><td>ITU dialling code</td><td><code>232</code></td></tr>
+    <tr><td><code>enabled</code></td><td>Boolean</td><td>Active/Inactive toggle</td><td><code>True</code></td></tr>
+  </tbody>
+</table>
+
+<div class="callout caution">
+  <div class="callout-icon">Caution</div>
+  <div>The <code>code</code> field determines the directory structure (<code>data/{code}/input/...</code>). Changing it after files have been processed will orphan existing files on disk. Plan the code value before going live.</div>
+</div>
+
+<!-- 5.2 Source Patterns -->
+<h3 class="procedure-title" id="source-patterns">5.2 &nbsp; Source Patterns</h3>
+<p>Source Patterns map incoming filenames to an operator, vendor, network element, and decoder type. When a file is uploaded or collected, its filename is matched against all enabled patterns in priority order (lowest first); the first match wins.</p>
+
+<p><strong>Path:</strong> Reference Data &rarr; Source Patterns &rarr; <em>+ Add Pattern</em></p>
+
+<table class="config-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>pattern</code></td><td>Text <span class="req">Required</span></td><td>Substring or regex matched case-insensitively against filename</td><td><code>HMSC</code></td></tr>
+    <tr><td><code>is_regex</code></td><td>Boolean</td><td>If true, pattern is evaluated as a Python regex</td><td><code>False</code></td></tr>
+    <tr><td><code>operator</code></td><td>FK <span class="req">Required</span></td><td>Link to the Operator this pattern belongs to</td><td>Orange Sierra Leone</td></tr>
+    <tr><td><code>vendor</code></td><td>Slug <span class="req">Required</span></td><td>Equipment vendor slug (used in directory path)</td><td><code>huawei</code></td></tr>
+    <tr><td><code>network_element</code></td><td>Choice <span class="req">Required</span></td><td>Stream type: <code>msc</code>, <code>ims</code>, <code>pgw</code>, <code>sgsn</code>, <code>sgw</code>, <code>cbs</code>, <code>ocs</code></td><td><code>msc</code></td></tr>
+    <tr><td><code>decoder_type</code></td><td>Choice</td><td>Decoder: MSC, IMS, PGW, SGSN, SGW, CBS, CSV, FORWARD, or AUTO</td><td><code>MSC</code></td></tr>
+    <tr><td><code>priority</code></td><td>Integer</td><td>Lower values are tried first. Default: <code>100</code></td><td><code>10</code></td></tr>
+    <tr><td><code>enabled</code></td><td>Boolean</td><td>Active/Inactive toggle</td><td><code>True</code></td></tr>
+  </tbody>
+</table>
+
+<h4 class="sub-procedure">Procedure: Add a Source Pattern for Huawei MSC</h4>
+<div class="step-block"><div class="step-num">1</div><div class="step-body"><p>Navigate to <strong>Reference Data &rarr; Source Patterns</strong>.</p></div></div>
+<div class="step-block"><div class="step-num">2</div><div class="step-body"><p>Click <strong>+ Add Pattern</strong>.</p></div></div>
+<div class="step-block"><div class="step-num">3</div><div class="step-body"><p>Enter pattern: <code>HMSC</code> (matches any filename containing "HMSC").</p></div></div>
+<div class="step-block"><div class="step-num">4</div><div class="step-body"><p>Select <strong>Operator</strong>: <em>Orange Sierra Leone</em>.</p></div></div>
+<div class="step-block"><div class="step-num">5</div><div class="step-body"><p>Set <strong>Vendor</strong>: <code>huawei</code>, <strong>Network Element</strong>: <code>msc</code>, <strong>Decoder</strong>: <code>MSC</code>.</p></div></div>
+<div class="step-block"><div class="step-num">6</div><div class="step-body"><p>Set <strong>Priority</strong>: <code>10</code>. Ensure <strong>Enabled</strong> is checked.</p></div></div>
+<div class="step-block"><div class="step-num">7</div><div class="step-body"><p>Click <strong>Save</strong>. The pattern now appears in the list.</p></div></div>
+
+<div class="callout note">
+  <div class="callout-icon">Note</div>
+  <div>If <code>decoder_type</code> is set to <code>AUTO</code>, the system will attempt to detect the decoder type from the filename and file content. For best results, set the decoder type explicitly.</div>
+</div>
+
+<!-- 5.3 MCC/MNC -->
+<h3 class="procedure-title" id="mcc-mnc">5.3 &nbsp; MCC / MNC Reference</h3>
+<p>Mobile Country Code / Mobile Network Code entries identify mobile networks worldwide. Used for roaming detection and PLMN classification during CDR enrichment.</p>
+
+<p><strong>Path:</strong> Reference Data &rarr; MCC / MNC &rarr; <em>+ Add Entry</em></p>
+
+<table class="config-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>mcc</code></td><td>Text <span class="req">Required</span></td><td>Mobile Country Code (3 digits)</td><td><code>619</code></td></tr>
+    <tr><td><code>mnc</code></td><td>Text <span class="req">Required</span></td><td>Mobile Network Code (2&ndash;3 digits)</td><td><code>01</code></td></tr>
+    <tr><td><code>country</code></td><td>Text <span class="req">Required</span></td><td>Country name</td><td>Sierra Leone</td></tr>
+    <tr><td><code>iso</code></td><td>Text</td><td>ISO 3166-1 alpha-2 country code</td><td><code>SL</code></td></tr>
+    <tr><td><code>dial_code</code></td><td>Text</td><td>Country dialling code</td><td><code>+232</code></td></tr>
+    <tr><td><code>operator</code></td><td>Text <span class="req">Required</span></td><td>Network operator name</td><td>Orange SL</td></tr>
+    <tr><td><code>is_home</code></td><td>Boolean</td><td>Flag for home network (used in roaming detection)</td><td><code>True</code></td></tr>
+    <tr><td><code>enabled</code></td><td>Boolean</td><td>Active/Inactive toggle</td><td><code>True</code></td></tr>
+  </tbody>
+</table>
+
+<div class="callout note">
+  <div class="callout-icon">Note</div>
+  <div>The MCC/MNC table supports CSV bulk import. Prepare a CSV file with columns matching the field names above, then use <strong>Import CSV</strong> on the list page. The ITU MCC/MNC database is the authoritative source for these values.</div>
+</div>
+
+<!-- 5.4 IMSI Prefix -->
+<h3 class="procedure-title" id="imsi-prefix">5.4 &nbsp; IMSI Prefix</h3>
+<p>IMSI prefix entries map subscriber IMSI ranges to operators and countries. Used to classify subscribers as home vs. roaming during CDR enrichment.</p>
+
+<p><strong>Path:</strong> Reference Data &rarr; IMSI Prefix &rarr; <em>+ Add Entry</em></p>
+
+<table class="config-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>prefix</code></td><td>Text <span class="req">Required</span></td><td>IMSI prefix (e.g., MCC+MNC+subscriber range)</td><td><code>61901</code></td></tr>
+    <tr><td><code>mcc</code></td><td>Text <span class="req">Required</span></td><td>Mobile Country Code</td><td><code>619</code></td></tr>
+    <tr><td><code>mnc</code></td><td>Text <span class="req">Required</span></td><td>Mobile Network Code</td><td><code>01</code></td></tr>
+    <tr><td><code>operator</code></td><td>Text <span class="req">Required</span></td><td>Operator name</td><td>Orange SL</td></tr>
+    <tr><td><code>country</code></td><td>Text <span class="req">Required</span></td><td>Country name</td><td>Sierra Leone</td></tr>
+    <tr><td><code>is_home</code></td><td>Boolean</td><td>Home network subscriber flag</td><td><code>True</code></td></tr>
+    <tr><td><code>enabled</code></td><td>Boolean</td><td>Active/Inactive toggle</td><td><code>True</code></td></tr>
+  </tbody>
+</table>
+
+<!-- 5.5 Numbering Plan -->
+<h3 class="procedure-title" id="numbering-plan">5.5 &nbsp; Numbering Plan</h3>
+<p>The Numbering Plan maps E.164 number prefixes to operators, number types, and subscriber segments. Used for A/B-party classification, on-net/off-net determination, and prepaid/postpaid identification.</p>
+
+<p><strong>Path:</strong> Reference Data &rarr; Numbering Plan &rarr; <em>+ Add Entry</em></p>
+
+<table class="config-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>prefix</code></td><td>Text <span class="req">Required</span></td><td>Number prefix (E.164)</td><td><code>23230</code></td></tr>
+    <tr><td><code>country</code></td><td>Text</td><td>Country name</td><td>Sierra Leone</td></tr>
+    <tr><td><code>country_code</code></td><td>Text</td><td>Country dialling code</td><td><code>232</code></td></tr>
+    <tr><td><code>operator</code></td><td>Text <span class="req">Required</span></td><td>Operator name</td><td>Orange SL</td></tr>
+    <tr><td><code>number_type</code></td><td>Choice <span class="req">Required</span></td><td><code>MOBILE</code>, <code>FIXED</code>, <code>PREMIUM</code>, <code>TOLLFREE</code>, <code>SHORTCODE</code>, <code>INTERNATIONAL</code>, <code>SPECIAL</code>, <code>ROAMING</code></td><td><code>MOBILE</code></td></tr>
+    <tr><td><code>subscriber_segment</code></td><td>Choice</td><td><code>PREPAID</code>, <code>POSTPAID</code>, or blank (unknown)</td><td><code>PREPAID</code></td></tr>
+    <tr><td><code>min_length</code></td><td>Integer</td><td>Minimum total number length</td><td><code>8</code></td></tr>
+    <tr><td><code>max_length</code></td><td>Integer</td><td>Maximum total number length</td><td><code>12</code></td></tr>
+    <tr><td><code>enabled</code></td><td>Boolean</td><td>Active/Inactive toggle</td><td><code>True</code></td></tr>
+  </tbody>
+</table>
+
+<!-- 5.6 Trunk Groups -->
+<h3 class="procedure-title" id="trunks">5.6 &nbsp; Trunk Groups</h3>
+<p>Trunk Group records identify interconnect routes referenced by CDRs. Used for route classification and interconnect partner identification.</p>
+
+<p><strong>Path:</strong> Reference Data &rarr; Trunks &rarr; <em>+ Add Trunk</em></p>
+
+<table class="config-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>switch_id</code></td><td>Text</td><td>MSC/Switch identifier</td><td><code>FTHMSC1</code></td></tr>
+    <tr><td><code>trunk_id</code></td><td>Text <span class="req">Required</span></td><td>Trunk identifier as it appears in CDRs</td><td><code>TG001</code></td></tr>
+    <tr><td><code>name</code></td><td>Text <span class="req">Required</span></td><td>Descriptive name</td><td>Orange-Africell Interconnect</td></tr>
+    <tr><td><code>trunk_type</code></td><td>Choice</td><td><code>INTERCONNECT</code>, <code>ROAMING</code>, <code>INTERNAL</code>, <code>GATEWAY</code>, <code>OTHER</code></td><td><code>INTERCONNECT</code></td></tr>
+    <tr><td><code>direction</code></td><td>Choice</td><td><code>INCOMING</code>, <code>OUTGOING</code>, <code>BOTH</code></td><td><code>BOTH</code></td></tr>
+    <tr><td><code>partner</code></td><td>Text</td><td>Interconnect partner name</td><td>Africell</td></tr>
+    <tr><td><code>country</code></td><td>Text</td><td>Country</td><td>Sierra Leone</td></tr>
+    <tr><td><code>enabled</code></td><td>Boolean</td><td>Active/Inactive toggle</td><td><code>True</code></td></tr>
+  </tbody>
+</table>
+
+<!-- 5.7 Vendors -->
+<h3 class="procedure-title" id="vendors">5.7 &nbsp; Vendors</h3>
+<p>Vendors represent downstream systems or equipment manufacturers. They group Distribution Portals in the File Registry tree.</p>
+
+<p><strong>Path:</strong> Reference Data &rarr; Vendors &rarr; <em>+ Add Vendor</em></p>
+
+<table class="config-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>name</code></td><td>Text <span class="req">Required</span></td><td>Full name shown in the File Registry tree</td><td>SL BIGDATA</td></tr>
+    <tr><td><code>code</code></td><td>Text <span class="req">Required</span></td><td>Short uppercase code</td><td><code>SL_BIGDATA</code></td></tr>
+    <tr><td><code>description</code></td><td>Text</td><td>Free-text description</td><td>Big Data analytics platform</td></tr>
+    <tr><td><code>enabled</code></td><td>Boolean</td><td>Active/Inactive toggle</td><td><code>True</code></td></tr>
+  </tbody>
+</table>
+
+
+<!-- ═══════════════════ 6. PORTALS & COLLECTION ═══════════════════ -->
+<h2 class="section-heading" id="portals">6 &nbsp; Portals &amp; Collection Configuration</h2>
+
+<!-- 6.1 Data Sources -->
+<h3 class="procedure-title" id="data-sources">6.1 &nbsp; Data Sources</h3>
+<p>A Data Source represents the origin of CDR files (e.g., an SFTP server, local directory, or manual upload channel). Each Data Source is linked to a decoder type and optionally to SFTP connection parameters.</p>
+
+<p><strong>Path:</strong> Admin Panel &rarr; Collection &rarr; Data Sources &rarr; <em>Add Data Source</em></p>
+
+<table class="config-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>name</code></td><td>Text <span class="req">Required</span></td><td>Unique identifier</td><td><code>INP-MSC-SFTP</code></td></tr>
+    <tr><td><code>description</code></td><td>Text</td><td>Free-text description</td><td>Huawei MSC SFTP source</td></tr>
+    <tr><td><code>source_type</code></td><td>Choice <span class="req">Required</span></td><td><code>SFTP</code>, <code>LOCAL</code>, <code>API</code>, <code>MANUAL</code></td><td><code>SFTP</code></td></tr>
+    <tr><td><code>decoder_type</code></td><td>Choice</td><td>MSC, IMS, PGW, SGSN, SGW, CBS, CSV, FORWARD, AUTO</td><td><code>MSC</code></td></tr>
+    <tr><td><code>vendor</code></td><td>Text</td><td>Equipment vendor</td><td>Huawei</td></tr>
+    <tr><td><code>network_element</code></td><td>Text</td><td>Network element identifier</td><td><code>MSC01</code></td></tr>
+    <tr><td colspan="4" style="background:var(--ice);font-weight:600;font-family:'DM Sans',sans-serif;font-size:12px;">SFTP Configuration (required when source_type = SFTP)</td></tr>
+    <tr><td><code>sftp_host</code></td><td>Text</td><td>SFTP server hostname or IP</td><td><code>192.168.1.10</code></td></tr>
+    <tr><td><code>sftp_port</code></td><td>Integer</td><td>SFTP port (default: 22)</td><td><code>22</code></td></tr>
+    <tr><td><code>sftp_username</code></td><td>Text</td><td>SFTP login username</td><td><code>cdr_user</code></td></tr>
+    <tr><td><code>sftp_password</code></td><td>Encrypted</td><td>SFTP password (AES-256 encrypted at rest)</td><td><code>********</code></td></tr>
+    <tr><td><code>sftp_key_path</code></td><td>Text</td><td>Path to SSH private key (alternative to password)</td><td><code>/opt/ump/keys/id_rsa</code></td></tr>
+    <tr><td><code>sftp_remote_path</code></td><td>Text</td><td>Remote directory to poll for files</td><td><code>/cdr/voice/</code></td></tr>
+    <tr><td><code>sftp_file_pattern</code></td><td>Text</td><td>Glob pattern to match CDR files</td><td><code>*.dat</code></td></tr>
+    <tr><td colspan="4" style="background:var(--ice);font-weight:600;font-family:'DM Sans',sans-serif;font-size:12px;">Local Directory (required when source_type = LOCAL)</td></tr>
+    <tr><td><code>local_path</code></td><td>Text</td><td>Absolute path to local directory</td><td><code>/data/incoming/msc/</code></td></tr>
+    <tr><td colspan="4" style="background:var(--ice);font-weight:600;font-family:'DM Sans',sans-serif;font-size:12px;">Polling</td></tr>
+    <tr><td><code>poll_interval_seconds</code></td><td>Integer</td><td>Seconds between collection polls</td><td><code>300</code></td></tr>
+    <tr><td><code>enabled</code></td><td>Boolean</td><td>Active/Inactive toggle</td><td><code>True</code></td></tr>
+  </tbody>
+</table>
+
+<div class="callout caution">
+  <div class="callout-icon">Caution</div>
+  <div>SFTP passwords are encrypted using AES-256 (Fernet) and stored in the <code>sftp_password</code> field. The encryption key is derived from <code>DJANGO_SECRET_KEY</code>. If the secret key changes, all stored passwords must be re-encrypted.</div>
+</div>
+
+<!-- 6.2 Input Portals -->
+<h3 class="procedure-title" id="input-portals">6.2 &nbsp; Input Portals</h3>
+<p>Input Portals define the collection endpoints with detailed protocol, scheduling, and processing parameters. The Input Portal IDE provides a tabbed interface for configuration.</p>
+
+<p><strong>Path:</strong> Sidebar &rarr; System &amp; Portals &rarr; Configure Portal &rarr; Input Portal</p>
+
+<h4 class="sub-procedure">Tab 1: Details</h4>
+<table class="config-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>name</code></td><td>Text <span class="req">Required</span></td><td>Portal display name</td><td><code>MSC01_VOICE</code></td></tr>
+    <tr><td><code>portal_type</code></td><td>Choice <span class="req">Required</span></td><td><code>FTP</code>, <code>SFTP</code>, <code>LOCAL</code>, <code>API</code></td><td><code>SFTP</code></td></tr>
+    <tr><td><code>stream_type</code></td><td>Choice</td><td><code>MSC</code>, <code>IMS</code>, <code>PGW</code>, <code>SGSN</code>, <code>SGW</code>, <code>CBS</code>, <code>ALL</code></td><td><code>MSC</code></td></tr>
+    <tr><td><code>description</code></td><td>Text</td><td>Portal description</td><td>Huawei MSC01 Voice CDRs</td></tr>
+    <tr><td><code>is_active</code></td><td>Toggle</td><td>Enable/disable the portal</td><td>Enabled</td></tr>
+  </tbody>
+</table>
+
+<h4 class="sub-procedure">Tab 2: Routing (Dispatch Parameters)</h4>
+<table class="config-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th><th>Default</th></tr></thead>
+  <tbody>
+    <tr><td><code>dispatch_method</code></td><td>Choice</td><td><code>Scheduled</code> or <code>Immediate</code></td><td><code>Scheduled</code></td></tr>
+    <tr><td><code>schedule_type</code></td><td>Choice</td><td><code>Interval</code> or <code>Daily</code></td><td><code>Interval</code></td></tr>
+    <tr><td><code>interval_mins</code></td><td>Integer</td><td>Polling interval in minutes</td><td><code>3</code></td></tr>
+    <tr><td><code>base_time</code></td><td>Time</td><td>Base time for daily scheduling</td><td>&mdash;</td></tr>
+    <tr><td><code>do_not_dispatch_on</code></td><td>Text</td><td>Comma-separated days to exclude</td><td>&mdash;</td></tr>
+    <tr><td><code>pending_processing_throttling</code></td><td>Boolean</td><td>Enable throttling when queue is full</td><td><code>False</code></td></tr>
+  </tbody>
+</table>
+
+<h4 class="sub-procedure">Tab 3: Protocols (Connection Parameters)</h4>
+<table class="config-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th><th>Default</th></tr></thead>
+  <tbody>
+    <tr><td><code>host</code></td><td>Text</td><td>Remote server hostname/IP</td><td>&mdash;</td></tr>
+    <tr><td><code>port</code></td><td>Integer</td><td>Connection port</td><td><code>22</code></td></tr>
+    <tr><td><code>username</code></td><td>Text</td><td>Login username</td><td>&mdash;</td></tr>
+    <tr><td><code>password</code></td><td>Encrypted</td><td>Login password (encrypted)</td><td>&mdash;</td></tr>
+    <tr><td><code>directory</code></td><td>Text</td><td>Remote directory path</td><td>&mdash;</td></tr>
+    <tr><td><code>file_pattern</code></td><td>Text</td><td>File glob pattern</td><td><code>*.dat</code></td></tr>
+    <tr><td><code>connect_timeout</code></td><td>Integer</td><td>Connection timeout (seconds)</td><td><code>0</code> (no timeout)</td></tr>
+    <tr><td><code>script_name</code></td><td>Text</td><td>FAI script name</td><td>&mdash;</td></tr>
+    <tr><td><code>enable_transcript</code></td><td>Boolean</td><td>Enable protocol transcript logging</td><td><code>True</code></td></tr>
+  </tbody>
+</table>
+
+<h4 class="sub-procedure">Tab 4: Keys (File Disposition)</h4>
+<table class="config-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th><th>Default</th></tr></thead>
+  <tbody>
+    <tr><td><code>disposition</code></td><td>Choice</td><td><code>MOVE</code>, <code>DELETE</code>, <code>KEEP</code> &mdash; what to do with files after collection</td><td><code>MOVE</code></td></tr>
+    <tr><td><code>rename_ext</code></td><td>Text</td><td>Extension to rename collected files to</td><td>&mdash;</td></tr>
+    <tr><td><code>move_to</code></td><td>Text</td><td>Directory to move collected files to</td><td>&mdash;</td></tr>
+    <tr><td><code>rmv_prefix</code></td><td>Text</td><td>Prefix to remove from filenames</td><td>&mdash;</td></tr>
+    <tr><td><code>reg_pattern</code></td><td>Text</td><td>Regex pattern for filename transformation</td><td>&mdash;</td></tr>
+  </tbody>
+</table>
+
+<h4 class="sub-procedure">Tab 5: Adapter In (Input Processing)</h4>
+<table class="config-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th><th>Default</th></tr></thead>
+  <tbody>
+    <tr><td><code>duplicate_detection_algo</code></td><td>Choice</td><td>Duplicate detection algorithm</td><td><code>Disabled</code></td></tr>
+    <tr><td><code>duplicate_disposition</code></td><td>Choice</td><td>How to handle duplicates</td><td><code>Transfer and Process Normally</code></td></tr>
+    <tr><td><code>duplicate_directory</code></td><td>Text</td><td>Directory for duplicate files</td><td>&mdash;</td></tr>
+    <tr><td><code>file_compression_type</code></td><td>Choice</td><td>Expected compression</td><td><code>No Compression</code></td></tr>
+    <tr><td><code>input_script</code></td><td>Choice</td><td>Pre-processing script</td><td><code>None</code></td></tr>
+  </tbody>
+</table>
+
+<!-- 6.3 Output Portals -->
+<h3 class="procedure-title" id="output-portals">6.3 &nbsp; Output Portals</h3>
+<p>Output Portals define where processed CDR files are delivered. Each portal specifies a transport type, output format, and directory structure with dynamic placeholders.</p>
+
+<p><strong>Path:</strong> Sidebar &rarr; System &amp; Portals &rarr; Configure Portal &rarr; Output Portal</p>
+
+<table class="config-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>name</code></td><td>Text <span class="req">Required</span></td><td>Portal display name</td><td><code>BIGDATA-MSC</code></td></tr>
+    <tr><td><code>portal_type</code></td><td>Choice <span class="req">Required</span></td><td><code>FTP</code>, <code>SFTP</code>, <code>LOCAL</code>, <code>DATABASE</code>, <code>API</code></td><td><code>LOCAL</code></td></tr>
+    <tr><td><code>output_format</code></td><td>Choice <span class="req">Required</span></td><td><code>CSV</code>, <code>JSON</code>, <code>XML</code>, <code>TEXT</code>, <code>RAW</code></td><td><code>CSV</code></td></tr>
+    <tr><td><code>stream_type</code></td><td>Choice</td><td><code>MSC</code>, <code>IMS</code>, <code>PGW</code>, <code>SGSN</code>, <code>SGW</code>, <code>CBS</code>, <code>ALL</code></td><td><code>MSC</code></td></tr>
+    <tr><td><code>host</code></td><td>Text</td><td>Remote server (for SFTP/FTP/API)</td><td><code>192.168.2.100</code></td></tr>
+    <tr><td><code>port</code></td><td>Integer</td><td>Connection port</td><td><code>22</code></td></tr>
+    <tr><td><code>username</code></td><td>Text</td><td>Login username</td><td><code>bi_user</code></td></tr>
+    <tr><td><code>password</code></td><td>Encrypted</td><td>Login password (encrypted)</td><td><code>********</code></td></tr>
+    <tr><td><code>directory</code></td><td>Text</td><td>Output directory path with placeholders</td><td><code>{operator}/output/{vendor}/{ne}</code></td></tr>
+    <tr><td><code>is_active</code></td><td>Boolean</td><td>Active/Inactive toggle</td><td><code>True</code></td></tr>
+  </tbody>
+</table>
+
+<h4 class="sub-procedure">Directory Placeholders</h4>
+<table class="config-table">
+  <thead><tr><th>Placeholder</th><th>Resolves To</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>{operator}</code></td><td>Operator code from CDR file</td><td><code>orange</code></td></tr>
+    <tr><td><code>{vendor}</code></td><td>Vendor slug from CDR file</td><td><code>huawei</code></td></tr>
+    <tr><td><code>{ne}</code></td><td>Network element from CDR file</td><td><code>msc</code></td></tr>
+    <tr><td><code>{stream}</code></td><td>Portal stream type</td><td><code>msc</code></td></tr>
+    <tr><td><code>{portal}</code></td><td>Portal name (lowercase)</td><td><code>bigdata-msc</code></td></tr>
+    <tr><td><code>{YYYY}</code></td><td>4-digit year</td><td><code>2026</code></td></tr>
+    <tr><td><code>{MM}</code></td><td>2-digit month</td><td><code>09</code></td></tr>
+    <tr><td><code>{DD}</code></td><td>2-digit day</td><td><code>08</code></td></tr>
+  </tbody>
+</table>
+
+<div class="callout note">
+  <div class="callout-icon">Note</div>
+  <div>If the <code>directory</code> field is left blank, the system defaults to <code>{operator}/output/{vendor}/{ne}</code>. Relative paths are resolved from the project <code>DATA_DIR</code> setting.</div>
+</div>
+
+<h4 class="sub-procedure">Procedure: Configure a Local Output Portal for BI</h4>
+<div class="step-block"><div class="step-num">1</div><div class="step-body"><p>Navigate to <strong>System &amp; Portals &rarr; Configure Portal &rarr; Output Portal</strong>.</p></div></div>
+<div class="step-block"><div class="step-num">2</div><div class="step-body"><p>Click <strong>+ New Portal</strong> in the left panel.</p></div></div>
+<div class="step-block"><div class="step-num">3</div><div class="step-body"><p>Set <strong>Name</strong>: <code>BIGDATA-MSC</code>, <strong>Portal Type</strong>: <code>LOCAL</code>, <strong>Output Format</strong>: <code>CSV</code>.</p></div></div>
+<div class="step-block"><div class="step-num">4</div><div class="step-body"><p>Set <strong>Directory</strong>: <code>{operator}/bigdata/{YYYY}/{MM}/{DD}</code>.</p></div></div>
+<div class="step-block"><div class="step-num">5</div><div class="step-body"><p>Set <strong>Stream Type</strong>: <code>MSC</code>. Toggle <strong>Active</strong> on.</p></div></div>
+<div class="step-block"><div class="step-num">6</div><div class="step-body"><p>Click <strong>Save</strong>.</p></div></div>
+
+<!-- 6.4 Output Schemas -->
+<h3 class="procedure-title" id="output-schemas">6.4 &nbsp; Output Schemas</h3>
+<p>Output Schemas define the column mapping and file format for distributed CDR files. Each Distribution Rule links to an Output Schema to control which fields are exported and how they are named.</p>
+
+<p><strong>Path:</strong> Admin Panel &rarr; System &amp; Portals &rarr; Output Schemas &rarr; <em>Add Output Schema</em></p>
+
+<table class="config-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>name</code></td><td>Text <span class="req">Required</span></td><td>Schema name</td><td><code>MSC-BIGDATA-SCHEMA</code></td></tr>
+    <tr><td><code>stream_type</code></td><td>Choice</td><td><code>MSC</code>, <code>IMS</code>, <code>PGW</code>, <code>SGSN</code>, <code>SGW</code>, <code>CBS</code>, <code>ALL</code></td><td><code>MSC</code></td></tr>
+    <tr><td><code>mapping_json</code></td><td>JSON</td><td>Column mapping: <code>{"OutputHeader": "db_field"}</code> or <code>[["Header", "field"], ...]</code></td><td>See below</td></tr>
+    <tr><td><code>delimiter</code></td><td>Text</td><td>CSV field delimiter</td><td><code>,</code></td></tr>
+    <tr><td><code>include_header</code></td><td>Boolean</td><td>Include header row in output</td><td><code>True</code></td></tr>
+    <tr><td><code>quote_all</code></td><td>Boolean</td><td>Quote all CSV fields</td><td><code>False</code></td></tr>
+    <tr><td><code>line_terminator</code></td><td>Text</td><td>Line ending: <code>\n</code> (Unix) or <code>\r\n</code> (Windows)</td><td><code>\n</code></td></tr>
+  </tbody>
+</table>
+
+<h4 class="sub-procedure">Mapping JSON Format</h4>
+<p>Two formats are supported:</p>
+
+<p><strong>Dict format</strong> (column order not guaranteed):</p>
+<pre class="cmd">{
+  "MSISDN": "subscriber_id",
+  "CALLED_NUMBER": "called_number",
+  "DURATION": "call_duration",
+  "START_TIME": "answer_time"
+}</pre>
+
+<p><strong>List format</strong> (preserves column order, recommended):</p>
+<pre class="cmd">[
+  ["MSISDN", "subscriber_id"],
+  ["CALLED_NUMBER", "called_number"],
+  ["DURATION", "call_duration"],
+  ["START_TIME", "answer_time"]
+]</pre>
+
+<div class="callout note">
+  <div class="callout-icon">Note</div>
+  <div>If <code>mapping_json</code> is empty (<code>{}</code>), all model fields are exported in declaration order. Use the list format for downstream systems that require a specific column order.</div>
+</div>
+
+<!-- 6.5 Distribution Rules -->
+<h3 class="procedure-title" id="dist-rules">6.5 &nbsp; Distribution Rules</h3>
+<p>Distribution Rules link input streams to output portals. When a file finishes decoding, the Distributor evaluates all active rules. Each matching rule delivers the file (or a filtered subset of records) to its linked Output Portal using the linked Output Schema.</p>
+
+<p><strong>Path:</strong> Admin Panel &rarr; System &amp; Portals &rarr; Distribution Rules &rarr; <em>Add Distribution Rule</em></p>
+
+<table class="config-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>name</code></td><td>Text <span class="req">Required</span></td><td>Rule name</td><td><code>MSC-TO-BIGDATA</code></td></tr>
+    <tr><td><code>stream_type</code></td><td>Choice <span class="req">Required</span></td><td>Stream to match: <code>MSC</code>, <code>IMS</code>, <code>PGW</code>, <code>SGSN</code>, <code>SGW</code>, <code>CBS</code>, <code>ALL</code>, or <code>FORWARD</code></td><td><code>MSC</code></td></tr>
+    <tr><td><code>output_portal</code></td><td>FK <span class="req">Required</span></td><td>Target Output Portal</td><td>BIGDATA-MSC</td></tr>
+    <tr><td><code>output_schema</code></td><td>FK <span class="req">Required</span></td><td>Column mapping schema</td><td>MSC-BIGDATA-SCHEMA</td></tr>
+    <tr><td><code>filter_logic</code></td><td>JSON</td><td>ORM filter kwargs. Empty = match all.</td><td><code>{"prepaid_flag": "POSTPAID"}</code></td></tr>
+    <tr><td><code>is_active</code></td><td>Boolean</td><td>Active/Inactive toggle</td><td><code>True</code></td></tr>
+    <tr><td><code>priority</code></td><td>Integer</td><td>Execution order (lower first)</td><td><code>10</code></td></tr>
+    <tr><td><code>max_retries</code></td><td>Integer</td><td>Total delivery attempts (1 = no retry)</td><td><code>3</code></td></tr>
+    <tr><td><code>retry_backoff_seconds</code></td><td>Text</td><td>Comma-separated wait seconds between attempts</td><td><code>2,5,10</code></td></tr>
+  </tbody>
+</table>
+
+<h4 class="sub-procedure">Filter Logic Examples</h4>
+<table class="config-table">
+  <thead><tr><th>Use Case</th><th>Filter JSON</th></tr></thead>
+  <tbody>
+    <tr><td>Postpaid records only</td><td><code>{"prepaid_flag": "POSTPAID"}</code></td></tr>
+    <tr><td>Prepaid records only</td><td><code>{"prepaid_flag": "PREPAID"}</code></td></tr>
+    <tr><td>Calls longer than 60 seconds</td><td><code>{"call_duration__gt": 60}</code></td></tr>
+    <tr><td>International calls</td><td><code>{"is_international": true}</code></td></tr>
+    <tr><td>Non-roaming records</td><td><code>{"is_roaming": false}</code></td></tr>
+    <tr><td>All records (no filter)</td><td><em>Leave blank</em></td></tr>
+  </tbody>
+</table>
+
+<h4 class="sub-procedure">Procedure: Configure Distribution for Postpaid MSC to BI</h4>
+<div class="step-block"><div class="step-num">1</div><div class="step-body"><p>Ensure the Output Portal (<code>BIGDATA-MSC</code>) and Output Schema (<code>MSC-BIGDATA-SCHEMA</code>) are already created.</p></div></div>
+<div class="step-block"><div class="step-num">2</div><div class="step-body"><p>Navigate to <strong>Admin Panel &rarr; Distribution Rules &rarr; Add Distribution Rule</strong>.</p></div></div>
+<div class="step-block"><div class="step-num">3</div><div class="step-body"><p>Set <strong>Name</strong>: <code>MSC-POSTPAID-BIGDATA</code>.</p></div></div>
+<div class="step-block"><div class="step-num">4</div><div class="step-body"><p>Set <strong>Stream Type</strong>: <code>MSC</code>.</p></div></div>
+<div class="step-block"><div class="step-num">5</div><div class="step-body"><p>Select <strong>Output Portal</strong>: <code>BIGDATA-MSC</code> and <strong>Output Schema</strong>: <code>MSC-BIGDATA-SCHEMA</code>.</p></div></div>
+<div class="step-block"><div class="step-num">6</div><div class="step-body"><p>Set <strong>Filter Logic</strong>: <code>{"prepaid_flag": "POSTPAID"}</code>.</p></div></div>
+<div class="step-block"><div class="step-num">7</div><div class="step-body"><p>Set <strong>Priority</strong>: <code>10</code>, <strong>Max Retries</strong>: <code>3</code>.</p></div></div>
+<div class="step-block"><div class="step-num">8</div><div class="step-body"><p>Toggle <strong>Active</strong> on and click <strong>Save</strong>.</p></div></div>
+
+<!-- 6.6 Pass-Through Mode -->
+<h3 class="procedure-title" id="passthrough">6.6 &nbsp; Pass-Through / Forward Mode</h3>
+<p>For downstream systems that receive files without decoding (e.g., raw billing feeds, flat files), UMP supports a pass-through mode. Files are collected, classified, and forwarded as-is without any decoding or record extraction.</p>
+
+<h4 class="sub-procedure">Configuration Requirements</h4>
+<table class="config-table">
+  <thead><tr><th>Component</th><th>Setting</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Source Pattern</td><td><code>decoder_type</code></td><td><code>FORWARD</code> (Pass-through)</td></tr>
+    <tr><td>Data Source</td><td><code>decoder_type</code></td><td><code>FORWARD</code></td></tr>
+    <tr><td>Output Portal</td><td><code>output_format</code></td><td><code>RAW</code> (Raw Binary)</td></tr>
+    <tr><td>Output Schema</td><td><code>mapping_json</code></td><td><code>{}</code> (empty, ignored for RAW)</td></tr>
+    <tr><td>Distribution Rule</td><td><code>stream_type</code></td><td><code>FORWARD</code></td></tr>
+  </tbody>
+</table>
+
+<div class="callout note">
+  <div class="callout-icon">Note</div>
+  <div>When a file&rsquo;s <code>decoder_type</code> is <code>FORWARD</code>, the Decoder service immediately marks it as <code>DECODED</code> without processing. The Distributor then delivers the original file byte-for-byte to any matching Distribution Rule with <code>output_format = RAW</code>.</div>
+</div>
+
+
+<!-- ═══════════════════ 7. PROCESSING ═══════════════════ -->
+<h2 class="section-heading" id="processing">7 &nbsp; Processing Services</h2>
+
+<!-- 7.1 File Upload -->
+<h3 class="procedure-title" id="file-upload">7.1 &nbsp; Manual File Upload</h3>
+<p>CDR files can be manually uploaded through the web UI for ad-hoc processing or testing.</p>
+
+<p><strong>Path:</strong> Sidebar &rarr; Operations &rarr; File Upload</p>
+
+<div class="step-block"><div class="step-num">1</div><div class="step-body"><p>Navigate to <strong>Operations &rarr; File Upload</strong>.</p></div></div>
+<div class="step-block"><div class="step-num">2</div><div class="step-body"><p>Click <strong>Choose Files</strong> to select one or more CDR files. Accepted formats: <code>.dat</code>, <code>.bin</code>, <code>.csv</code>, <code>.txt</code>, <code>.asn1</code>.</p></div></div>
+<div class="step-block"><div class="step-num">3</div><div class="step-body"><p><strong>Input Source</strong> (optional): Select a Data Source to associate. If left as &ldquo;Auto-detect&rdquo;, the system resolves the source from the file&rsquo;s decoder type.</p></div></div>
+<div class="step-block"><div class="step-num">4</div><div class="step-body"><p><strong>Decoder Type</strong> (optional): Override the auto-detected decoder. Leave as &ldquo;Auto-detect&rdquo; for most cases.</p></div></div>
+<div class="step-block"><div class="step-num">5</div><div class="step-body"><p>Click <strong>Upload &amp; Process</strong>. The file enters the pipeline with status <code>COLLECTED</code>.</p></div></div>
+
+<div class="callout note">
+  <div class="callout-icon">Note</div>
+  <div>Uploaded files are classified using Source Patterns. Ensure a matching pattern exists before uploading; otherwise the file&rsquo;s operator/vendor/network_element fields will be empty.</div>
+</div>
+
+<!-- 7.2 Decoder Service -->
+<h3 class="procedure-title" id="decoder">7.2 &nbsp; Decoder Service</h3>
+<p>The Decoder runs as a long-lived daemon, polling for files with status <code>COLLECTED</code>. It supports the following decoder types:</p>
+
+<table class="config-table">
+  <thead><tr><th>Decoder Type</th><th>Format</th><th>Records Extracted</th></tr></thead>
+  <tbody>
+    <tr><td><code>MSC</code></td><td>Huawei ASN.1/BER encoded voice/SMS CDRs</td><td>MSCRecord</td></tr>
+    <tr><td><code>IMS</code></td><td>Huawei ATS9900 VoLTE/VoBB CDRs</td><td>IMSRecord</td></tr>
+    <tr><td><code>PGW</code></td><td>3GPP PGW CDRs (4G PS Domain)</td><td>PGWRecord</td></tr>
+    <tr><td><code>SGSN</code></td><td>3GPP SGSN CDRs (2G/3G PS Domain)</td><td>SGSNRecord</td></tr>
+    <tr><td><code>SGW</code></td><td>3GPP SGW CDRs (4G S-GW)</td><td>SGWRecord</td></tr>
+    <tr><td><code>CBS</code></td><td>Huawei CBS/OCS output files</td><td>CBSRecord</td></tr>
+    <tr><td><code>CSV</code></td><td>Pre-decoded CSV files</td><td>Per-stream model</td></tr>
+    <tr><td><code>FORWARD</code></td><td>Pass-through (no decoding)</td><td>None (file forwarded as-is)</td></tr>
+  </tbody>
+</table>
+
+<h4 class="sub-procedure">Starting the Decoder</h4>
+<pre class="cmd"># Development (foreground)
+python manage.py run_decoder --batch 10 --interval 5
+
+# Production (systemd)
+sudo systemctl start mediation-decoder
+sudo systemctl enable mediation-decoder</pre>
+
+<table class="config-table">
+  <thead><tr><th>Parameter</th><th>Description</th><th>Default</th></tr></thead>
+  <tbody>
+    <tr><td><code>--batch</code></td><td>Max files to process per cycle</td><td><code>10</code></td></tr>
+    <tr><td><code>--interval</code></td><td>Seconds between poll cycles when idle</td><td><code>10</code> (or <code>SERVICE_POLL_INTERVAL</code>)</td></tr>
+  </tbody>
+</table>
+
+<!-- 7.3 Distributor Service -->
+<h3 class="procedure-title" id="distributor">7.3 &nbsp; Distributor Service</h3>
+<p>The Distributor picks up files with status <code>DECODED</code> and evaluates all active Distribution Rules. For each matching rule, it renders the output per the Output Schema and delivers via the Output Portal&rsquo;s transport.</p>
+
+<h4 class="sub-procedure">Starting the Distributor</h4>
+<pre class="cmd"># Development (foreground)
+python manage.py run_distributor --batch 10 --interval 10
+
+# Production (systemd)
+sudo systemctl start mediation-distributor
+sudo systemctl enable mediation-distributor</pre>
+
+<!-- 7.4 Collector Service -->
+<h3 class="procedure-title" id="collector">7.4 &nbsp; Collector Service</h3>
+<p>The Collector polls enabled Data Sources (SFTP, FTP, local directories) for new files matching the configured file patterns. Collected files are downloaded to the local staging area and registered as CDRFile records with status <code>COLLECTED</code>.</p>
+
+<h4 class="sub-procedure">Starting the Collector</h4>
+<pre class="cmd"># Development (foreground)
+python manage.py run_collector --interval 60
+
+# Production (systemd)
+sudo systemctl start mediation-collector
+sudo systemctl enable mediation-collector</pre>
+
+
+<!-- ═══════════════════ 8. BUSINESS LOGIC ═══════════════════ -->
+<h2 class="section-heading" id="business-logic-section">8 &nbsp; Business Logic Configuration</h2>
+
+<!-- 8.1 Business Rules -->
+<h3 class="procedure-title" id="business-rules">8.1 &nbsp; Business Rules</h3>
+<p>Business Rules define the validation, transformation, enrichment, filtering, and rating logic applied to CDR streams. Rules are configured per stream type and executed in priority order.</p>
+
+<p><strong>Path:</strong> Sidebar &rarr; Configuration &rarr; Business Logic &rarr; Business Rules</p>
+
+<table class="config-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>name</code></td><td>Text <span class="req">Required</span></td><td>Unique rule name</td><td><code>Validate Call Duration</code></td></tr>
+    <tr><td><code>rule_type</code></td><td>Choice <span class="req">Required</span></td><td><code>VALIDATION</code>, <code>TRANSFORMATION</code>, <code>ENRICHMENT</code>, <code>FILTERING</code>, <code>RATING</code>, <code>AGGREGATION</code>, <code>CORRELATION</code>, <code>DETECTION</code>, <code>ERROR_HANDLING</code></td><td><code>VALIDATION</code></td></tr>
+    <tr><td><code>stream</code></td><td>Choice</td><td><code>ALL</code>, <code>MSC</code>, <code>PGW</code>, <code>SGSN</code>, <code>SGW</code></td><td><code>MSC</code></td></tr>
+    <tr><td><code>status</code></td><td>Choice</td><td><code>ACTIVE</code>, <code>INACTIVE</code>, <code>DRAFT</code>, <code>TESTING</code></td><td><code>ACTIVE</code></td></tr>
+    <tr><td><code>priority</code></td><td>Choice</td><td><code>10</code> (Low), <code>50</code> (Normal), <code>80</code> (High), <code>100</code> (Critical)</td><td><code>50</code></td></tr>
+    <tr><td><code>condition</code></td><td>Text</td><td>JSON or expression defining when the rule triggers</td><td><code>{"call_duration__gt": 86400}</code></td></tr>
+    <tr><td><code>action</code></td><td>Text</td><td>JSON or expression defining what the rule does</td><td><code>{"status": "INVALID", "reason": "Duration exceeds 24h"}</code></td></tr>
+    <tr><td><code>tags</code></td><td>Text</td><td>Comma-separated tags for categorization</td><td><code>voice,validation</code></td></tr>
+  </tbody>
+</table>
+
+<p>Additional specialized rule types are available under the Business Logic submenu:</p>
+<ul>
+  <li><strong>Correlation Rules</strong> &mdash; Match related CDRs across streams (e.g., correlate MSC voice with IMS VoLTE)</li>
+  <li><strong>Detection Rules</strong> &mdash; Identify anomalies such as short-duration calls, silent periods, or volume spikes</li>
+  <li><strong>Error Handling</strong> &mdash; Define how specific error conditions are handled (retry, skip, escalate)</li>
+</ul>
+
+<!-- 8.2 Scripts IDE -->
+<h3 class="procedure-title" id="scripts-ide">8.2 &nbsp; Scripts IDE</h3>
+<p>The Scripts IDE allows authorized administrators to write and test Python scripts for advanced CDR processing logic that cannot be expressed as declarative rules.</p>
+
+<p><strong>Path:</strong> Sidebar &rarr; Configuration &rarr; Scripts</p>
+
+<div class="callout warning">
+  <div class="callout-icon">Warning</div>
+  <div>The Scripts IDE executes arbitrary Python code on the server. Access is restricted to <strong>superuser accounts only</strong>. Scripts run with full application context. Always test scripts in a development environment before deploying to production.</div>
+</div>
+
+
+<!-- ═══════════════════ 9. OPERATIONS ═══════════════════ -->
+<h2 class="section-heading" id="operations">9 &nbsp; Operations &amp; Monitoring</h2>
+
+<!-- 9.1 Dashboard -->
+<h3 class="procedure-title" id="dashboard">9.1 &nbsp; Dashboard</h3>
+<p>The main dashboard provides a real-time overview of system health and processing metrics.</p>
+<p><strong>Path:</strong> Sidebar &rarr; Dashboard</p>
+
+<table class="config-table">
+  <thead><tr><th>Widget</th><th>Metric</th></tr></thead>
+  <tbody>
+    <tr><td>Total CDR Records</td><td>Cumulative records processed across all streams</td></tr>
+    <tr><td>Records Today</td><td>Records processed in the current 24-hour period</td></tr>
+    <tr><td>Files Processed</td><td>Total files that completed the pipeline</td></tr>
+    <tr><td>Files Today</td><td>Files processed in the current 24-hour period</td></tr>
+    <tr><td>Failed Files</td><td>Files currently in FAILED status</td></tr>
+    <tr><td>Duplicate Files</td><td>Files detected as duplicates</td></tr>
+    <tr><td>Processing Statistics</td><td>Per-operator breakdown with record counts by stream</td></tr>
+    <tr><td>KPI Charts</td><td>Call records by type (Voice/SMS/Data), Incoming vs. Outgoing traffic</td></tr>
+  </tbody>
+</table>
+
+<!-- 9.2 File Registry -->
+<h3 class="procedure-title" id="file-registry">9.2 &nbsp; File Registry</h3>
+<p>The File Registry provides a hierarchical view of all CDR files organized by operator, vendor, and network element. It also shows distribution portal status and delivery history.</p>
+<p><strong>Path:</strong> Sidebar &rarr; File Registry</p>
+
+<!-- 9.3 Reports -->
+<h3 class="procedure-title" id="reports">9.3 &nbsp; Reports &amp; Analytics</h3>
+<p><strong>Path:</strong> Sidebar &rarr; Reports (for operational reports) or Sidebar &rarr; Analytics (for traffic analytics)</p>
+
+<table class="config-table">
+  <thead><tr><th>Report</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td>Input Report</td><td>Files received per source, with status breakdown and volume trends</td></tr>
+    <tr><td>Output Report</td><td>Files delivered per output portal, with delivery success rates</td></tr>
+    <tr><td>Processing Report</td><td>Decode performance: records/second, error rates, processing duration</td></tr>
+    <tr><td>Distribution Report</td><td>Per-rule delivery status, retry counts, failure analysis</td></tr>
+    <tr><td>Analytics Dashboard</td><td>Traffic trends, call volume heatmaps, KPI visualization</td></tr>
+  </tbody>
+</table>
+
+<!-- 9.4 Activity Log -->
+<h3 class="procedure-title" id="activity-log">9.4 &nbsp; Activity Log</h3>
+<p>The Activity Log records all system events: service starts/stops, file processing events, dispatch results, and errors. Used for operational troubleshooting and audit.</p>
+<p><strong>Path:</strong> Sidebar &rarr; Operations &rarr; Activity Log</p>
+
+<!-- 9.5 User Management -->
+<h3 class="procedure-title" id="users">9.5 &nbsp; User Management</h3>
+<p>User accounts control access to the UMP web interface. The system uses role-based access control (RBAC):</p>
+
+<table class="config-table">
+  <thead><tr><th>Role</th><th>Read Access</th><th>Write Access</th><th>Admin Functions</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Staff</strong> (<code>is_staff = True</code>)</td><td>All pages</td><td>All configuration, upload, rules</td><td>Admin panel, scripts IDE</td></tr>
+    <tr><td><strong>Regular User</strong></td><td>All pages</td><td>None (read-only)</td><td>None</td></tr>
+    <tr><td><strong>Superuser</strong></td><td>All pages</td><td>All configuration</td><td>Full admin + Script execution</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Path:</strong> Sidebar &rarr; Configuration &rarr; User Management</p>
+
+
+<!-- ═══════════════════ APPENDIX ═══════════════════ -->
+<h2 class="section-heading" id="appendix">Appendix</h2>
+
+<!-- A. Environment Variables -->
+<h3 class="procedure-title" id="env-vars">A &nbsp; Environment Variables</h3>
+
+<table class="config-table">
+  <thead><tr><th>Variable</th><th>Required</th><th>Description</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>DJANGO_SECRET_KEY</code></td><td><span class="req">Required</span></td><td>Django secret key (min 50 chars, cryptographically random)</td><td><code>$(python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())")</code></td></tr>
+    <tr><td><code>DJANGO_DEBUG</code></td><td><span class="opt">Optional</span></td><td>Debug mode. Default: <code>False</code></td><td><code>False</code></td></tr>
+    <tr><td><code>DJANGO_ALLOWED_HOSTS</code></td><td><span class="opt">Optional</span></td><td>Comma-separated allowed hostnames</td><td><code>ump.example.com,192.168.1.100</code></td></tr>
+    <tr><td><code>DB_PASSWORD</code></td><td><span class="req">Required</span></td><td>PostgreSQL database password</td><td><code>secure_db_password</code></td></tr>
+    <tr><td><code>DB_HOST</code></td><td><span class="opt">Optional</span></td><td>Database host. Default: <code>localhost</code></td><td><code>db.internal</code></td></tr>
+    <tr><td><code>DB_PORT</code></td><td><span class="opt">Optional</span></td><td>Database port. Default: <code>5432</code></td><td><code>5432</code></td></tr>
+    <tr><td><code>DB_NAME</code></td><td><span class="opt">Optional</span></td><td>Database name. Default: <code>ump_mediation</code></td><td><code>ump_mediation</code></td></tr>
+  </tbody>
+</table>
+
+<!-- B. Systemd Services -->
+<h3 class="procedure-title" id="systemd">B &nbsp; Systemd Service Configuration</h3>
+
+<table class="config-table">
+  <thead><tr><th>Service</th><th>Unit File</th><th>Management Commands</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Web Application</strong></td>
+      <td><code>mediation-web.service</code></td>
+      <td>
+        <code>sudo systemctl start mediation-web</code><br>
+        <code>sudo systemctl status mediation-web</code>
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Collector</strong></td>
+      <td><code>mediation-collector.service</code></td>
+      <td>
+        <code>sudo systemctl start mediation-collector</code><br>
+        <code>sudo systemctl status mediation-collector</code>
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Decoder</strong></td>
+      <td><code>mediation-decoder.service</code></td>
+      <td>
+        <code>sudo systemctl start mediation-decoder</code><br>
+        <code>sudo systemctl status mediation-decoder</code>
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Distributor</strong></td>
+      <td><code>mediation-distributor.service</code></td>
+      <td>
+        <code>sudo systemctl start mediation-distributor</code><br>
+        <code>sudo systemctl status mediation-distributor</code>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<pre class="cmd"># Start all services
+sudo systemctl start mediation-web mediation-collector mediation-decoder mediation-distributor
+
+# Enable all services (auto-start on boot)
+sudo systemctl enable mediation-web mediation-collector mediation-decoder mediation-distributor
+
+# Check status of all services
+sudo systemctl status mediation-*.service
+
+# View logs
+sudo journalctl -u mediation-decoder -f --no-pager</pre>
+
+<!-- C. Verification -->
+<h3 class="procedure-title" id="verification">C &nbsp; Post-Configuration Verification Checklist</h3>
+
+<table class="config-table">
+  <thead><tr><th>#</th><th>Verification Step</th><th>Expected Result</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Run <code>python manage.py check --deploy</code></td><td>No critical warnings</td><td></td></tr>
+    <tr><td>2</td><td>Navigate to <code>/health/</code></td><td><code>{"status": "ok"}</code></td><td></td></tr>
+    <tr><td>3</td><td>Login with admin credentials</td><td>Dashboard loads with all widgets</td><td></td></tr>
+    <tr><td>4</td><td>Verify Operator record exists</td><td>At least one enabled operator</td><td></td></tr>
+    <tr><td>5</td><td>Verify Source Patterns configured</td><td>Patterns for each expected file type</td><td></td></tr>
+    <tr><td>6</td><td>Upload a test CDR file</td><td>File classified correctly (operator, vendor, decoder)</td><td></td></tr>
+    <tr><td>7</td><td>Start Decoder service</td><td>File transitions: COLLECTED &rarr; PROCESSING &rarr; DECODED</td><td></td></tr>
+    <tr><td>8</td><td>Verify Distribution Rules active</td><td>At least one rule per stream type</td><td></td></tr>
+    <tr><td>9</td><td>Start Distributor service</td><td>File transitions: DECODED &rarr; DISPATCHING &rarr; COMPLETED</td><td></td></tr>
+    <tr><td>10</td><td>Verify output file delivered</td><td>Output file exists at configured portal directory</td><td></td></tr>
+    <tr><td>11</td><td>Check Distribution Logs</td><td>Log entry with status SUCCESS</td><td></td></tr>
+    <tr><td>12</td><td>Check Activity Log</td><td>Events recorded for decode and dispatch</td><td></td></tr>
+  </tbody>
+</table>
+
+<!-- D. Revision History -->
+<h3 class="procedure-title" id="revision">D &nbsp; Revision History</h3>
+
+<table class="revision-table">
+  <thead><tr><th>Rev</th><th>Date</th><th>Author</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td>1.0</td><td>2026-09-08</td><td>UMP Engineering</td><td>Initial release &mdash; covers all UI service configuration procedures</td></tr>
+  </tbody>
+</table>
+
+<div style="margin-top:40px;padding-top:16px;border-top:1px solid var(--border);font-size:11px;color:var(--ink-secondary);text-align:center;">
+  SOP-UMP-CFG-001 Rev 1.0 &nbsp;&middot;&nbsp; Universal Mediation Platform &nbsp;&middot;&nbsp; Internal &mdash; Operations &nbsp;&middot;&nbsp; 2026-09-08
+</div>
+
+</main>

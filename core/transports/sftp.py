@@ -1,6 +1,8 @@
 """SFTP transport: uploads the rendered file to portal.host:portal.directory."""
 import io
 import logging
+import posixpath
+import uuid
 
 import paramiko
 
@@ -16,12 +18,14 @@ class SFTPTransport(Transport):
         username = portal.username
         password = portal.password
         ctx = context or {}
-        remote_dir = (portal.directory or '.').rstrip('/') or '.'
-        # Honour the per-operator placeholders on remote paths too.
-        remote_dir = (remote_dir
-                      .replace('{operator}', (ctx.get('operator') or 'unknown').lower())
-                      .replace('{vendor}', (ctx.get('vendor') or 'unknown').lower())
-                      .replace('{ne}', (ctx.get('network_element') or '').lower()))
+        remote_dir = str(portal.resolve_directory(
+            operator=ctx.get('operator'),
+            vendor=ctx.get('vendor'),
+            network_element=ctx.get('network_element'),
+            cbs_substream=ctx.get('cbs_substream'),
+            downstream=ctx.get('downstream'),
+            context='published',
+        )).replace('\\', '/').rstrip('/') or '.'
 
         if not host or not username:
             raise ValueError(f'OutputPortal "{portal.name}" missing host/username')
@@ -31,10 +35,18 @@ class SFTPTransport(Transport):
             transport.connect(username=username, password=password)
             sftp = paramiko.SFTPClient.from_transport(transport)
             try:
+                if not filename or posixpath.basename(filename) != filename:
+                    raise ValueError('Output filename must not contain a path')
                 self._ensure_dir(sftp, remote_dir)
+                staging_dir = f'{remote_dir}/staging'
+                self._ensure_dir(sftp, staging_dir)
+                staged_path = f'{staging_dir}/.{filename}.{uuid.uuid4().hex}.part'
                 remote_path = f'{remote_dir}/{filename}'
-                with sftp.open(remote_path, 'wb') as remote_f:
+                with sftp.open(staged_path, 'wb') as remote_f:
                     remote_f.write(payload)
+                if sftp.stat(staged_path).st_size != len(payload):
+                    raise IOError(f'Verification failed for {filename}')
+                sftp.rename(staged_path, remote_path)
                 logger.info(f'SFTP delivered {filename} to {host}:{remote_path} ({len(payload)} bytes)')
                 return f'sftp://{host}{remote_path}'
             finally:

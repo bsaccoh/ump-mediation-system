@@ -14,13 +14,26 @@ media/
 env/
 venv/
 
-# Static files
+# Static files (collected)
 staticfiles/
 
-# Data directories
+# Data directories (all CDR data is production-local, never in repo)
 data/
 *.cdr
 *.dat
+*.bin
+*.ber
+*.asn
+
+# Node / frontend build artifacts
+node_modules/
+.vite/
+package-lock.json
+
+# SQLite databases
+*.sqlite3
+ump_mediation
+ump_mediation_*
 
 # IDE
 .vscode/
@@ -35,3 +48,13 @@ Thumbs.db
 
 # Celery
 celerybeat-schedule
+
+# Temporary / dev-only files
+config_dump.json
+*.tar.gz
+*.xlsx
+*.csv.gz
+reports/*.pptx
+
+# Claude Code local config
+.claude/

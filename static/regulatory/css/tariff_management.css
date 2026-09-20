@@ -1,0 +1,26 @@
+.regulatory-page { color: #17315b; }
+.regulatory-breadcrumb { display: flex; align-items: center; gap: .45rem; color: #6680a3; font-size: .73rem; margin-bottom: .55rem; }
+.regulatory-breadcrumb a { color: inherit; text-decoration: none; }
+.regulatory-breadcrumb i { font-size: .58rem; }
+.regulatory-page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .8rem; }
+.regulatory-page-header h1 { color: #142d5c; font-size: 1.12rem; font-weight: 700; margin: 0 0 .12rem; }
+.regulatory-page-header p { color: #587097; font-size: .77rem; margin: 0; }
+.regulatory-primary-action { padding: .42rem .72rem; white-space: nowrap; }
+.regulatory-kpi-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .55rem; margin-bottom: .6rem; }
+.regulatory-kpi-card { align-items: center; background: #fff; border: 1px solid #e1eaf5; border-radius: .35rem; box-shadow: 0 2px 7px rgba(28, 69, 118, .06); display: flex; gap: .7rem; min-height: 61px; padding: .68rem .8rem; }
+.regulatory-kpi-card small { color: #4c668f; display: block; font-size: .68rem; line-height: 1.05; }
+.regulatory-kpi-card strong { color: #132e5c; display: block; font-size: 1rem; line-height: 1.25; }
+.kpi-icon { align-items: center; border-radius: .3rem; color: #fff; display: inline-flex; flex: 0 0 31px; font-size: .9rem; height: 31px; justify-content: center; }
+.kpi-icon.blue { background: #1075f2; }.kpi-icon.purple { background: #8e28e8; }.kpi-icon.orange { background: #f69b17; }.kpi-icon.green { background: #10b968; }.kpi-icon.red { background: #ef4451; }
+.regulatory-filter-bar { align-items: center; background: #fff; border: 1px solid #e1eaf5; border-radius: .35rem; display: grid; gap: .45rem; grid-template-columns: 1.05fr .95fr 1fr .95fr 1.2fr 1.75fr auto auto; margin-bottom: .6rem; padding: .52rem; }
+.regulatory-filter-bar .form-select, .regulatory-filter-bar .form-control { border-color: #d5e1ef; color: #355078; font-size: .72rem; min-height: 30px; }
+.regulatory-search-wrap { position: relative; }.regulatory-search-wrap i { color: #7185a1; font-size: .72rem; left: .6rem; position: absolute; top: .53rem; }.regulatory-search-wrap input { padding-left: 1.7rem; }
+.regulatory-filter-bar .btn { font-size: .72rem; min-height: 30px; padding: .25rem .58rem; }
+.regulatory-table-card { background: #fff; border: 1px solid #e1eaf5; border-radius: .35rem; box-shadow: 0 2px 7px rgba(28, 69, 118, .06); overflow: hidden; }
+.regulatory-data-table { font-size: .7rem; min-width: 1050px; }.regulatory-data-table thead th { background: #f7faff; border-bottom: 1px solid #dbe7f3; color: #17315b; font-size: .67rem; font-weight: 700; padding: .47rem .48rem; white-space: nowrap; }.regulatory-data-table td { border-color: #edf2f8; color: #294568; padding: .41rem .48rem; vertical-align: middle; white-space: nowrap; }
+.status-badge { border-radius: .22rem; display: inline-block; font-size: .62rem; font-weight: 700; line-height: 1.1; padding: .22rem .38rem; }.status-draft { background: #e9edf2; color: #556678; }.status-submitted { background: #dbeafe; color: #1761bb; }.status-reviewed { background: #fff0ca; color: #a65e00; }.status-approved, .status-active { background: #d9f8e8; color: #13804b; }.status-expired { background: #ffe1e3; color: #ce3945; }
+.regulatory-row-actions { align-items: center; display: flex; gap: .26rem; justify-content: center; }.regulatory-row-actions form { margin: 0; }.icon-action { align-items: center; background: #fff; border: 1px solid #98c9fa; border-radius: .2rem; color: #1670c9; display: inline-flex; font-size: .67rem; height: 21px; justify-content: center; padding: 0; text-decoration: none; width: 21px; }.icon-action:hover { background: #eaf4ff; color: #07589f; }.icon-action.danger { border-color: #f8aeb5; color: #e0424f; }.icon-action.success { border-color: #91dfbb; color: #109255; }
+.regulatory-table-footer { align-items: center; border-top: 1px solid #edf2f8; color: #5b7090; display: flex; font-size: .68rem; gap: .8rem; justify-content: space-between; padding: .45rem .65rem; }.page-size-form select { font-size: .68rem; min-height: 26px; width: 100px; }.pagination .page-link { color: #226eb9; font-size: .68rem; padding: .2rem .42rem; }.pagination .active .page-link { background: #1075f2; border-color: #1075f2; }
+.regulatory-empty-state { align-items: center; color: #6c819d; display: flex; flex-direction: column; gap: .4rem; padding: 2.8rem 1rem; text-align: center; }.regulatory-empty-state i { color: #9ab3d1; font-size: 2rem; }.regulatory-empty-state strong { color: #304c72; }.tariff-detail-page small { color: #6a80a0; display: block; font-size: .72rem; margin-bottom: .2rem; }.tariff-detail-page strong { color: #1c3760; display: block; font-size: .86rem; }
+@media (max-width: 1250px) { .regulatory-filter-bar { grid-template-columns: repeat(4, minmax(140px, 1fr)); }.regulatory-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .regulatory-page-header { align-items: stretch; flex-direction: column; }.regulatory-kpi-grid, .regulatory-filter-bar { grid-template-columns: 1fr; }.regulatory-table-footer { align-items: flex-start; flex-direction: column; } }

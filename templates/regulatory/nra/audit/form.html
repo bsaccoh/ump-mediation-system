@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}New Audit Case | NRA{% endblock %}
+{% block page_title %}New Audit Case{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'regulatory/css/tariff_management.css' %}">
+<link rel="stylesheet" href="{% static 'regulatory/css/declarations.css' %}">
+{% endblock %}
+{% block content %}
+<div class="regulatory-page">
+    <nav class="regulatory-breadcrumb">
+        <span>NRA</span><i class="bi bi-chevron-right"></i>
+        <a href="{% url 'regulatory:audit_case_list' %}">Audit</a><i class="bi bi-chevron-right"></i>
+        <span>New Audit Case</span>
+    </nav>
+
+    <div class="declaration-form-card" style="max-width:960px;">
+        <h1 class="h5 mb-1">New Audit Case</h1>
+        <p class="text-muted small mb-3">Open a manual investigation, or select a related Risk Alert / Reconciliation Run below to auto-populate the case and seed its initial evidence.</p>
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Operator *</label>
+                    <select class="form-select" name="operator_code" required>
+                        <option value="">Select operator</option>
+                        {% for op in operators %}<option value="{{ op.code }}">{{ op.name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Case Type *</label>
+                    <select class="form-select" name="case_type" required>
+                        {% for value, label in case_type_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Period Start *</label>
+                    <input type="date" class="form-control" name="period_start" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Period End *</label>
+                    <input type="date" class="form-control" name="period_end" required>
+                </div>
+
+                <div class="col-12"><hr class="my-1"><p class="small text-muted mb-0">Related records (optional — selecting one auto-populates the case from that source)</p></div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Related Risk Alert</label>
+                    <select class="form-select" name="risk_alert">
+                        <option value="">None</option>
+                        {% for alert in risk_alerts %}<option value="{{ alert.pk }}">{{ alert.reference }} — {{ alert.operator_code }} — {{ alert.get_alert_type_display }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Related Reconciliation Run</label>
+                    <select class="form-select" name="reconciliation_run">
+                        <option value="">None</option>
+                        {% for run in reconciliation_runs %}<option value="{{ run.pk }}">{{ run.reference|default:run.pk }} — {{ run.operator_code }} — {{ run.period_start|date:"M Y" }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Related Declaration</label>
+                    <select class="form-select" name="declaration">
+                        <option value="">None</option>
+                        {% for d in declarations %}<option value="{{ d.pk }}">{{ d.reference }} — {{ d.operator_code }} — {{ d.period_start|date:"M Y" }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Related Tariff Compliance Result</label>
+                    <select class="form-select" name="tariff_compliance_result">
+                        <option value="">None</option>
+                        {% for r in compliance_results %}<option value="{{ r.pk }}">{{ r.tariff_name }} — {{ r.operator_code }} — {{ r.variance_percent }}%</option>{% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-12"><hr class="my-1"></div>
+
+                <div class="col-12">
+                    <label class="form-label">Finding *</label>
+                    <textarea class="form-control" name="finding" rows="2" required placeholder="e.g. Declared GST below expected GST"></textarea>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Risk Level *</label>
+                    <select class="form-select" name="risk_level" required>
+                        {% for value, label in risk_choices %}<option value="{{ value }}" {% if value == 'MEDIUM' %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Potential Exposure</label>
+                    <input type="number" step="0.01" class="form-control" name="potential_exposure" placeholder="0.00">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Assigned Officer</label>
+                    <select class="form-select" name="assigned_to">
+                        <option value="">Unassigned</option>
+                        {% for officer in officers %}<option value="{{ officer.pk }}">{{ officer.get_full_name|default:officer.username }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Priority</label>
+                    <select class="form-select" name="priority">
+                        <option value="">—</option>
+                        {% for value, label in risk_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Investigation Scope</label>
+                    <textarea class="form-control" name="investigation_scope" rows="2"></textarea>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Due Date</label>
+                    <input type="date" class="form-control" name="due_date">
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" name="notes" rows="2"></textarea>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Supporting Evidence</label>
+                    <textarea class="form-control" name="supporting_evidence" rows="2" placeholder="Describe or reference initial supporting evidence"></textarea>
+                </div>
+            </div>
+            <div class="mt-3">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check-lg"></i> Create Audit Case</button>
+                <a href="{% url 'regulatory:audit_case_list' %}" class="btn btn-outline-secondary btn-sm">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

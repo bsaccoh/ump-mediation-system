@@ -23,6 +23,26 @@ logger = logging.getLogger(__name__)
 class PGWProcessor(BaseProcessor):
     """Processor for Huawei PGW CDR files (4G data sessions)."""
 
+    def decode_to_records(self, file_path: str):
+        """Fast path: decode binary directly to in-memory record dicts."""
+        try:
+            decoder = PGWDecoder()
+            records = decoder.decode_file(file_path)
+
+            pgw_records = [
+                rec for rec in (records or [])
+                if rec.get('record_type') != PGWDecoder.RECORD_TYPE_SGW
+                and rec.get('record_type_name', '').upper() not in ('SGW-CDR', 'SGWRECORD')
+            ]
+
+            count = len(pgw_records)
+            logger.info(f"PGW decoded {count} records (filtered from {len(records or [])} total)")
+            return True, pgw_records, count
+
+        except Exception as e:
+            logger.error(f"PGW decode error: {e}", exc_info=True)
+            return False, str(e), 0
+
     def decode(self, file_path: str) -> Tuple[bool, str, int]:
         """Decode ASN.1 BER binary PGW file directly into memory.
 
@@ -50,13 +70,6 @@ class PGWProcessor(BaseProcessor):
             self._decoded_records = pgw_records
             count = len(pgw_records)
             logger.info(f"PGW decoded {count} records (filtered from {len(records or [])} total)")
-            print(f"[PGW PROCESSOR] Decoded {count} records from {file_path}. Decoder errors: {decoder.errors}")
-            if decoder.errors:
-                for err in decoder.errors[:5]:
-                    print(f"[PGW DECODER ERROR] {err}")
-
-            # Write decoded CSV output (mirrors MSC behaviour)
-            self._write_decoded_csv(pgw_records, file_path, 'pgw')
 
             return True, file_path, count
 
@@ -213,17 +226,13 @@ class PGWProcessor(BaseProcessor):
             record.end_time = record.start_time + timedelta(seconds=record.duration)
 
     def _parse_timestamp(self, ts_str) -> datetime:
-        """Parse PGW timestamp string to timezone-aware datetime."""
+        """Parse PGW timestamp string to naive datetime."""
         if not ts_str:
             return None
         try:
-            from django.utils import timezone
-            import pytz
             s = str(ts_str)
             if len(s) >= 19:
-                naive_dt = datetime.strptime(s[:19], '%Y-%m-%d %H:%M:%S')
-                # Make timezone-aware using UTC
-                return timezone.make_aware(naive_dt, pytz.UTC)
+                return datetime.strptime(s[:19], '%Y-%m-%d %H:%M:%S')
             return None
         except (ValueError, TypeError):
             return None
@@ -347,6 +356,5 @@ class PGWProcessor(BaseProcessor):
                     writer.writerow(row)
 
             logger.info(f'[PGW] Decoded CSV written: {csv_path} ({len(records)} rows)')
-            print(f'[PGW PROCESSOR] Decoded CSV: {csv_path}')
         except Exception as e:
             logger.warning(f'[PGW] Could not write decoded CSV: {e}')

@@ -42,8 +42,8 @@
                         <thead class="table-light">
                             <tr>
                                 <th style="width:10%">Pos</th>
-                                <th style="width:35%">Output Column (header in CSV)</th>
-                                <th style="width:45%">Source Field (from record)</th>
+                                <th style="width:35%">Output Column <small class="fw-normal text-muted">(custom CSV header)</small></th>
+                                <th style="width:45%">Source Field <small class="fw-normal text-muted">(from decoded record)</small></th>
                                 <th style="width:10%"></th>
                             </tr>
                         </thead>
@@ -127,11 +127,20 @@ function makeRow(header = '', source = '') {
     tdPos.appendChild(btnUp); tdPos.appendChild(btnDown);
     
     const tdHeader = document.createElement('td');
+    const headerWrap = document.createElement('div');
+    headerWrap.className = 'input-group input-group-sm';
     const inp = document.createElement('input');
     inp.type = 'text'; inp.value = header;
-    inp.className = 'form-control form-control-sm bg-light output-header';
-    inp.placeholder = 'e.g. SUBSCRIBER_ID';
-    tdHeader.appendChild(inp);
+    inp.className = 'form-control form-control-sm output-header';
+    inp.placeholder = 'e.g. MSISDN or any custom name';
+    inp.title = 'Type any custom name for this CSV column header';
+    const editIcon = document.createElement('span');
+    editIcon.className = 'input-group-text bg-white';
+    editIcon.innerHTML = '<i class="bi bi-pencil text-primary"></i>';
+    editIcon.title = 'Editable — type any custom header name';
+    headerWrap.appendChild(inp);
+    headerWrap.appendChild(editIcon);
+    tdHeader.appendChild(headerWrap);
     
     const tdSource = document.createElement('td');
     tdSource.appendChild(buildSourceSelect(source));

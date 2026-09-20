@@ -167,10 +167,10 @@ class SGSNDecoder:
                     f"No SGSN records found in {filepath}. "
                     f"Expected outer tags: {[hex(t) for t in self.OUTER_TAGS.keys()]}"
                 )
-                print(f"[SGSN DECODER] First 100 bytes: {data[:100].hex()}")
+                logger.debug(f"SGSN first 100 bytes: {data[:100].hex()}")
 
-            print(f"[SGSN DECODER] Total records decoded: {len(self.records)}, "
-                  f"errors: {len(self.errors)}, file size: {len(data)} bytes")
+            logger.debug(f"SGSN total records decoded: {len(self.records)}, "
+                         f"errors: {len(self.errors)}, file size: {len(data)} bytes")
             return self.records
 
         except Exception as e:

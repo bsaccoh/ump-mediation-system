@@ -21,6 +21,8 @@ class InputPortalForm(forms.ModelForm):
             'name', 'portal_type', 'stream_type', 'host', 'port',
             'username', 'password', 'directory', 'file_pattern',
             'polling_interval', 'is_active', 'description',
+            # Staging / Publication
+            'landing_root', 'staging_path', 'archive_path', 'enable_staging',
             # FAI / Protocol
             'script_name', 'connect_timeout', 'enable_transcript',
             'disposition', 'rename_ext', 'move_to', 'rmv_prefix', 'reg_pattern',
@@ -76,6 +78,12 @@ class InputPortalForm(forms.ModelForm):
             'start_throttling_counts': forms.NumberInput(attrs={'class': 'form-control form-control-sm bg-light'}),
             'end_throttling_counts': forms.NumberInput(attrs={'class': 'form-control form-control-sm bg-light'}),
 
+            # Staging / Publication
+            'landing_root': forms.TextInput(attrs={'class': 'form-control form-control-sm bg-light', 'placeholder': '/data/ump/landing/input'}),
+            'staging_path': forms.TextInput(attrs={'class': 'form-control form-control-sm bg-light', 'placeholder': '{stream}/staging/'}),
+            'archive_path': forms.TextInput(attrs={'class': 'form-control form-control-sm bg-light', 'placeholder': '{stream}/archive/{YYYY}/{MM}/{DD}/{HH}/'}),
+            'enable_staging': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+
             # Input Processing
             'duplicate_detection_algo': forms.Select(attrs={'class': 'form-select form-select-sm bg-light'}, choices=[('Disabled', 'Disabled'), ('Name', 'Name'), ('Size', 'Size'), ('Checksum', 'Checksum')]),
             'duplicate_disposition': forms.Select(attrs={'class': 'form-select form-select-sm bg-light'}, choices=[('Transfer and Process Normally', 'Transfer and Process Normally'), ('Delete', 'Delete'), ('Rename', 'Rename'), ('Move', 'Move')]),
@@ -94,13 +102,15 @@ class OutputPortalForm(forms.ModelForm):
             'name', 'portal_type', 'stream_type', 'output_format',
             'host', 'port', 'username', 'password', 'directory',
             'is_active', 'description',
+            # Staging / Publication
+            'landing_root', 'staging_path', 'archive_path', 'enable_staging',
         ]
         help_texts = {
             'directory': (
                 'Output path. Absolute, or relative to the data dir. '
                 'Placeholders: {operator} {vendor} {ne} {stream} {portal} '
-                '{YYYY} {MM} {DD}. Leave blank to use the per-operator default '
-                '{operator}/output/{vendor}/{ne}.'
+                '{downstream} {cbs_substream} {YYYY} {MM} {DD} {HH}. '
+                'Leave blank to use the PathBuilder default.'
             ),
         }
         widgets = {
@@ -115,6 +125,11 @@ class OutputPortalForm(forms.ModelForm):
             'directory': forms.TextInput(attrs={'class': 'form-control form-control-sm bg-light', 'placeholder': '/incoming/MSC'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'description': forms.Textarea(attrs={'class': 'form-control form-control-sm bg-light', 'rows': 2}),
+            # Staging / Publication
+            'landing_root': forms.TextInput(attrs={'class': 'form-control form-control-sm bg-light', 'placeholder': '/data/ump/landing/output'}),
+            'staging_path': forms.TextInput(attrs={'class': 'form-control form-control-sm bg-light', 'placeholder': '{downstream}/{stream}/staging/'}),
+            'archive_path': forms.TextInput(attrs={'class': 'form-control form-control-sm bg-light', 'placeholder': '{downstream}/{stream}/archive/{YYYY}/{MM}/{DD}/{HH}/'}),
+            'enable_staging': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
 

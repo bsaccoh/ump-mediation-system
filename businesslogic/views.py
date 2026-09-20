@@ -5,6 +5,7 @@ CRUD interface for managing mediation business rules.
 """
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from core.decorators import staff_required
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -15,7 +16,7 @@ from .models import BusinessRule, RuleExecutionLog
 
 # ── List ──────────────────────────────────────────────────────────────────────
 
-@login_required
+@staff_required
 def rule_list(request):
     rules = BusinessRule.objects.prefetch_related('executions').all()
 
@@ -60,7 +61,7 @@ def rule_list(request):
     })
 
 
-@login_required
+@staff_required
 def business_rule_list(request):
     """Filters for standard business rules (Validation, Transformation, Enrichment)."""
     types = [BusinessRule.RuleType.VALIDATION, BusinessRule.RuleType.TRANSFORMATION, BusinessRule.RuleType.ENRICHMENT]
@@ -73,7 +74,7 @@ def business_rule_list(request):
     })
 
 
-@login_required
+@staff_required
 def correlation_rule_list(request):
     """Filters for Correlation rules."""
     qs = BusinessRule.objects.filter(rule_type=BusinessRule.RuleType.CORRELATION)
@@ -85,7 +86,7 @@ def correlation_rule_list(request):
     })
 
 
-@login_required
+@staff_required
 def detection_rule_list(request):
     """Filters for Detection rules."""
     qs = BusinessRule.objects.filter(rule_type=BusinessRule.RuleType.DETECTION)
@@ -97,7 +98,7 @@ def detection_rule_list(request):
     })
 
 
-@login_required
+@staff_required
 def error_handling_list(request):
     """Filters for Error Handling rules."""
     qs = BusinessRule.objects.filter(rule_type=BusinessRule.RuleType.ERROR_HANDLING)
@@ -111,7 +112,7 @@ def error_handling_list(request):
 
 # ── Create ─────────────────────────────────────────────────────────────────────
 
-@login_required
+@staff_required
 def rule_create(request):
     initial = {}
     if 'type' in request.GET:
@@ -133,7 +134,7 @@ def rule_create(request):
 
 # ── Edit ───────────────────────────────────────────────────────────────────────
 
-@login_required
+@staff_required
 def rule_edit(request, pk):
     rule = get_object_or_404(BusinessRule, pk=pk)
     form = BusinessRuleForm(request.POST or None, instance=rule)
@@ -151,7 +152,7 @@ def rule_edit(request, pk):
 
 # ── Detail ─────────────────────────────────────────────────────────────────────
 
-@login_required
+@staff_required
 def rule_detail(request, pk):
     rule = get_object_or_404(BusinessRule, pk=pk)
     executions = rule.executions.all()[:20]
@@ -163,7 +164,7 @@ def rule_detail(request, pk):
 
 # ── Delete ─────────────────────────────────────────────────────────────────────
 
-@login_required
+@staff_required
 @require_POST
 def rule_delete(request, pk):
     rule = get_object_or_404(BusinessRule, pk=pk)
@@ -175,7 +176,7 @@ def rule_delete(request, pk):
 
 # ── Toggle Status ──────────────────────────────────────────────────────────────
 
-@login_required
+@staff_required
 @require_POST
 def rule_toggle(request, pk):
     """Quick toggle between ACTIVE and INACTIVE."""

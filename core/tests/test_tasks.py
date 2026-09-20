@@ -28,7 +28,7 @@ def _always_fails():
 
 
 class TrackedTaskLifecycleTests(TestCase):
-    databases = {"default", "interconnect", "regulatory", "roaming"}
+    databases = {"default"}
 
     def test_success_lifecycle(self):
         job = enqueue_job(
@@ -82,7 +82,7 @@ class TrackedTaskLifecycleTests(TestCase):
 
 
 class JobApiTests(TestCase):
-    databases = {"default", "interconnect", "regulatory", "roaming"}
+    databases = {"default"}
 
     def setUp(self):
         from django.contrib.auth import get_user_model

@@ -1,0 +1,780 @@
+{% extends "base.html" %}
+{% load static %}
+{% load regulatory_tags %}
+{% block title %}{{ case.case_number }} | Audit Cases | NRA{% endblock %}
+{% block page_title %}Audit Case {{ case.case_number }}{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'regulatory/css/tariff_management.css' %}">
+<link rel="stylesheet" href="{% static 'regulatory/css/risk.css' %}">
+<link rel="stylesheet" href="{% static 'regulatory/css/audit.css' %}">
+{% endblock %}
+{% block content %}
+<div class="regulatory-page audit-page">
+    <nav class="regulatory-breadcrumb">
+        <span>NRA</span><i class="bi bi-chevron-right"></i>
+        <a href="{% url 'regulatory:audit_case_list' %}">Audit</a><i class="bi bi-chevron-right"></i>
+        <a href="{% url 'regulatory:audit_case_list' %}">Audit Cases</a><i class="bi bi-chevron-right"></i>
+        <span>{{ case.case_number }}</span>
+    </nav>
+
+    <div class="regulatory-page-header">
+        <div>
+            <h1>Audit Case {{ case.case_number }}</h1>
+            <p>Regulatory investigation, evidence review and case resolution</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap justify-content-end">
+            <a href="#case-actions" class="btn btn-outline-primary btn-sm" data-preset="assign"><i class="bi bi-person-plus"></i> Assign / Reassign</a>
+            <a href="?tab=operator_responses#request-response" class="btn btn-outline-primary btn-sm"><i class="bi bi-envelope"></i> Request Operator Response</a>
+            <a href="?tab=findings#add-finding" class="btn btn-outline-primary btn-sm"><i class="bi bi-flag"></i> Add Finding</a>
+            <a href="?tab=evidence#add-evidence" class="btn btn-outline-primary btn-sm"><i class="bi bi-paperclip"></i> Add Evidence</a>
+            <a href="{% url 'regulatory:audit_case_report' case.pk %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-file-earmark-spreadsheet"></i> Generate Report</a>
+            {% if 'RESOLVED' in case_next_statuses %}<a href="#case-actions" class="btn btn-success btn-sm" data-preset="resolve"><i class="bi bi-check-circle"></i> Resolve Case</a>{% endif %}
+            {% if case.status == 'RESOLVED' %}<a href="#case-actions" class="btn btn-outline-dark btn-sm" data-preset="close"><i class="bi bi-lock"></i> Close Case</a>{% endif %}
+            {% if case_reopenable and is_supervisor %}<a href="#case-actions" class="btn btn-outline-warning btn-sm" data-preset="reopen"><i class="bi bi-arrow-counterclockwise"></i> Reopen Case</a>{% endif %}
+            <div class="dropdown d-inline-block">
+                <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="dropdown"><i class="bi bi-three-dots"></i> More</button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item small" href="#case-actions" data-preset="update_risk">Update Risk</a></li>
+                    <li><a class="dropdown-item small" href="#case-actions" data-preset="update_priority">Update Priority</a></li>
+                    <li><a class="dropdown-item small" href="#case-actions" data-preset="update_exposure">Update Exposure</a></li>
+                    <li><a class="dropdown-item small" href="{% url 'regulatory:audit_case_list' %}">Back to Audit Cases</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <section class="audit-detail-grid audit-status-strip-8">
+        <div class="audit-detail-value"><small>Operator</small><strong>{{ case.operator_code }}</strong></div>
+        <div class="audit-detail-value"><small>Case Type</small><strong>{{ case.get_case_type_display }}</strong></div>
+        <div class="audit-detail-value"><small>Risk</small><strong><span class="status-badge risk-severity-{{ case.risk_level|lower }}">{{ case.get_risk_level_display }}</span></strong></div>
+        <div class="audit-detail-value"><small>Priority</small><strong>{{ case.get_priority_display|default:"—" }}</strong></div>
+        <div class="audit-detail-value"><small>Status</small><strong><span class="status-badge audit-status-{{ case.status|lower }}">{{ case.get_status_display }}</span></strong></div>
+        <div class="audit-detail-value"><small>Assigned To</small><strong>{{ case.assigned_to|default:"Unassigned" }}</strong></div>
+        <div class="audit-detail-value"><small>Opened</small><strong>{{ case.opened_at|date:"d M Y" }}</strong></div>
+        <div class="audit-detail-value"><small>Due</small><strong>{{ case.due_date|date:"d M Y"|default:"—" }}</strong></div>
+    </section>
+
+    <section class="regulatory-kpi-grid audit-financial-kpi-grid">
+        {% if financial_analysis.is_financial %}
+        <div class="regulatory-kpi-card"><span class="kpi-icon blue"><i class="bi bi-cash"></i></span><div><small>Expected Revenue</small><strong>{{ financial_analysis.expected_revenue|default:"—" }}</strong></div></div>
+        <div class="regulatory-kpi-card"><span class="kpi-icon blue"><i class="bi bi-cash-coin"></i></span><div><small>Declared Revenue</small><strong>{{ financial_analysis.declared_revenue|default:"—" }}</strong></div></div>
+        <div class="regulatory-kpi-card"><span class="kpi-icon orange"><i class="bi bi-arrow-left-right"></i></span><div><small>Revenue Variance</small><strong>{{ financial_analysis.revenue_variance|default:"—" }}</strong></div></div>
+        <div class="regulatory-kpi-card"><span class="kpi-icon blue"><i class="bi bi-receipt"></i></span><div><small>Expected GST</small><strong>{{ financial_analysis.expected_gst|default:"—" }}</strong></div></div>
+        <div class="regulatory-kpi-card"><span class="kpi-icon blue"><i class="bi bi-receipt-cutoff"></i></span><div><small>Declared GST</small><strong>{{ financial_analysis.declared_gst|default:"—" }}</strong></div></div>
+        <div class="regulatory-kpi-card"><span class="kpi-icon orange"><i class="bi bi-arrow-left-right"></i></span><div><small>GST Variance</small><strong>{{ financial_analysis.gst_variance|default:"—" }}</strong></div></div>
+        <div class="regulatory-kpi-card"><span class="kpi-icon red"><i class="bi bi-exclamation-diamond"></i></span><div><small>Potential Exposure</small><strong>{{ case.currency }} {{ case.potential_exposure|floatformat:2 }}</strong></div></div>
+        <div class="regulatory-kpi-card"><span class="kpi-icon red"><i class="bi bi-check2-square"></i></span><div><small>Confirmed Exposure</small><strong>{% if case.confirmed_exposure is not None %}{{ case.currency }} {{ case.confirmed_exposure|floatformat:2 }}{% else %}—{% endif %}</strong></div></div>
+        <div class="regulatory-kpi-card"><span class="kpi-icon green"><i class="bi bi-piggy-bank"></i></span><div><small>Recovered / Adjusted</small><strong>{% if case.recovered_amount is not None %}{{ case.currency }} {{ case.recovered_amount|floatformat:2 }}{% else %}—{% endif %}</strong></div></div>
+        {% else %}
+        <div class="regulatory-kpi-card"><span class="kpi-icon blue"><i class="bi bi-hash"></i></span><div><small>Affected Records</small><strong>{{ financial_analysis.affected_records|default:"—" }}</strong></div></div>
+        <div class="regulatory-kpi-card"><span class="kpi-icon orange"><i class="bi bi-exclamation-triangle"></i></span><div><small>Missing Records</small><strong>{{ financial_analysis.missing_records|default:"—" }}</strong></div></div>
+        <div class="regulatory-kpi-card"><span class="kpi-icon blue"><i class="bi bi-folder"></i></span><div><small>Affected Files</small><strong>{{ financial_analysis.affected_files|default:"—" }}</strong></div></div>
+        <div class="regulatory-kpi-card"><span class="kpi-icon orange"><i class="bi bi-graph-down"></i></span><div><small>Traffic Variance</small><strong>{{ financial_analysis.traffic_variance|default:"—" }}</strong></div></div>
+        <div class="regulatory-kpi-card"><span class="kpi-icon red"><i class="bi bi-exclamation-diamond"></i></span><div><small>Potential Exposure</small><strong>{{ case.currency }} {{ case.potential_exposure|floatformat:2 }}</strong></div></div>
+        {% endif %}
+    </section>
+
+    <nav class="audit-tabs nav nav-tabs">
+        <a class="nav-link {% if active_tab == 'overview' %}active{% endif %}" href="?tab=overview">Overview</a>
+        <a class="nav-link {% if active_tab == 'findings' %}active{% endif %}" href="?tab=findings">Findings</a>
+        <a class="nav-link {% if active_tab == 'evidence' %}active{% endif %}" href="?tab=evidence">Evidence</a>
+        <a class="nav-link {% if active_tab == 'financial' %}active{% endif %}" href="?tab=financial">Financial Analysis</a>
+        <a class="nav-link {% if active_tab == 'reconciliation' %}active{% endif %}" href="?tab=reconciliation">Reconciliation</a>
+        <a class="nav-link {% if active_tab == 'declaration' %}active{% endif %}" href="?tab=declaration">Declaration</a>
+        <a class="nav-link {% if active_tab == 'tariff_tax' %}active{% endif %}" href="?tab=tariff_tax">Tariff / Tax Rules</a>
+        <a class="nav-link {% if active_tab == 'cdrs' %}active{% endif %}" href="?tab=cdrs">CDRs</a>
+        <a class="nav-link {% if active_tab == 'source_files' %}active{% endif %}" href="?tab=source_files">Source Files</a>
+        <a class="nav-link {% if active_tab == 'calculations' %}active{% endif %}" href="?tab=calculations">Calculation Trace</a>
+        <a class="nav-link {% if active_tab == 'operator_responses' %}active{% endif %}" href="?tab=operator_responses">Operator Responses</a>
+        <a class="nav-link {% if active_tab == 'comments' %}active{% endif %}" href="?tab=comments">Comments</a>
+        <a class="nav-link {% if active_tab == 'activity' %}active{% endif %}" href="?tab=activity">Activity Log</a>
+    </nav>
+
+    {% if active_tab == 'overview' %}
+    <section class="audit-section-card">
+        <h2>Case Information</h2>
+        <div class="audit-detail-grid">
+            <div class="audit-detail-value"><small>Case ID</small><strong>{{ case.case_number }}</strong></div>
+            <div class="audit-detail-value"><small>Operator</small><strong>{{ case.operator_code }}</strong></div>
+            <div class="audit-detail-value"><small>Case Type</small><strong>{{ case.get_case_type_display }}</strong></div>
+            <div class="audit-detail-value"><small>Period</small><strong>{% if case.period_start %}{{ case.period_start|date:"d M Y" }} – {{ case.period_end|date:"d M Y" }}{% else %}—{% endif %}</strong></div>
+            <div class="audit-detail-value"><small>Status</small><strong>{{ case.get_status_display }}</strong></div>
+            <div class="audit-detail-value"><small>Risk</small><strong>{{ case.get_risk_level_display }}</strong></div>
+            <div class="audit-detail-value"><small>Priority</small><strong>{{ case.get_priority_display|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Assigned Officer</small><strong>{{ case.assigned_to|default:"Unassigned" }}</strong></div>
+            <div class="audit-detail-value"><small>Opened By</small><strong>{{ case.opened_by|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Opened At</small><strong>{{ case.opened_at|date:"d M Y H:i" }}</strong></div>
+            <div class="audit-detail-value"><small>Due Date</small><strong>{{ case.due_date|date:"d M Y"|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Last Updated</small><strong>{{ case.updated_at|date:"d M Y H:i" }}</strong></div>
+        </div>
+    </section>
+
+    <section class="audit-section-card">
+        <h2>Case Summary</h2>
+        <div class="audit-detail-grid">
+            <div class="audit-detail-value"><small>Finding Summary</small><strong>{{ case.finding_summary|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Potential Exposure</small><strong>{{ case.currency }} {{ case.potential_exposure|floatformat:2 }}</strong></div>
+            <div class="audit-detail-value"><small>Confirmed Exposure</small><strong>{% if case.confirmed_exposure is not None %}{{ case.currency }} {{ case.confirmed_exposure|floatformat:2 }}{% else %}—{% endif %}</strong></div>
+            <div class="audit-detail-value"><small>Outstanding Exposure</small><strong>{{ case.currency }} {{ case.outstanding_exposure|floatformat:2 }}</strong></div>
+            <div class="audit-detail-value"><small>Resolution Status</small><strong>{% if case.resolution_type %}{{ case.get_resolution_type_display }}{% else %}Not yet resolved{% endif %}</strong></div>
+        </div>
+        <p class="small mb-0 mt-2">{{ case.description|linebreaksbr }}</p>
+    </section>
+
+    <section class="audit-section-card">
+        <h2>Related Records &amp; Relationship</h2>
+        <div class="audit-evidence-chain">
+            {% if case.risk_alert %}<div class="node"><small>Risk Alert</small><strong><a href="{% url 'regulatory:risk_alert_detail' case.risk_alert.reference|default:case.risk_alert.pk %}">{{ case.risk_alert.reference }}</a> — {{ case.risk_alert.get_status_display }}</strong></div><i class="bi bi-arrow-right"></i>{% endif %}
+            {% if case.reconciliation_run %}<div class="node"><small>Reconciliation Run</small><strong><a href="{% url 'regulatory:reconciliation_detail' case.reconciliation_run.pk %}">{{ case.reconciliation_run.reference|default:case.reconciliation_run.pk }}</a> — {{ case.reconciliation_run.get_status_display }}</strong></div><i class="bi bi-arrow-right"></i>{% endif %}
+            {% if case.declaration %}<div class="node"><small>Operator Declaration</small><strong><a href="{% url 'regulatory:declaration_detail' case.declaration.pk %}">{{ case.declaration.reference }}</a> — {{ case.declaration.get_status_display }}</strong></div><i class="bi bi-arrow-right"></i>{% endif %}
+            <div class="node"><small>Audit Case</small><strong>{{ case.case_number }} — {{ case.get_status_display }}</strong></div>
+            {% if case.tariff_compliance_result %}<i class="bi bi-arrow-right"></i><div class="node"><small>Tariff Compliance</small><strong><a href="{% url 'regulatory:tariff_compliance_detail' case.tariff_compliance_result.pk %}">{{ case.tariff_compliance_result.tariff_name }}</a></strong></div>{% endif %}
+        </div>
+        {% if not case.risk_alert and not case.reconciliation_run and not case.declaration and not case.tariff_compliance_result %}
+        <p class="text-muted small mb-0 mt-2">This case was opened manually with no linked source record.</p>
+        {% endif %}
+    </section>
+
+    <section class="audit-section-card">
+        <h2>Investigation Timeline Summary</h2>
+        <div class="audit-detail-grid">
+            <div class="audit-detail-value"><small>Case Created</small><strong>{{ case.opened_at|date:"d M Y H:i" }}</strong></div>
+            <div class="audit-detail-value"><small>Assigned</small><strong>{{ case.assigned_at|date:"d M Y H:i"|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Investigation Started</small><strong>{{ case.investigation_started_at|date:"d M Y H:i"|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Operator Contacted</small><strong>{{ operator_responses.first.requested_at|date:"d M Y H:i"|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Latest Response</small><strong>{{ operator_responses.first.submitted_at|date:"d M Y H:i"|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Last Finding</small><strong>{{ findings.first.created_at|date:"d M Y H:i"|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Last Evidence Added</small><strong>{{ evidence.first.created_at|date:"d M Y H:i"|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Target Resolution Date</small><strong>{{ case.due_date|date:"d M Y"|default:"—" }}</strong></div>
+        </div>
+    </section>
+
+    <section class="audit-section-card">
+        <h2>Report History</h2>
+        {% if report_history %}
+        <div class="table-responsive">
+            <table class="table table-hover regulatory-data-table mb-0">
+                <thead><tr><th>Version</th><th>Format</th><th>Case Status</th><th>Generated By</th><th>Generated At</th><th>Checksum</th><th class="text-center">Action</th></tr></thead>
+                <tbody>
+                    {% for report in report_history %}
+                    <tr>
+                        <td>v{{ report.version }}</td>
+                        <td>{{ report.file_format }}</td>
+                        <td>{{ report.case_status_at_generation }}</td>
+                        <td>{{ report.generated_by|default:"—" }}</td>
+                        <td>{{ report.generated_at|date:"d M Y H:i" }}</td>
+                        <td>{{ report.checksum|truncatechars:16 }}</td>
+                        <td class="text-center"><a class="icon-action" href="{{ report.file.url }}" title="Download"><i class="bi bi-download"></i></a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted small mb-0">No report has been generated for this case yet.</p>
+        {% endif %}
+    </section>
+
+    {% elif active_tab == 'findings' %}
+    <section class="audit-section-card">
+        <h2>Findings</h2>
+        {% for finding in findings %}
+        <div class="audit-finding-card">
+            <h3>{{ finding.title|default:finding.get_finding_type_display }} <span class="status-badge risk-severity-{{ finding.severity|lower }}">{{ finding.get_severity_display }}</span> <span class="status-badge status-{{ finding.status|lower }}">{{ finding.get_status_display }}</span></h3>
+            <p class="small mb-1">{{ finding.description }}</p>
+            <div class="d-flex gap-3 small text-muted flex-wrap">
+                <span>Expected: {{ finding.expected_value|default:"—" }}</span>
+                <span>Observed: {{ finding.observed_value|default:"—" }}</span>
+                <span>Variance: {{ finding.variance|default:"—" }}</span>
+                <span>Exposure: {{ case.currency }} {{ finding.financial_exposure|floatformat:2 }}</span>
+                <span>Created {{ finding.created_at|date:"d M Y" }}</span>
+            </div>
+            {% if finding.recommendation %}<p class="small mt-1 mb-0"><strong>Recommendation:</strong> {{ finding.recommendation }}</p>{% endif %}
+            <div class="d-flex gap-2 mt-2 flex-wrap">
+                <details><summary class="btn btn-outline-secondary btn-sm">Edit</summary>
+                    <form method="post" class="row g-2 mt-2">
+                        {% csrf_token %}<input type="hidden" name="action" value="update_finding"><input type="hidden" name="finding_id" value="{{ finding.pk }}">
+                        <div class="col-md-6"><input name="title" value="{{ finding.title }}" class="form-control form-control-sm" placeholder="Title"></div>
+                        <div class="col-md-3"><input type="number" step="0.01" name="expected_value" value="{{ finding.expected_value|default_if_none:'' }}" class="form-control form-control-sm" placeholder="Expected"></div>
+                        <div class="col-md-3"><input type="number" step="0.01" name="observed_value" value="{{ finding.observed_value|default_if_none:'' }}" class="form-control form-control-sm" placeholder="Observed"></div>
+                        <div class="col-12"><textarea name="description" class="form-control form-control-sm" rows="2">{{ finding.description }}</textarea></div>
+                        <div class="col-12"><button class="btn btn-primary btn-sm">Save Changes</button></div>
+                    </form>
+                </details>
+                {% if finding.status == 'OPEN' %}<form method="post"><input type="hidden" name="action" value="confirm_finding"><input type="hidden" name="finding_id" value="{{ finding.pk }}">{% csrf_token %}<button class="btn btn-outline-success btn-sm">Confirm</button></form>{% endif %}
+                {% if finding.status != 'RESOLVED' %}<form method="post"><input type="hidden" name="action" value="resolve_finding"><input type="hidden" name="finding_id" value="{{ finding.pk }}">{% csrf_token %}<button class="btn btn-outline-primary btn-sm">Resolve</button></form>{% endif %}
+            </div>
+        </div>
+        {% empty %}
+        <p class="text-muted small">No findings have been recorded.</p>
+        {% endfor %}
+    </section>
+    <section class="audit-section-card" id="add-finding">
+        <h2>Add Finding</h2>
+        <form method="post">
+            {% csrf_token %}<input type="hidden" name="action" value="add_finding">
+            <div class="row g-2">
+                <div class="col-md-6"><label class="form-label small mb-1">Finding Title *</label><input name="title" class="form-control form-control-sm" required></div>
+                <div class="col-md-3"><label class="form-label small mb-1">Finding Type *</label><select name="finding_type" class="form-select form-select-sm">{% for value, label in finding_type_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+                <div class="col-md-3"><label class="form-label small mb-1">Severity *</label><select name="severity" class="form-select form-select-sm">{% for value, label in risk_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+                <div class="col-12"><label class="form-label small mb-1">Description *</label><textarea name="description" class="form-control form-control-sm" rows="2" required></textarea></div>
+                <div class="col-md-3"><label class="form-label small mb-1">Expected Value</label><input type="number" step="0.01" name="expected_value" class="form-control form-control-sm"></div>
+                <div class="col-md-3"><label class="form-label small mb-1">Observed / Declared Value</label><input type="number" step="0.01" name="observed_value" class="form-control form-control-sm"></div>
+                <div class="col-md-3"><label class="form-label small mb-1">Financial Exposure</label><input type="number" step="0.01" name="financial_exposure" class="form-control form-control-sm"></div>
+                <div class="col-12"><label class="form-label small mb-1">Recommendation</label><textarea name="recommendation" class="form-control form-control-sm" rows="2"></textarea></div>
+            </div>
+            <div class="mt-2"><button class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> Save Finding</button></div>
+        </form>
+    </section>
+
+    {% elif active_tab == 'evidence' %}
+    <section class="audit-section-card">
+        <h2>Evidence</h2>
+        <div class="table-responsive">
+            <table class="table table-hover regulatory-data-table mb-0">
+                <thead><tr><th>Evidence ID</th><th>Type</th><th>Description</th><th>Source</th><th>Checksum</th><th>Added By</th><th>Added</th><th>Linked Finding</th><th class="text-center">Actions</th></tr></thead>
+                <tbody>
+                    {% for item in evidence %}
+                    <tr>
+                        <td>#{{ item.pk }}</td>
+                        <td>{{ item.get_evidence_type_display }}</td>
+                        <td>{{ item.description|default:item.notes|truncatechars:50 }}</td>
+                        <td>{{ item.source_type|default:"—" }} {{ item.reference_id }}</td>
+                        <td>{{ item.checksum|default:"—" }}</td>
+                        <td>{{ item.created_by|default:"—" }}</td>
+                        <td>{{ item.created_at|date:"d M Y H:i" }}</td>
+                        <td>{% if item.finding %}{{ item.finding.title|default:item.finding.get_finding_type_display }}{% else %}—{% endif %}</td>
+                        <td>
+                            <div class="regulatory-row-actions">
+                                {% if item.file %}<a class="icon-action" href="{{ item.file.url }}" title="Download"><i class="bi bi-download"></i></a>{% endif %}
+                                {% if item.reference_url %}<a class="icon-action" href="{{ item.reference_url }}" title="Open Source"><i class="bi bi-box-arrow-up-right"></i></a>{% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="9" class="py-1">
+                            <form method="post" class="d-flex gap-2 align-items-center">
+                                {% csrf_token %}<input type="hidden" name="action" value="link_evidence_finding"><input type="hidden" name="evidence_id" value="{{ item.pk }}">
+                                <span class="small text-muted">Link to finding:</span>
+                                <select name="finding_id" class="form-select form-select-sm" style="max-width:260px;">
+                                    <option value="">— unlinked —</option>
+                                    {% for f in findings %}<option value="{{ f.pk }}" {% if item.finding_id == f.pk %}selected{% endif %}>{{ f.title|default:f.get_finding_type_display }}</option>{% endfor %}
+                                </select>
+                                <button class="btn btn-outline-secondary btn-sm">Save</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}<tr><td colspan="9" class="text-muted small text-center py-3">No evidence has been attached.</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <section class="audit-section-card" id="add-evidence">
+        <h2>Add Evidence</h2>
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}<input type="hidden" name="action" value="add_evidence">
+            <div class="row g-2">
+                <div class="col-md-4"><label class="form-label small mb-1">Evidence Type *</label><select name="evidence_type" class="form-select form-select-sm">{% for value, label in evidence_type_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+                <div class="col-md-4"><label class="form-label small mb-1">Source Type</label><input name="source_type" class="form-control form-control-sm"></div>
+                <div class="col-md-4"><label class="form-label small mb-1">Source Reference</label><input name="reference_id" class="form-control form-control-sm"></div>
+                <div class="col-12"><label class="form-label small mb-1">Description *</label><textarea name="description" class="form-control form-control-sm" rows="2" required></textarea></div>
+                <div class="col-md-4"><label class="form-label small mb-1">Related Finding</label>
+                    <select name="finding_id" class="form-select form-select-sm"><option value="">None</option>{% for f in findings %}<option value="{{ f.pk }}">{{ f.title|default:f.get_finding_type_display }}</option>{% endfor %}</select>
+                </div>
+                <div class="col-md-4"><label class="form-label small mb-1">File Upload</label><input type="file" name="file" class="form-control form-control-sm"></div>
+                <div class="col-md-4"><label class="form-label small mb-1">Notes</label><input name="checksum" class="form-control form-control-sm" placeholder="Checksum (optional)"></div>
+            </div>
+            <div class="mt-2"><button class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> Add Evidence</button></div>
+        </form>
+        <p class="small text-muted mt-2 mb-0">Evidence is append-only — historical entries are never silently overwritten. To attach to an existing entity, store its reference rather than copying its data.</p>
+    </section>
+
+    {% elif active_tab == 'financial' %}
+    <section class="audit-section-card">
+        <h2>Financial Analysis</h2>
+        {% if financial_analysis.is_financial %}
+        <div class="audit-detail-grid">
+            <div class="audit-detail-value"><small>Expected Revenue</small><strong>{{ financial_analysis.expected_revenue|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Declared Revenue</small><strong>{{ financial_analysis.declared_revenue|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Revenue Variance</small><strong>{{ financial_analysis.revenue_variance|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Expected Taxable Revenue</small><strong>{{ financial_analysis.expected_taxable_revenue|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Declared Taxable Revenue</small><strong>{{ financial_analysis.declared_taxable_revenue|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Taxable Revenue Variance</small><strong>{{ financial_analysis.taxable_revenue_variance|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Expected GST</small><strong>{{ financial_analysis.expected_gst|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Declared GST</small><strong>{{ financial_analysis.declared_gst|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>GST Variance</small><strong>{{ financial_analysis.gst_variance|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Potential Exposure</small><strong>{{ case.currency }} {{ financial_analysis.potential_exposure|floatformat:2 }}</strong></div>
+            <div class="audit-detail-value"><small>Confirmed Exposure</small><strong>{% if financial_analysis.confirmed_exposure is not None %}{{ case.currency }} {{ financial_analysis.confirmed_exposure|floatformat:2 }}{% else %}—{% endif %}</strong></div>
+            <div class="audit-detail-value"><small>Recovered / Adjusted</small><strong>{% if financial_analysis.recovered_amount is not None %}{{ case.currency }} {{ financial_analysis.recovered_amount|floatformat:2 }}{% else %}—{% endif %}</strong></div>
+        </div>
+        {% if financial_analysis.services %}
+        <h3 class="small fw-bold mt-3 mb-2">Expected vs Declared Revenue by Service</h3>
+        {% for row in financial_analysis.services %}
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="small" style="width:90px;">{{ row.service_type }}</span>
+            <div class="flex-grow-1 bg-light rounded" style="height:14px;overflow:hidden;">
+                <div style="height:14px;background:#1075f2;width:{% widthratio row.declared_revenue row.expected_revenue|default:1 100 %}%;"></div>
+            </div>
+            <span class="small text-muted" style="width:170px;">{{ row.declared_revenue|floatformat:0 }} / {{ row.expected_revenue|floatformat:0 }}</span>
+        </div>
+        {% endfor %}
+        <div class="table-responsive mt-2">
+            <table class="table table-hover regulatory-data-table mb-0">
+                <thead><tr><th>Service</th><th class="text-end">Expected Revenue</th><th class="text-end">Declared Revenue</th><th class="text-end">Variance</th><th class="text-end">Expected GST</th><th class="text-end">Declared GST</th><th class="text-end">GST Variance</th><th class="text-end">Exposure</th><th>Risk</th><th class="text-center">Action</th></tr></thead>
+                <tbody>
+                    {% for row in financial_analysis.services %}
+                    <tr>
+                        <td>{{ row.service_type }}</td>
+                        <td class="text-end">{{ row.expected_revenue|floatformat:2 }}</td>
+                        <td class="text-end">{{ row.declared_revenue|floatformat:2 }}</td>
+                        <td class="text-end">{{ row.variance|floatformat:2 }}</td>
+                        <td class="text-end">{{ row.expected_gst|floatformat:2 }}</td>
+                        <td class="text-end">{{ row.declared_gst|floatformat:2 }}</td>
+                        <td class="text-end">{{ row.gst_variance|floatformat:2 }}</td>
+                        <td class="text-end">{{ row.exposure|floatformat:2 }}</td>
+                        <td><span class="status-badge declaration-status-{{ row.risk|lower }}">{{ row.risk }}</span></td>
+                        <td class="text-center">{% if case.reconciliation_run %}<a class="icon-action" href="{% url 'regulatory:reconciliation_detail' case.reconciliation_run.pk %}" title="Open Reconciliation"><i class="bi bi-box-arrow-up-right"></i></a>{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted small mb-0 mt-2">No reconciliation run is linked to this case, so no per-service breakdown is available.</p>
+        {% endif %}
+        {% else %}
+        <p class="text-muted small mb-2">This is a {{ case.get_case_type_display }} case — no financial variance applies.</p>
+        <div class="audit-detail-grid">
+            <div class="audit-detail-value"><small>Affected Records</small><strong>{{ financial_analysis.affected_records|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Missing Records</small><strong>{{ financial_analysis.missing_records|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Affected Files</small><strong>{{ financial_analysis.affected_files|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Traffic Variance</small><strong>{{ financial_analysis.traffic_variance|default:"—" }}</strong></div>
+        </div>
+        {% endif %}
+    </section>
+
+    {% elif active_tab == 'reconciliation' %}
+    <section class="audit-section-card">
+        <h2>Reconciliation</h2>
+        {% if reconciliation_run %}
+        <div class="audit-detail-grid">
+            <div class="audit-detail-value"><small>Run ID</small><strong>{{ reconciliation_run.reference|default:reconciliation_run.pk }}</strong></div>
+            <div class="audit-detail-value"><small>Operator</small><strong>{{ reconciliation_run.operator_code }}</strong></div>
+            <div class="audit-detail-value"><small>Period</small><strong>{{ reconciliation_run.period_start|date:"M Y" }}</strong></div>
+            <div class="audit-detail-value"><small>Level</small><strong>{{ reconciliation_run.get_level_display }}</strong></div>
+            <div class="audit-detail-value"><small>Status</small><strong>{{ reconciliation_run.get_status_display }}</strong></div>
+            <div class="audit-detail-value"><small>Risk</small><strong>{{ reconciliation_run.risk_level }}</strong></div>
+            <div class="audit-detail-value"><small>Started</small><strong>{{ reconciliation_run.started_at|date:"d M Y H:i"|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Completed</small><strong>{{ reconciliation_run.completed_at|date:"d M Y H:i"|default:"—" }}</strong></div>
+        </div>
+        <div class="audit-detail-grid">
+            <div class="audit-detail-value"><small>Expected Revenue</small><strong>{{ reconciliation_run.expected_revenue|floatformat:2 }}</strong></div>
+            <div class="audit-detail-value"><small>Declared Revenue</small><strong>{{ reconciliation_run.declared_revenue|floatformat:2 }}</strong></div>
+            <div class="audit-detail-value"><small>Revenue Variance</small><strong>{{ reconciliation_run.revenue_variance|floatformat:2 }}</strong></div>
+            <div class="audit-detail-value"><small>Expected Taxable Revenue</small><strong>{{ reconciliation_run.expected_taxable_revenue|floatformat:2 }}</strong></div>
+            <div class="audit-detail-value"><small>Declared Taxable Revenue</small><strong>{{ reconciliation_run.declared_taxable_revenue|floatformat:2 }}</strong></div>
+            <div class="audit-detail-value"><small>Taxable Revenue Variance</small><strong>{{ reconciliation_run.taxable_revenue_variance|floatformat:2 }}</strong></div>
+            <div class="audit-detail-value"><small>Expected GST</small><strong>{{ reconciliation_run.expected_gst|floatformat:2 }}</strong></div>
+            <div class="audit-detail-value"><small>Declared GST</small><strong>{{ reconciliation_run.declared_gst|floatformat:2 }}</strong></div>
+            <div class="audit-detail-value"><small>GST Variance</small><strong>{{ reconciliation_run.gst_variance|floatformat:2 }}</strong></div>
+        </div>
+        <div class="table-responsive mt-2">
+            <table class="table table-hover regulatory-data-table mb-0">
+                <thead><tr><th>Service</th><th class="text-end">Expected</th><th class="text-end">Declared</th><th class="text-end">Variance</th><th>Risk</th><th class="text-center">Action</th></tr></thead>
+                <tbody>
+                    {% for r in reconciliation_services %}
+                    <tr>
+                        <td>{{ r.service_type }}</td>
+                        <td class="text-end">{{ r.mediated_revenue|floatformat:2 }}</td>
+                        <td class="text-end">{{ r.declared_revenue|floatformat:2 }}</td>
+                        <td class="text-end">{{ r.variance_revenue|floatformat:2 }}</td>
+                        <td><span class="status-badge declaration-status-{{ r.match_status|lower }}">{{ r.get_match_status_display }}</span></td>
+                        <td class="text-center"><a class="icon-action" href="{% url 'regulatory:reconciliation_detail' reconciliation_run.pk %}" title="Open Reconciliation Detail"><i class="bi bi-box-arrow-up-right"></i></a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted small mb-0">No reconciliation linked to this case.</p>
+        {% endif %}
+    </section>
+
+    {% elif active_tab == 'declaration' %}
+    <section class="audit-section-card">
+        <h2>Declaration</h2>
+        {% if declaration %}
+        <div class="audit-detail-grid">
+            <div class="audit-detail-value"><small>Declaration Reference</small><strong>{{ declaration.reference }}</strong></div>
+            <div class="audit-detail-value"><small>Version</small><strong>v{{ declaration.version }}</strong></div>
+            <div class="audit-detail-value"><small>Operator</small><strong>{{ declaration.operator_code }}</strong></div>
+            <div class="audit-detail-value"><small>Period</small><strong>{{ declaration.period_start|date:"M Y" }}</strong></div>
+            <div class="audit-detail-value"><small>Type</small><strong>{{ declaration.get_declaration_type_display }}</strong></div>
+            <div class="audit-detail-value"><small>Status</small><strong>{{ declaration.get_status_display }}</strong></div>
+            <div class="audit-detail-value"><small>Submitted By</small><strong>{{ declaration.submitted_by|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Submitted At</small><strong>{{ declaration.submitted_at|date:"d M Y"|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Reviewed By</small><strong>{{ declaration.reviewed_by|default:"—" }}</strong></div>
+            <div class="audit-detail-value"><small>Reviewed At</small><strong>{{ declaration.reviewed_at|date:"d M Y"|default:"—" }}</strong></div>
+        </div>
+        <div class="audit-detail-grid">
+            <div class="audit-detail-value"><small>Declared Revenue</small><strong>{{ declaration.total_declared_revenue|floatformat:2 }}</strong></div>
+            <div class="audit-detail-value"><small>Declared Taxable Revenue</small><strong>{{ declaration.declared_taxable_revenue|floatformat:2 }}</strong></div>
+            <div class="audit-detail-value"><small>Declared GST</small><strong>{{ declaration.total_declared_tax|floatformat:2 }}</strong></div>
+            <div class="audit-detail-value"><small>International Revenue</small><strong>{{ declaration.international_revenue|floatformat:2 }}</strong></div>
+            <div class="audit-detail-value"><small>Roaming Revenue</small><strong>{{ declaration.roaming_revenue|floatformat:2 }}</strong></div>
+            <div class="audit-detail-value"><small>Interconnect Revenue</small><strong>{{ declaration.interconnect_revenue|floatformat:2 }}</strong></div>
+        </div>
+        <div class="d-flex gap-2 mt-2">
+            <a href="{% url 'regulatory:declaration_detail' declaration.pk %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-box-arrow-up-right"></i> Open Declaration</a>
+        </div>
+        <p class="small text-muted mt-2 mb-0">The declaration cannot be edited from the audit case — open it directly to make changes.</p>
+        {% else %}
+        <p class="text-muted small mb-0">No declaration is linked to this case.</p>
+        {% endif %}
+    </section>
+
+    {% elif active_tab == 'tariff_tax' %}
+    <section class="audit-section-card">
+        <h2>Applied Tariffs</h2>
+        {% if tariffs_tax.tariffs %}
+        <div class="table-responsive">
+            <table class="table table-hover regulatory-data-table mb-0">
+                <thead><tr><th>Tariff</th><th>Version</th><th>Service</th><th>Traffic Type</th><th class="text-end">Rate</th><th>Unit</th><th>Effective From</th><th>Effective To</th><th>Status</th><th class="text-center">Action</th></tr></thead>
+                <tbody>
+                    {% for row in tariffs_tax.tariffs %}
+                    <tr>
+                        <td>{{ row.tariff.name }} <span class="text-muted small">({{ row.note }})</span></td>
+                        <td>v{{ row.tariff.version }}</td>
+                        <td>{{ row.tariff.get_service_type_display }}</td>
+                        <td>{{ row.tariff.get_traffic_type_display }}</td>
+                        <td class="text-end">{{ row.tariff.rate }}</td>
+                        <td>{{ row.tariff.get_charging_unit_display }}</td>
+                        <td>{{ row.tariff.effective_from|date:"d M Y" }}</td>
+                        <td>{{ row.tariff.effective_to|date:"d M Y"|default:"open" }}</td>
+                        <td><span class="status-badge status-{{ row.tariff.status|lower }}">{{ row.tariff.get_status_display }}</span></td>
+                        <td class="text-center"><a class="icon-action" href="{% url 'regulatory:tariff_detail' row.tariff.pk %}" title="View Version"><i class="bi bi-box-arrow-up-right"></i></a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if tariffs_tax.tariff_source == 'exact' %}<p class="small text-muted mt-2 mb-0">These are the exact tariff versions referenced by the rating engine / tariff-compliance check for this case — not just whatever is active today.</p>{% else %}<p class="small text-muted mt-2 mb-0">No exact rating link was found; showing tariff versions whose effective range overlaps the case period.</p>{% endif %}
+        {% else %}
+        <p class="text-muted small mb-0">No applied tariffs found for this case's operator/period.</p>
+        {% endif %}
+    </section>
+    <section class="audit-section-card">
+        <h2>Applied Tax Rules</h2>
+        {% if tariffs_tax.tax_rules %}
+        <div class="table-responsive">
+            <table class="table table-hover regulatory-data-table mb-0">
+                <thead><tr><th>Tax Type</th><th>Code</th><th>Version</th><th>Category</th><th class="text-end">Rate</th><th>Treatment</th><th>Effective From</th><th>Effective To</th><th>Status</th><th class="text-center">Action</th></tr></thead>
+                <tbody>
+                    {% for row in tariffs_tax.tax_rules %}
+                    <tr>
+                        <td>{{ row.rate.tax_type.name }}</td>
+                        <td>{{ row.rate.tax_type.code }}</td>
+                        <td>v{{ row.rate.version }}</td>
+                        <td>{{ row.rate.tax_type.get_category_display }}</td>
+                        <td class="text-end">{{ row.rate.rate_percent }}%</td>
+                        <td>{{ row.rate.get_treatment_display }}</td>
+                        <td>{{ row.rate.effective_from|date:"d M Y" }}</td>
+                        <td>{{ row.rate.effective_to|date:"d M Y"|default:"open" }}</td>
+                        <td><span class="status-badge status-{{ row.rate.status|lower }}">{{ row.rate.get_status_display }}</span></td>
+                        <td class="text-center"><a class="icon-action" href="{% url 'regulatory:tax_type_detail' row.rate.tax_type.pk %}" title="View Rule Detail"><i class="bi bi-box-arrow-up-right"></i></a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="small text-muted mt-2 mb-0">Historical cases remain reproducible: these are the tax-rate versions effective during the case period, not just the rate active today.</p>
+        {% else %}
+        <p class="text-muted small mb-0">No applied tax rules found for this case's period.</p>
+        {% endif %}
+    </section>
+
+    {% elif active_tab == 'cdrs' %}
+    <section class="audit-section-card">
+        <h2>CDRs</h2>
+        <form method="get" class="row g-2 mb-3">
+            <input type="hidden" name="tab" value="cdrs">
+            <div class="col-md-2"><input type="date" name="date_from" value="{{ request.GET.date_from }}" class="form-control form-control-sm" placeholder="From"></div>
+            <div class="col-md-2"><input type="date" name="date_end" value="{{ request.GET.date_end }}" class="form-control form-control-sm" placeholder="To"></div>
+            <div class="col-md-2"><input name="service_type" value="{{ request.GET.service_type }}" class="form-control form-control-sm" placeholder="Service Type"></div>
+            <div class="col-md-2"><input name="direction" value="{{ request.GET.direction }}" class="form-control form-control-sm" placeholder="Direction"></div>
+            <div class="col-md-2"><input name="source_file" value="{{ request.GET.source_file }}" class="form-control form-control-sm" placeholder="Source File ID"></div>
+            <div class="col-md-2"><input name="cdr_search" value="{{ request.GET.cdr_search }}" class="form-control form-control-sm" placeholder="Search MSISDN/ref"></div>
+            <div class="col-md-2">
+                <select name="cdr_page_size" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="50" {% if request.GET.cdr_page_size == '50' or not request.GET.cdr_page_size %}selected{% endif %}>50 / page</option>
+                    <option value="100" {% if request.GET.cdr_page_size == '100' %}selected{% endif %}>100 / page</option>
+                    <option value="250" {% if request.GET.cdr_page_size == '250' %}selected{% endif %}>250 / page</option>
+                </select>
+            </div>
+            <div class="col-md-2"><button class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel"></i> Filter</button></div>
+        </form>
+        {% if not cdr_data.available %}
+        <p class="text-muted small mb-0">CDR drill-down is unavailable for this environment (streams app not installed).</p>
+        {% else %}
+        <div class="table-responsive">
+            <table class="table table-hover regulatory-data-table mb-0">
+                <thead><tr><th>Event Time</th><th>MSISDN</th><th>IMSI</th><th>Service</th><th>Direction</th><th>Duration</th><th>Record Type</th><th>Source File</th></tr></thead>
+                <tbody>
+                    {% for rec in cdr_data.records %}
+                    <tr>
+                        <td>{{ rec.event_time|date:"d M Y H:i:s" }}</td>
+                        <td>{{ rec.calling_number }}</td>
+                        <td>{{ rec.imsi|default:"—" }}</td>
+                        <td>{{ rec.service_type }}</td>
+                        <td>{{ rec.direction }}</td>
+                        <td>{{ rec.duration }}s</td>
+                        <td>{{ rec.record_type }}</td>
+                        <td>{{ rec.source_file_id|default:"—" }}</td>
+                    </tr>
+                    {% empty %}<tr><td colspan="8" class="text-muted small text-center py-3">No CDRs match these filters for this operator/period.</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="regulatory-table-footer">
+            <span>Page {{ cdr_data.page }}</span>
+            <div class="d-flex gap-2">
+                {% if cdr_data.page > 1 %}<a class="btn btn-outline-secondary btn-sm" href="?tab=cdrs&cdr_page={{ cdr_data.page|add:"-1" }}&date_from={{ request.GET.date_from }}&date_end={{ request.GET.date_end }}&service_type={{ request.GET.service_type }}&direction={{ request.GET.direction }}&source_file={{ request.GET.source_file }}&cdr_page_size={{ request.GET.cdr_page_size }}">Previous</a>{% endif %}
+                {% if cdr_data.has_next %}<a class="btn btn-outline-secondary btn-sm" href="?tab=cdrs&cdr_page={{ cdr_data.page|add:"1" }}&date_from={{ request.GET.date_from }}&date_end={{ request.GET.date_end }}&service_type={{ request.GET.service_type }}&direction={{ request.GET.direction }}&source_file={{ request.GET.source_file }}&cdr_page_size={{ request.GET.cdr_page_size }}">Next</a>{% endif %}
+            </div>
+        </div>
+        <p class="small text-muted mt-2 mb-0">MSISDN/IMSI are masked and access is audit-logged. Rated amount, taxable amount, GST and tariff/tax version are not stored per-record in this system — see Financial Analysis and Calculation Trace for the aggregate-level rated/tax figures. Records are queried on demand — not copied into the case.</p>
+        {% endif %}
+    </section>
+
+    {% elif active_tab == 'source_files' %}
+    <section class="audit-section-card">
+        <h2>Source Files</h2>
+        <div class="table-responsive">
+            <table class="table table-hover regulatory-data-table mb-0">
+                <thead><tr><th>File Name</th><th>Stream</th><th>Operator</th><th>File Date</th><th>Received</th><th class="text-end">Records</th><th class="text-end">Processed</th><th class="text-end">Rejected</th><th>Status</th><th>Checksum</th></tr></thead>
+                <tbody>
+                    {% for file in source_files %}
+                    <tr>
+                        <td>{{ file.filename }}</td>
+                        <td>{{ file.decoder_type|default:"—" }}</td>
+                        <td>{{ file.operator_code }}</td>
+                        <td>{{ file.created_at|date:"d M Y H:i" }}</td>
+                        <td>{{ file.processing_started|date:"d M Y H:i"|default:"—" }}</td>
+                        <td class="text-end">{{ file.records_total }}</td>
+                        <td class="text-end">{{ file.records_valid }}</td>
+                        <td class="text-end">{{ file.records_invalid }}</td>
+                        <td><span class="status-badge status-{{ file.status|lower }}">{{ file.get_status_display }}</span></td>
+                        <td>{{ file.file_hash|default:"—"|truncatechars:16 }}</td>
+                    </tr>
+                    {% empty %}<tr><td colspan="10" class="text-muted small text-center py-3">No source files linked to this investigation.</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if source_files.paginator.num_pages > 1 %}
+        <div class="regulatory-table-footer">
+            <span>Page {{ source_files.number }} of {{ source_files.paginator.num_pages }}</span>
+            <div class="d-flex gap-2">
+                {% if source_files.has_previous %}<a class="btn btn-outline-secondary btn-sm" href="?tab=source_files&sf_page={{ source_files.previous_page_number }}">Previous</a>{% endif %}
+                {% if source_files.has_next %}<a class="btn btn-outline-secondary btn-sm" href="?tab=source_files&sf_page={{ source_files.next_page_number }}">Next</a>{% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </section>
+
+    {% elif active_tab == 'calculations' %}
+    <section class="audit-section-card">
+        <h2>Calculation Trace</h2>
+        {% for step in calculation_trace %}
+        <div class="audit-calc-step">
+            <small>{{ step.timestamp|date:"d M Y H:i" }} · {{ step.source }}</small>
+            <strong>{{ step.label }}</strong>
+            <span>{{ step.detail }} — <strong>{{ step.result }}</strong></span>
+            {% if step.formula %}<div class="small text-muted mt-1">Formula: {{ step.formula }}</div>{% endif %}
+        </div>
+        {% empty %}
+        <p class="text-muted small mb-0">No linked rated traffic, reconciliation run or tariff compliance result to trace calculations from. Link one from the Overview tab, or open the case from Risk Alerts / Reconciliation to seed this automatically.</p>
+        {% endfor %}
+    </section>
+
+    {% elif active_tab == 'operator_responses' %}
+    <section class="audit-section-card">
+        <h2>Operator Responses</h2>
+        {% for response in operator_responses %}
+        <div class="audit-response-card">
+            <h3>{{ response.request_subject }} <span class="status-badge status-{{ response.response_status|lower }}">{{ response.get_response_status_display }}</span></h3>
+            <div class="d-flex gap-3 small text-muted flex-wrap mb-1">
+                <span>Requested {{ response.requested_at|date:"d M Y" }}</span>
+                <span>Due {{ response.due_date|date:"d M Y"|default:"—" }}</span>
+                <span>Submitted {{ response.submitted_at|date:"d M Y"|default:"—" }}</span>
+                <span>Reviewer {{ response.reviewed_by|default:"—" }}</span>
+            </div>
+            <p class="small mb-1">{{ response.request_details }}</p>
+            {% if response.required_evidence %}<p class="small mb-1"><strong>Required evidence:</strong> {{ response.required_evidence }}</p>{% endif %}
+            {% if response.response_text %}<p class="small mb-1"><strong>Response ({{ response.submitted_by|default:"operator" }}):</strong> {{ response.response_text }}</p>{% endif %}
+            {% if response.review_notes %}<p class="small mb-1"><strong>Reviewer notes:</strong> {{ response.review_notes }}</p>{% endif %}
+
+            {% if response.response_status == 'PENDING' %}
+            <form method="post" class="row g-2 mt-1">
+                {% csrf_token %}<input type="hidden" name="action" value="record_operator_response"><input type="hidden" name="response_id" value="{{ response.pk }}">
+                <div class="col-md-4"><input name="submitted_by" class="form-control form-control-sm" placeholder="Submitted by (operator contact)"></div>
+                <div class="col-md-6"><input name="response_text" class="form-control form-control-sm" placeholder="Response text"></div>
+                <div class="col-md-2"><button class="btn btn-outline-primary btn-sm w-100">Record</button></div>
+            </form>
+            {% elif response.response_status == 'SUBMITTED' and is_supervisor %}
+            <div class="d-flex gap-2 mt-1">
+                <form method="post"><input type="hidden" name="action" value="review_operator_response"><input type="hidden" name="response_id" value="{{ response.pk }}"><input type="hidden" name="decision" value="accept">{% csrf_token %}<button class="btn btn-outline-success btn-sm">Accept</button></form>
+                <form method="post"><input type="hidden" name="action" value="review_operator_response"><input type="hidden" name="response_id" value="{{ response.pk }}"><input type="hidden" name="decision" value="reject">{% csrf_token %}<button class="btn btn-outline-danger btn-sm">Reject</button></form>
+                <a href="?tab=operator_responses#request-response" class="btn btn-outline-secondary btn-sm">Request More Information</a>
+            </div>
+            {% endif %}
+        </div>
+        {% empty %}
+        <p class="text-muted small">No operator response received.</p>
+        {% endfor %}
+    </section>
+    <section class="audit-section-card" id="request-response">
+        <h2>Request Operator Response</h2>
+        <form method="post">
+            {% csrf_token %}<input type="hidden" name="action" value="request_operator_response">
+            <div class="row g-2">
+                <div class="col-md-6"><label class="form-label small mb-1">Subject *</label><input name="subject" class="form-control form-control-sm" required></div>
+                <div class="col-md-3"><label class="form-label small mb-1">Due Date *</label><input type="date" name="due_date" class="form-control form-control-sm" required></div>
+                <div class="col-md-3"><label class="form-label small mb-1">Priority</label><select name="priority" class="form-select form-select-sm"><option value="">—</option>{% for value, label in risk_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+                <div class="col-12"><label class="form-label small mb-1">Request Details *</label><textarea name="details" class="form-control form-control-sm" rows="2" required></textarea></div>
+                <div class="col-12"><label class="form-label small mb-1">Required Evidence</label><textarea name="required_evidence" class="form-control form-control-sm" rows="2"></textarea></div>
+            </div>
+            <div class="mt-2"><button class="btn btn-primary btn-sm"><i class="bi bi-send"></i> Send Request</button></div>
+        </form>
+    </section>
+
+    {% elif active_tab == 'comments' %}
+    <section class="audit-section-card">
+        <h2>Comments</h2>
+        {% for c in comments %}
+        <div class="audit-comment">
+            <small>{{ c.author|default:"System" }} · {{ c.created_at|date:"d M Y H:i" }} · {{ c.get_visibility_display }}</small>
+            <div>{{ c.comment }}</div>
+        </div>
+        {% empty %}<p class="text-muted small mb-2">No comments have been added.</p>{% endfor %}
+        <form method="post" class="d-flex gap-2 mt-2">
+            {% csrf_token %}<input type="hidden" name="action" value="comment">
+            <input name="comment" class="form-control form-control-sm" placeholder="Add a comment...">
+            <select name="visibility" class="form-select form-select-sm" style="max-width:180px;">
+                <option value="INTERNAL">Internal</option>
+                <option value="OPERATOR_VISIBLE">Operator-visible</option>
+            </select>
+            <button class="btn btn-outline-secondary btn-sm"><i class="bi bi-send"></i></button>
+        </form>
+    </section>
+
+    {% elif active_tab == 'activity' %}
+    <section class="audit-section-card">
+        <h2>Activity Log</h2>
+        <div class="table-responsive">
+            <table class="table table-hover regulatory-data-table mb-0">
+                <thead><tr><th>Timestamp</th><th>User/System</th><th>Action</th><th>Old Status</th><th>New Status</th><th>Description</th></tr></thead>
+                <tbody>
+                    {% for entry in activity_log %}
+                    <tr>
+                        <td>{{ entry.timestamp|date:"d M Y H:i" }}</td>
+                        <td>{{ entry.user|default:"System" }}</td>
+                        <td>{{ entry.action }}</td>
+                        <td>{{ entry.extra_data.old_status|default:"—" }}</td>
+                        <td>{{ entry.extra_data.new_status|default:"—" }}</td>
+                        <td>{{ entry.description }}</td>
+                    </tr>
+                    {% empty %}<tr><td colspan="6" class="text-muted small text-center py-3">No activity recorded yet.</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+
+    {% if request.user.is_superuser or request.user.is_regulatory_admin or request.user.is_regulator or request.user.is_auditor %}
+    <section class="audit-section-card" id="case-actions">
+        <h2>Case Actions</h2>
+        <form method="post">
+            {% csrf_token %}
+            <div class="row g-2 align-items-start">
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Action</label>
+                    <select name="action" id="audit-action-select" class="form-select form-select-sm">
+                        <option value="assign">Assign / Reassign</option>
+                        <option value="start_investigation" {% if 'INVESTIGATION' not in case_next_statuses %}disabled{% endif %}>Start Investigation</option>
+                        <option value="update_risk">Update Risk Level</option>
+                        <option value="update_priority">Update Priority</option>
+                        <option value="update_exposure">Update Exposure</option>
+                        <option value="resolve" {% if 'RESOLVED' not in case_next_statuses %}disabled{% endif %}>Resolve</option>
+                        <option value="close" {% if case.status != 'RESOLVED' %}disabled{% endif %}>Close</option>
+                        <option value="reopen" {% if not case_reopenable %}disabled{% endif %}>Reopen</option>
+                    </select>
+                </div>
+                <div class="col-md-9">
+                    <div class="row g-2" data-action-fields="assign">
+                        <div class="col-md-4"><label class="form-label small mb-1">Assigned Officer *</label><select name="assigned_to" class="form-select form-select-sm"><option value="">Select</option>{% for officer in officers %}<option value="{{ officer.pk }}" {% if case.assigned_to_id == officer.pk %}selected{% endif %}>{{ officer.get_full_name|default:officer.username }}</option>{% endfor %}</select></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">Priority</label><select name="priority" class="form-select form-select-sm"><option value="">—</option>{% for value, label in priority_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">Due Date</label><input type="date" name="due_date" class="form-control form-control-sm"></div>
+                        <div class="col-md-12"><label class="form-label small mb-1">Assignment Notes</label><textarea name="notes" class="form-control form-control-sm" rows="2"></textarea></div>
+                        <div class="col-12"><p class="small text-muted mb-0">Reassigning preserves prior assignment history in the Activity Log — it is never erased.</p></div>
+                    </div>
+                    <div class="row g-2" data-action-fields="start_investigation" hidden>
+                        <div class="col-12"><p class="small text-muted mb-0">Marks the case as under active investigation and records the investigator/timestamp.</p></div>
+                    </div>
+                    <div class="row g-2" data-action-fields="update_risk" hidden>
+                        <div class="col-md-4"><label class="form-label small mb-1">Risk Level</label><select name="risk_level" class="form-select form-select-sm">{% for value, label in risk_choices %}<option value="{{ value }}" {% if case.risk_level == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+                        <div class="col-md-8"><label class="form-label small mb-1">Reason (required when downgrading from High/Critical)</label><input name="reason" class="form-control form-control-sm"></div>
+                    </div>
+                    <div class="row g-2" data-action-fields="update_priority" hidden>
+                        <div class="col-md-4"><label class="form-label small mb-1">Priority</label><select name="priority" class="form-select form-select-sm">{% for value, label in priority_choices %}<option value="{{ value }}" {% if case.priority == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+                        <div class="col-md-8"><p class="small text-muted mb-0 mt-4">Priority reflects operational urgency for the investigator's queue — it is tracked separately from regulatory Risk.</p></div>
+                    </div>
+                    <div class="row g-2" data-action-fields="update_exposure" hidden>
+                        <div class="col-md-3"><label class="form-label small mb-1">Potential Exposure</label><input type="number" step="0.01" name="potential_exposure" class="form-control form-control-sm" value="{{ case.potential_exposure }}"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">Confirmed Exposure</label><input type="number" step="0.01" name="confirmed_exposure" class="form-control form-control-sm" value="{{ case.confirmed_exposure|default_if_none:'' }}"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">Recovered Amount</label><input type="number" step="0.01" name="recovered_amount" class="form-control form-control-sm" value="{{ case.recovered_amount|default_if_none:'' }}"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">Adjustment Amount</label><input type="number" step="0.01" name="adjustment_amount" class="form-control form-control-sm" value="{{ case.adjustment_amount|default_if_none:'' }}"></div>
+                    </div>
+                    <div class="row g-2" data-action-fields="resolve" hidden>
+                        <div class="col-md-4"><label class="form-label small mb-1">Resolution Type *</label><select name="resolution_type" class="form-select form-select-sm"><option value="">Select</option>{% for value, label in resolution_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+                        <div class="col-md-4"><label class="form-label small mb-1">Regulatory Decision *</label><select name="regulatory_decision" class="form-select form-select-sm"><option value="">Select</option>{% for value, label in regulatory_decision_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+                        <div class="col-md-4"><label class="form-label small mb-1">Confirmed Exposure</label><input type="number" step="0.01" name="confirmed_exposure" class="form-control form-control-sm"></div>
+                        <div class="col-md-4"><label class="form-label small mb-1">Recovered Amount</label><input type="number" step="0.01" name="recovered_amount" class="form-control form-control-sm"></div>
+                        <div class="col-md-4"><label class="form-label small mb-1">Adjustment Amount</label><input type="number" step="0.01" name="adjustment_amount" class="form-control form-control-sm"></div>
+                        <div class="col-md-12"><label class="form-label small mb-1">Resolution Summary *</label><textarea name="resolution_summary" class="form-control form-control-sm" rows="2"></textarea></div>
+                        <div class="col-md-12"><label class="form-label small mb-1">Recommendations</label><textarea name="recommendations" class="form-control form-control-sm" rows="2"></textarea></div>
+                    </div>
+                    <div class="row g-2" data-action-fields="close" hidden>
+                        <div class="col-md-8"><label class="form-label small mb-1">Closure Notes</label><input name="closure_notes" class="form-control form-control-sm"></div>
+                        <div class="col-md-2 d-flex align-items-end"><div class="form-check"><input type="checkbox" class="form-check-input" id="follow_up_required" name="follow_up_required"><label class="form-check-label small" for="follow_up_required">Follow-up required</label></div></div>
+                        <div class="col-md-2"><label class="form-label small mb-1">Follow-up Date</label><input type="date" name="follow_up_date" class="form-control form-control-sm"></div>
+                    </div>
+                    <div class="row g-2" data-action-fields="reopen" hidden>
+                        <div class="col-md-12"><label class="form-label small mb-1">Reason for Reopening *</label><input name="reopen_reason" class="form-control form-control-sm" required></div>
+                        <div class="col-md-6"><label class="form-label small mb-1">Assigned Officer (optional)</label><select name="reopen_assigned_to" class="form-select form-select-sm"><option value="">Keep as-is</option>{% for officer in officers %}<option value="{{ officer.pk }}">{{ officer.get_full_name|default:officer.username }}</option>{% endfor %}</select></div>
+                        <div class="col-md-6"><label class="form-label small mb-1">New Due Date (optional)</label><input type="date" name="reopen_due_date" class="form-control form-control-sm"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-2 audit-action-bar"><button class="btn btn-primary btn-sm"><i class="bi bi-check-lg"></i> Submit</button></div>
+        </form>
+    </section>
+    {% endif %}
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var select = document.getElementById('audit-action-select');
+    if (!select) { return; }
+    var groups = document.querySelectorAll('[data-action-fields]');
+    function sync() { groups.forEach(function (g) { g.hidden = g.getAttribute('data-action-fields') !== select.value; }); }
+    select.addEventListener('change', sync);
+    sync();
+
+    document.querySelectorAll('a[data-preset]').forEach(function (link) {
+        link.addEventListener('click', function () {
+            select.value = link.getAttribute('data-preset');
+            sync();
+        });
+    });
+});
+</script>
+{% endblock %}

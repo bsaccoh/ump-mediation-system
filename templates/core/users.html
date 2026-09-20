@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+{% block title %}User Management - UMP Mediation{% endblock %}
+{% block page_title %}User Management{% endblock %}
+
+{% block extra_css %}
+<style>
+    .user-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .user-stat { background: #fff; border-radius: 8px; padding: 16px; text-align: center; border: 1px solid #e2e8f0; }
+    .user-stat .value { font-size: 1.8rem; font-weight: 700; }
+    .user-stat .label { font-size: 0.78rem; color: #6c757d; margin-top: 2px; }
+    .user-table { background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; overflow: hidden; }
+    .user-table table { margin: 0; }
+    .user-table th { background: #f8f9fa; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: #6c757d; font-weight: 600; }
+    .user-table td { vertical-align: middle; font-size: 0.88rem; }
+    .user-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8rem; color: #fff; flex-shrink: 0; }
+    .role-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em; }
+    .role-badge.superuser { background: #fee2e2; color: #991b1b; }
+    .role-badge.staff { background: #dbeafe; color: #1e40af; }
+    .role-badge.operator { background: #d1fae5; color: #065f46; }
+    .role-badge.analyst { background: #fef3c7; color: #92400e; }
+    .role-badge.lea { background: #ede9fe; color: #5b21b6; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .status-dot.active { background: #198754; }
+    .status-dot.inactive { background: #dc3545; }
+
+    /* Modal */
+    .modal-header { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); color: #fff; border: none; }
+    .modal-header .btn-close { filter: brightness(0) invert(1); }
+    .modal-title { font-size: 1rem; font-weight: 600; }
+    .form-label { font-size: 0.82rem; font-weight: 600; color: #2c3e50; }
+    .form-text { font-size: 0.75rem; }
+    .perm-group { background: #f8f9fa; border-radius: 6px; padding: 12px; margin-bottom: 8px; }
+    .perm-group-title { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #6c757d; margin-bottom: 8px; }
+    .form-check { font-size: 0.85rem; }
+    .form-check-label { cursor: pointer; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Stats -->
+<div class="user-stats">
+    <div class="user-stat">
+        <div class="value text-primary">{{ stats.total }}</div>
+        <div class="label">Total Users</div>
+    </div>
+    <div class="user-stat">
+        <div class="value text-success">{{ stats.active }}</div>
+        <div class="label">Active</div>
+    </div>
+    <div class="user-stat">
+        <div class="value text-danger">{{ stats.inactive }}</div>
+        <div class="label">Inactive</div>
+    </div>
+    <div class="user-stat">
+        <div class="value text-warning">{{ stats.superusers }}</div>
+        <div class="label">Superusers</div>
+    </div>
+    <div class="user-stat">
+        <div class="value text-info">{{ stats.staff }}</div>
+        <div class="label">Staff</div>
+    </div>
+</div>
+
+<!-- Toolbar -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex gap-2 align-items-center">
+        <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search users..." style="width:220px;">
+        <select id="filterRole" class="form-select form-select-sm" style="width:150px;">
+            <option value="">All Roles</option>
+            <option value="superuser">Superuser</option>
+            <option value="staff">Staff</option>
+            <option value="operator">Operator</option>
+            <option value="analyst">Analyst</option>
+        </select>
+        <select id="filterStatus" class="form-select form-select-sm" style="width:130px;">
+            <option value="">All Status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+        </select>
+    </div>
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#userModal" onclick="openCreateModal()">
+        <i class="bi bi-person-plus"></i> Add User
+    </button>
+</div>
+
+<!-- User Table -->
+<div class="user-table">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th style="width:40px;"></th>
+                    <th>User</th>
+                    <th>Email</th>
+                    <th>Department</th>
+                    <th>Roles</th>
+                    <th>Status</th>
+                    <th>Last Login</th>
+                    <th style="width:100px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="userTableBody">
+                {% for u in users %}
+                <tr class="user-row"
+                    data-roles="{% if u.is_superuser %}superuser {% endif %}{% if u.is_staff %}staff {% endif %}{% if u.is_operator %}operator {% endif %}{% if u.is_analyst %}analyst {% endif %}"
+                    data-status="{% if u.is_active %}active{% else %}inactive{% endif %}"
+                    data-search="{{ u.username|lower }} {{ u.first_name|lower }} {{ u.last_name|lower }} {{ u.email|lower }} {{ u.department|lower }}">
+                    <td>
+                        <div class="user-avatar" style="background:hsl({{ u.pk|divisibleby:1|default:0 }}{{ u.pk }}0, 55%, 50%);">
+                            {{ u.username|make_list|first|upper }}
+                        </div>
+                    </td>
+                    <td>
+                        <strong>{{ u.username }}</strong>
+                        {% if u.first_name or u.last_name %}
+                        <br><small class="text-muted">{{ u.first_name }} {{ u.last_name }}</small>
+                        {% endif %}
+                    </td>
+                    <td>{{ u.email|default:"-" }}</td>
+                    <td>{{ u.department|default:"-" }}</td>
+                    <td>
+                        {% if u.is_superuser %}<span class="role-badge superuser">Superuser</span> {% endif %}
+                        {% if u.is_staff %}<span class="role-badge staff">Staff</span> {% endif %}
+                        {% if u.is_operator %}<span class="role-badge operator">Operator</span> {% endif %}
+                        {% if u.is_analyst %}<span class="role-badge analyst">Analyst</span> {% endif %}
+                        {% if u.can_lawful_intercept %}<span class="role-badge lea">LEA</span> {% endif %}
+                    </td>
+                    <td>
+                        <span class="status-dot {% if u.is_active %}active{% else %}inactive{% endif %}"></span>
+                        {% if u.is_active %}Active{% else %}Inactive{% endif %}
+                    </td>
+                    <td><small>{{ u.last_login|date:"Y-m-d H:i"|default:"Never" }}</small></td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-primary py-0 px-2" title="Edit"
+                                    onclick="openEditModal({{ u.pk }})">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            {% if u.pk != request.user.pk %}
+                            <button class="btn btn-outline-{% if u.is_active %}warning{% else %}success{% endif %} py-0 px-2" title="{% if u.is_active %}Deactivate{% else %}Activate{% endif %}"
+                                    onclick="toggleUser({{ u.pk }}, '{{ u.username }}', {{ u.is_active|yesno:'true,false' }})">
+                                <i class="bi bi-{% if u.is_active %}pause-circle{% else %}play-circle{% endif %}"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="8" class="text-center text-muted py-4">No users found.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Create / Edit Modal -->
+<div class="modal fade" id="userModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="userModalTitle">Add New User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="userForm" method="post">
+                {% csrf_token %}
+                <input type="hidden" name="user_id" id="formUserId" value="">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <!-- Account Info -->
+                        <div class="col-md-6">
+                            <label class="form-label">Username <span class="text-danger">*</span></label>
+                            <input type="text" name="username" id="formUsername" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email</label>
+                            <input type="email" name="email" id="formEmail" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">First Name</label>
+                            <input type="text" name="first_name" id="formFirstName" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Last Name</label>
+                            <input type="text" name="last_name" id="formLastName" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Phone</label>
+                            <input type="text" name="phone" id="formPhone" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Department</label>
+                            <input type="text" name="department" id="formDepartment" class="form-control form-control-sm">
+                        </div>
+
+                        <!-- Password -->
+                        <div class="col-12" id="passwordSection">
+                            <hr class="my-2">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label" id="passwordLabel">Password <span class="text-danger">*</span></label>
+                                    <input type="password" name="password" id="formPassword" class="form-control form-control-sm">
+                                    <div class="form-text" id="passwordHelp">Min 8 characters.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Confirm Password</label>
+                                    <input type="password" name="password_confirm" id="formPasswordConfirm" class="form-control form-control-sm">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Roles & Permissions -->
+                        <div class="col-12">
+                            <hr class="my-2">
+                            <div class="perm-group">
+                                <div class="perm-group-title">Roles & Permissions</div>
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" name="is_active" id="formIsActive" checked>
+                                            <label class="form-check-label" for="formIsActive">Active</label>
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" name="is_staff" id="formIsStaff">
+                                            <label class="form-check-label" for="formIsStaff">Staff</label>
+                                            <div class="form-text">Can access admin panel</div>
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" name="is_superuser" id="formIsSuperuser">
+                                            <label class="form-check-label" for="formIsSuperuser">Superuser</label>
+                                            <div class="form-text">Full system access</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" name="is_operator" id="formIsOperator">
+                                            <label class="form-check-label" for="formIsOperator">Operator</label>
+                                            <div class="form-text">Upload & process files</div>
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" name="is_analyst" id="formIsAnalyst">
+                                            <label class="form-check-label" for="formIsAnalyst">Analyst</label>
+                                            <div class="form-text">Search CDR & view reports</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" name="can_lawful_intercept" id="formCanLEA">
+                                            <label class="form-check-label" for="formCanLEA">Lawful Intercept</label>
+                                            <div class="form-text">LEA request access</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="alert alert-danger d-none mt-3" id="formError"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm" id="formSubmitBtn">Create User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+const USERS_API = "{% url 'core:users_api' %}";
+
+// Search & filter
+document.getElementById('searchInput').addEventListener('input', filterTable);
+document.getElementById('filterRole').addEventListener('change', filterTable);
+document.getElementById('filterStatus').addEventListener('change', filterTable);
+
+function filterTable() {
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    const role = document.getElementById('filterRole').value;
+    const status = document.getElementById('filterStatus').value;
+    document.querySelectorAll('.user-row').forEach(row => {
+        const matchQ = !q || row.dataset.search.includes(q);
+        const matchR = !role || row.dataset.roles.includes(role);
+        const matchS = !status || row.dataset.status === status;
+        row.style.display = (matchQ && matchR && matchS) ? '' : 'none';
+    });
+}
+
+function openCreateModal() {
+    document.getElementById('userModalTitle').textContent = 'Add New User';
+    document.getElementById('formSubmitBtn').textContent = 'Create User';
+    document.getElementById('formUserId').value = '';
+    document.getElementById('userForm').reset();
+    document.getElementById('formIsActive').checked = true;
+    document.getElementById('formPassword').required = true;
+    document.getElementById('passwordLabel').innerHTML = 'Password <span class="text-danger">*</span>';
+    document.getElementById('passwordHelp').textContent = 'Min 8 characters.';
+    document.getElementById('formError').classList.add('d-none');
+    document.getElementById('formUsername').readOnly = false;
+}
+
+function openEditModal(userId) {
+    document.getElementById('formError').classList.add('d-none');
+    fetch(USERS_API + '?id=' + userId)
+        .then(r => r.json())
+        .then(data => {
+            const u = data.user;
+            document.getElementById('userModalTitle').textContent = 'Edit User: ' + u.username;
+            document.getElementById('formSubmitBtn').textContent = 'Save Changes';
+            document.getElementById('formUserId').value = u.id;
+            document.getElementById('formUsername').value = u.username;
+            document.getElementById('formUsername').readOnly = true;
+            document.getElementById('formEmail').value = u.email;
+            document.getElementById('formFirstName').value = u.first_name;
+            document.getElementById('formLastName').value = u.last_name;
+            document.getElementById('formPhone').value = u.phone;
+            document.getElementById('formDepartment').value = u.department;
+            document.getElementById('formIsActive').checked = u.is_active;
+            document.getElementById('formIsStaff').checked = u.is_staff;
+            document.getElementById('formIsSuperuser').checked = u.is_superuser;
+            document.getElementById('formIsOperator').checked = u.is_operator;
+            document.getElementById('formIsAnalyst').checked = u.is_analyst;
+            document.getElementById('formCanLEA').checked = u.can_lawful_intercept;
+            document.getElementById('formPassword').value = '';
+            document.getElementById('formPasswordConfirm').value = '';
+            document.getElementById('formPassword').required = false;
+            document.getElementById('passwordLabel').innerHTML = 'New Password';
+            document.getElementById('passwordHelp').textContent = 'Leave blank to keep current password.';
+            new bootstrap.Modal(document.getElementById('userModal')).show();
+        });
+}
+
+function toggleUser(userId, username, isActive) {
+    const action = isActive ? 'deactivate' : 'activate';
+    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} user "${username}"?`)) return;
+    fetch(USERS_API, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value},
+        body: JSON.stringify({action: 'toggle', user_id: userId})
+    }).then(r => r.json()).then(data => {
+        if (data.success) location.reload();
+        else alert(data.error || 'Failed');
+    });
+}
+
+document.getElementById('userForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const errEl = document.getElementById('formError');
+    errEl.classList.add('d-none');
+
+    const fd = new FormData(this);
+    const payload = {};
+    fd.forEach((v, k) => { payload[k] = v; });
+    // Checkboxes not in FormData when unchecked
+    ['is_active', 'is_staff', 'is_superuser', 'is_operator', 'is_analyst', 'can_lawful_intercept'].forEach(f => {
+        payload[f] = document.getElementById('form' + f.split('_').map((s,i) => i===0 ? s.charAt(0).toUpperCase()+s.slice(1) : s.charAt(0).toUpperCase()+s.slice(1)).join('')
+            .replace('Is_active','IsActive').replace('Is_staff','IsStaff').replace('Is_superuser','IsSuperuser').replace('Is_operator','IsOperator').replace('Is_analyst','IsAnalyst').replace('Can_lawful_intercept','CanLEA')
+        )?.checked || false;
+    });
+    // Fix checkbox IDs
+    payload.is_active = document.getElementById('formIsActive').checked;
+    payload.is_staff = document.getElementById('formIsStaff').checked;
+    payload.is_superuser = document.getElementById('formIsSuperuser').checked;
+    payload.is_operator = document.getElementById('formIsOperator').checked;
+    payload.is_analyst = document.getElementById('formIsAnalyst').checked;
+    payload.can_lawful_intercept = document.getElementById('formCanLEA').checked;
+    payload.action = payload.user_id ? 'edit' : 'create';
+
+    fetch(USERS_API, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value},
+        body: JSON.stringify(payload)
+    }).then(r => r.json()).then(data => {
+        if (data.success) location.reload();
+        else { errEl.textContent = data.error; errEl.classList.remove('d-none'); }
+    });
+});
+</script>
+{% endblock %}

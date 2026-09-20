@@ -1,0 +1,21 @@
+[Unit]
+Description=UMP Mediation Collector
+After=network.target postgresql.service
+Requires=postgresql.service
+PartOf=mediation.target
+
+[Service]
+Type=simple
+User=ump
+Group=ump
+WorkingDirectory=/opt/ump/mediation
+EnvironmentFile=/opt/ump/.env
+ExecStart=/opt/ump/venv/bin/python manage.py run_collector --interval 10
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mediation-collector
+
+[Install]
+WantedBy=mediation.target

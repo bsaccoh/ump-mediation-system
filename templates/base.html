@@ -1,17 +1,26 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}UMP Mediation{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <link href="{% static 'vendor/bootstrap-icons/bootstrap-icons.min.css' %}" rel="stylesheet">
     <style>
         :root { --sidebar-width: 240px; --sidebar-collapsed-width: 62px; }
+
+        /* Full-height viewport fit — body never scrolls; only .main-content and .sidebar do */
+        html, body { height: 100%; margin: 0; overflow: hidden; }
         body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f2f5; }
 
         /* Sidebar */
-        .sidebar { width: var(--sidebar-width); min-height: 100vh; background: linear-gradient(180deg, #1a237e 0%, #0d47a1 100%); position: fixed; top: 0; left: 0; z-index: 1000; transition: width 0.25s ease; overflow: hidden; }
+        .sidebar { width: var(--sidebar-width); height: 100vh; background: linear-gradient(180deg, #1a237e 0%, #0d47a1 100%); position: fixed; top: 0; left: 0; z-index: 1000; transition: width 0.25s ease; overflow-y: auto; overflow-x: hidden; }
+        .sidebar::-webkit-scrollbar { width: 6px; }
+        .sidebar::-webkit-scrollbar-track { background: transparent; }
+        .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 3px; }
+        .sidebar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
+        .sidebar { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.25) transparent; }
         .sidebar .brand { padding: 1.2rem; color: #fff; font-size: 1.3rem; font-weight: 700; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between; white-space: nowrap; }
         .sidebar .brand .brand-text { overflow: hidden; transition: opacity 0.2s, width 0.25s; }
         .sidebar .brand small { display: block; font-size: 0.7rem; font-weight: 400; opacity: 0.7; }
@@ -55,16 +64,48 @@
         .sidebar.sidebar-collapsed .nav-link { position: relative; }
         .sidebar.sidebar-collapsed .nav-link[title]:hover::after { content: attr(title); position: absolute; left: calc(var(--sidebar-collapsed-width) - 4px); top: 50%; transform: translateY(-50%); background: #333; color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 0.8rem; white-space: nowrap; z-index: 2000; pointer-events: none; }
 
-        /* Main */
-        .main-content { margin-left: var(--sidebar-width); padding: 1.5rem; transition: margin-left 0.25s ease; }
+        /* Main — fills the viewport, scrolls independently from the sidebar */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: 1.5rem;
+            height: 100vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+            transition: margin-left 0.25s ease;
+            box-sizing: border-box;
+        }
         .main-content.expanded { margin-left: var(--sidebar-collapsed-width); }
-        .topbar { background: #fff; border-bottom: 1px solid #dee2e6; padding: 0.8rem 1.5rem; margin: -1.5rem -1.5rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+
+        /* Sticky topbar — stays visible while content scrolls */
+        .topbar {
+            background: #fff;
+            border-bottom: 1px solid #dee2e6;
+            padding: 0.8rem 1.5rem;
+            margin: -1.5rem -1.5rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: -1.5rem;   /* cancels the negative margin so it pins at viewport top */
+            z-index: 900;
+        }
+
         .stat-card { text-align: center; padding: 1.2rem; }
         .stat-card .value { font-size: 2rem; font-weight: 700; color: #1a237e; }
         .stat-card .label { font-size: 0.8rem; color: #6c757d; }
-        
+
+        /* Prevent charts and images from blowing out the layout */
+        canvas, img { max-width: 100% !important; }
+
         /* Global Table Styling */
         table tbody { font-size: 0.85rem; }
+
+        /* Wide content (tables, code blocks) scrolls horizontally in its own lane */
+        .table-responsive { overflow-x: auto; max-width: 100%; }
+
+        /* Sidebar section labels */
+        .nav-section-label { padding: 0.8rem 1.2rem 0.2rem; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: rgba(255,255,255,0.35); white-space: nowrap; overflow: hidden; }
+        .sidebar.sidebar-collapsed .nav-section-label { display: none; }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -79,40 +120,35 @@
             </button>
         </div>
         <ul class="nav flex-column mt-2">
+
+            <!-- Dashboard -->
             <li class="nav-item">
                 <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="{% url 'dashboard:index' %}" title="Dashboard">
                     <i class="bi bi-speedometer2"></i><span class="nav-link-text"> Dashboard</span>
                 </a>
             </li>
 
-            <!-- Operations Dropdown -->
+            <!-- ── PIPELINE ── -->
+            <li class="nav-section-label">Pipeline</li>
+
+            <!-- Collection Dropdown: File Upload → CDR Files → Processing Queue -->
             <li class="nav-item">
-                <a class="nav-link nav-dropdown-toggle {% if '/search' in request.path or '/subscriber' in request.path or '/record' in request.path or '/collection' in request.path or '/queue' in request.path %}{% else %}collapsed{% endif %}"
-                   data-bs-toggle="collapse" href="#opsMenu" role="button" title="Operations"
-                   aria-expanded="{% if '/search' in request.path or '/subscriber' in request.path or '/record' in request.path or '/collection' in request.path or '/queue' in request.path %}true{% else %}false{% endif %}">
-                    <i class="bi bi-layers"></i>
-                    <span class="nav-text">Operations</span>
+                <a class="nav-link nav-dropdown-toggle {% if '/collection/upload' in request.path or '/collection' in request.path and '/distribution' not in request.path or '/queue' in request.path %}{% else %}collapsed{% endif %}"
+                   data-bs-toggle="collapse" href="#collectionMenu" role="button" title="Collection"
+                   aria-expanded="{% if '/collection/upload' in request.path or '/collection' in request.path and '/distribution' not in request.path or '/queue' in request.path %}true{% else %}false{% endif %}">
+                    <i class="bi bi-inbox-fill"></i>
+                    <span class="nav-text">Collection</span>
                     <i class="bi bi-chevron-down chevron"></i>
                 </a>
-                <ul class="nav-sub collapse {% if '/search' in request.path or '/subscriber' in request.path or '/record' in request.path or '/collection' in request.path or '/queue' in request.path %}show{% endif %}" id="opsMenu">
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/search' in request.path %}active{% endif %}" href="{% url 'dashboard:cdr_search' %}" title="CDR Search">
-                            <i class="bi bi-search"></i><span class="nav-link-text"> CDR Search</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/subscriber' in request.path %}active{% endif %}" href="{% url 'dashboard:subscriber' %}" title="Subscriber">
-                            <i class="bi bi-person-lines-fill"></i><span class="nav-link-text"> Subscriber</span>
-                        </a>
-                    </li>
+                <ul class="nav-sub collapse {% if '/collection/upload' in request.path or '/collection' in request.path and '/distribution' not in request.path or '/queue' in request.path %}show{% endif %}" id="collectionMenu">
                     <li class="nav-item">
                         <a class="nav-link {% if '/collection/upload' in request.path %}active{% endif %}" href="{% url 'collection:upload' %}" title="File Upload">
                             <i class="bi bi-upload"></i><span class="nav-link-text"> File Upload</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if '/collection' in request.path and '/upload' not in request.path %}active{% endif %}" href="{% url 'collection:file_list' %}" title="File Manager">
-                            <i class="bi bi-folder2-open"></i><span class="nav-link-text"> File Manager</span>
+                        <a class="nav-link {% if '/collection' in request.path and '/upload' not in request.path and '/distribution' not in request.path %}active{% endif %}" href="{% url 'collection:file_list' %}" title="CDR Files">
+                            <i class="bi bi-folder2-open"></i><span class="nav-link-text"> CDR Files</span>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -120,34 +156,206 @@
                             <i class="bi bi-activity"></i><span class="nav-link-text"> Processing Queue</span>
                         </a>
                     </li>
+                </ul>
+            </li>
+
+            <!-- Distribution Dropdown: Distribution Logs → File Registry -->
+            <li class="nav-item">
+                <a class="nav-link nav-dropdown-toggle {% if '/collection/distribution' in request.path or '/file-registry' in request.path %}{% else %}collapsed{% endif %}"
+                   data-bs-toggle="collapse" href="#distributionMenu" role="button" title="Distribution"
+                   aria-expanded="{% if '/collection/distribution' in request.path or '/file-registry' in request.path %}true{% else %}false{% endif %}">
+                    <i class="bi bi-send-fill"></i>
+                    <span class="nav-text">Distribution</span>
+                    <i class="bi bi-chevron-down chevron"></i>
+                </a>
+                <ul class="nav-sub collapse {% if '/collection/distribution' in request.path or '/file-registry' in request.path %}show{% endif %}" id="distributionMenu">
                     <li class="nav-item">
                         <a class="nav-link {% if '/collection/distribution' in request.path %}active{% endif %}" href="{% url 'collection:distribution_dashboard' %}" title="Distribution Logs">
                             <i class="bi bi-send-check"></i><span class="nav-link-text"> Distribution Logs</span>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/file-registry' in request.path %}active{% endif %}" href="{% url 'dashboard:file_registry' %}" title="File Registry">
+                            <i class="bi bi-archive"></i><span class="nav-link-text"> File Registry</span>
+                        </a>
+                    </li>
                 </ul>
             </li>
 
-            <!-- File Registry (standalone) -->
+            <!-- ── SEARCH & INSIGHTS ── -->
+            <li class="nav-section-label">Search &amp; Insights</li>
+
             <li class="nav-item">
-                <a class="nav-link {% if '/file-registry' in request.path %}active{% endif %}" href="{% url 'dashboard:file_registry' %}" title="File Registry">
-                    <i class="bi bi-archive"></i><span class="nav-link-text"> File Registry</span>
+                <a class="nav-link {% if '/search' in request.path %}active{% endif %}" href="{% url 'dashboard:cdr_search' %}" title="CDR Search">
+                    <i class="bi bi-search"></i><span class="nav-link-text"> CDR Search</span>
                 </a>
             </li>
-
-            <!-- Analytics (standalone) -->
+            <li class="nav-item">
+                <a class="nav-link {% if '/subscriber' in request.path %}active{% endif %}" href="{% url 'dashboard:subscriber' %}" title="Subscriber">
+                    <i class="bi bi-person-lines-fill"></i><span class="nav-link-text"> Subscriber</span>
+                </a>
+            </li>
             <li class="nav-item">
                 <a class="nav-link {% if '/analytics' in request.path %}active{% endif %}" href="{% url 'dashboard:analytics' %}" title="Analytics">
                     <i class="bi bi-graph-up-arrow"></i><span class="nav-link-text"> Analytics</span>
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link {% if '/reports' in request.path %}active{% endif %}" href="{% url 'dashboard:reports' %}" title="Reports">
+                    <i class="bi bi-bar-chart-line"></i><span class="nav-link-text"> Reports</span>
+                </a>
+            </li>
 
-            <!-- Background Jobs (standalone) -->
+            <!-- ── QUALITY & AUDIT ── -->
+            <li class="nav-section-label">Quality &amp; Audit</li>
+
+            <li class="nav-item">
+                <a class="nav-link {% if '/duplicates' in request.path %}active{% endif %}" href="{% url 'dashboard:duplicates' %}" title="Duplicates">
+                    <i class="bi bi-copy"></i><span class="nav-link-text"> Duplicates</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if '/errors' in request.path %}active{% endif %}" href="{% url 'dashboard:errors' %}" title="Processing Errors">
+                    <i class="bi bi-exclamation-triangle"></i><span class="nav-link-text"> Errors</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if '/activity-log' in request.path %}active{% endif %}" href="{% url 'dashboard:activity_log' %}" title="Activity Log">
+                    <i class="bi bi-journal-text"></i><span class="nav-link-text"> Activity Log</span>
+                </a>
+            </li>
+
+            <!-- ── MONITORING ── -->
+            <li class="nav-section-label">Monitoring</li>
+
+            <li class="nav-item">
+                <a class="nav-link {% if '/monitoring' in request.path %}active{% endif %}" href="{% url 'dashboard:system_monitoring' %}" title="System Monitoring">
+                    <i class="bi bi-heart-pulse"></i><span class="nav-link-text"> System Monitoring</span>
+                </a>
+            </li>
             <li class="nav-item">
                 <a class="nav-link {% if '/jobs' in request.path %}active{% endif %}" href="{% url 'core:job_list' %}" title="Background Jobs">
                     <i class="bi bi-gear-wide-connected"></i><span class="nav-link-text"> Background Jobs</span>
                 </a>
             </li>
+
+            <!-- ── REGULATORY ── -->
+            {% if request.user.is_superuser or request.user.is_regulator or request.user.is_auditor or request.user.is_regulatory_admin %}
+            <li class="nav-section-label">Regulatory</li>
+            <li class="nav-item">
+                <a class="nav-link nav-dropdown-toggle {% if '/regulatory/' in request.path %}{% else %}collapsed{% endif %}"
+                   data-bs-toggle="collapse" href="#regulatoryMenu" role="button" title="Regulatory"
+                   aria-expanded="{% if '/regulatory/' in request.path %}true{% else %}false{% endif %}">
+                    <i class="bi bi-bank2"></i>
+                    <span class="nav-text">Regulatory</span>
+                    <i class="bi bi-chevron-down chevron"></i>
+                </a>
+                <ul class="nav-sub collapse {% if '/regulatory/' in request.path %}show{% endif %}" id="regulatoryMenu">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.path == '/regulatory/' %}active{% endif %}" href="{% url 'regulatory:dashboard' %}" title="Regulatory Dashboard">
+                            <i class="bi bi-speedometer"></i><span class="nav-link-text"> Dashboard</span>
+                        </a>
+                    </li>
+                    <!-- NatCA Sub-category -->
+                    <li class="nav-item">
+                        <a class="nav-link nav-dropdown-toggle {% if '/regulatory/natca' in request.path or '/regulatory/tariffs' in request.path %}{% else %}collapsed{% endif %}"
+                           data-bs-toggle="collapse" href="#natcaMenu" role="button" title="NatCA"
+                           style="padding-left:2rem; font-size:0.82rem;">
+                            <i class="bi bi-broadcast"></i>
+                            <span class="nav-text">NatCA</span>
+                            <i class="bi bi-chevron-down chevron"></i>
+                        </a>
+                        <ul class="nav-sub collapse {% if '/regulatory/natca' in request.path or '/regulatory/tariffs' in request.path %}show{% endif %}" id="natcaMenu">
+                            <li class="nav-item">
+                                <a class="nav-link {% if '/regulatory/natca/dashboard' in request.path %}active{% endif %}"
+                                   href="{% url 'regulatory:natca_dashboard' %}" title="NatCA Dashboard"
+                                   style="padding-left:3.5rem;">
+                                    <i class="bi bi-speedometer"></i><span class="nav-link-text"> Dashboard</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if '/regulatory/tariffs' in request.path %}active{% endif %}"
+                                   href="{% url 'regulatory:tariff_list' %}" title="Tariff Management"
+                                   style="padding-left:3.5rem;">
+                                    <i class="bi bi-tags"></i><span class="nav-link-text"> Tariff Management</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if '/regulatory/natca/traffic' in request.path %}active{% endif %}"
+                                   href="{% url 'regulatory:traffic_overview' %}" title="Traffic Monitoring"
+                                   style="padding-left:3.5rem;">
+                                    <i class="bi bi-graph-up"></i><span class="nav-link-text"> Traffic Monitoring</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if '/regulatory/natca/tariff-compliance' in request.path %}active{% endif %}"
+                                   href="{% url 'regulatory:tariff_compliance_list' %}" title="Tariff Compliance"
+                                   style="padding-left:3.5rem;">
+                                    <i class="bi bi-shield-check"></i><span class="nav-link-text"> Tariff Compliance</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                    <!-- NRA Sub-category -->
+                    <li class="nav-item">
+                        <a class="nav-link nav-dropdown-toggle {% if '/regulatory/tax' in request.path or '/regulatory/declarations' in request.path or '/regulatory/reconciliation' in request.path or '/regulatory/risk' in request.path or '/regulatory/audit' in request.path or '/regulatory/nra' in request.path %}{% else %}collapsed{% endif %}"
+                           data-bs-toggle="collapse" href="#nraMenu" role="button" title="NRA"
+                           style="padding-left:2rem; font-size:0.82rem;">
+                            <i class="bi bi-cash-stack"></i>
+                            <span class="nav-text">NRA</span>
+                            <i class="bi bi-chevron-down chevron"></i>
+                        </a>
+                        <ul class="nav-sub collapse {% if '/regulatory/tax' in request.path or '/regulatory/declarations' in request.path or '/regulatory/reconciliation' in request.path or '/regulatory/risk' in request.path or '/regulatory/audit' in request.path or '/regulatory/nra' in request.path %}show{% endif %}" id="nraMenu">
+                            <li class="nav-item">
+                                <a class="nav-link {% if '/regulatory/nra/dashboard' in request.path %}active{% endif %}"
+                                   href="{% url 'regulatory:nra_dashboard' %}" title="NRA Dashboard"
+                                   style="padding-left:3.5rem;">
+                                    <i class="bi bi-speedometer"></i><span class="nav-link-text"> Dashboard</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if '/regulatory/nra/declarations' in request.path %}active{% endif %}"
+                                   href="{% url 'regulatory:declaration_list' %}" title="Declarations"
+                                   style="padding-left:3.5rem;">
+                                    <i class="bi bi-file-earmark-text"></i><span class="nav-link-text"> Declarations</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if '/regulatory/nra/reconciliation' in request.path %}active{% endif %}"
+                                   href="{% url 'regulatory:reconciliation_list' %}" title="Reconciliation"
+                                   style="padding-left:3.5rem;">
+                                    <i class="bi bi-arrow-left-right"></i><span class="nav-link-text"> Reconciliation</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if '/regulatory/nra/risk' in request.path %}active{% endif %}"
+                                   href="{% url 'regulatory:risk_alert_list' %}" title="Risk Alerts"
+                                   style="padding-left:3.5rem;">
+                                    <i class="bi bi-exclamation-triangle"></i><span class="nav-link-text"> Risk Alerts</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if '/regulatory/nra/tax-rates' in request.path %}active{% endif %}"
+                                   href="{% url 'regulatory:tax_rate_list' %}" title="Tax / GST Rates"
+                                   style="padding-left:3.5rem;">
+                                    <i class="bi bi-percent"></i><span class="nav-link-text"> Tax / GST Rates</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if '/regulatory/nra/audit' in request.path %}active{% endif %}"
+                                   href="{% url 'regulatory:audit_case_list' %}" title="Audit Cases"
+                                   style="padding-left:3.5rem;">
+                                    <i class="bi bi-clipboard-check"></i><span class="nav-link-text"> Audit Cases</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+            </li>
+            {% endif %}
+
+            <!-- ── CONFIGURATION ── -->
+            <li class="nav-section-label">Configuration</li>
 
             <!-- Reference Data Dropdown -->
             <li class="nav-item">
@@ -197,220 +405,16 @@
                 </ul>
             </li>
 
-            <!-- Interconnect Dropdown -->
-            <li class="nav-item">
-                <a class="nav-link nav-dropdown-toggle {% if '/interconnect/' in request.path %}{% else %}collapsed{% endif %}"
-                   data-bs-toggle="collapse" href="#interconnectMenu" role="button" title="Interconnect"
-                   aria-expanded="{% if '/interconnect/' in request.path %}true{% else %}false{% endif %}">
-                    <i class="bi bi-diagram-2"></i>
-                    <span class="nav-text">Interconnect</span>
-                    <i class="bi bi-chevron-down chevron"></i>
-                </a>
-                <ul class="nav-sub collapse {% if '/interconnect/' in request.path %}show{% endif %}" id="interconnectMenu">
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/interconnect/traffic-matrix' in request.path %}active{% endif %}" href="{% url 'interconnect:traffic_matrix' %}" title="Traffic Matrix">
-                            <i class="bi bi-grid-3x3-gap"></i><span class="nav-link-text"> Traffic Matrix</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/interconnect/partners' in request.path %}active{% endif %}" href="{% url 'interconnect:partner_list' %}" title="Partners">
-                            <i class="bi bi-people"></i><span class="nav-link-text"> Partners</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/interconnect/rates' in request.path %}active{% endif %}" href="{% url 'interconnect:rate_list' %}" title="Rates & Charging">
-                            <i class="bi bi-cash-coin"></i><span class="nav-link-text"> Rates &amp; Charging</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/interconnect/exchange-rates' in request.path %}active{% endif %}" href="{% url 'interconnect:exchange_rate_list' %}" title="Exchange Rates">
-                            <i class="bi bi-currency-exchange"></i><span class="nav-link-text"> Exchange Rates</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/interconnect/cycles' in request.path %}active{% endif %}" href="{% url 'interconnect:cycle_list' %}" title="Billing Cycles">
-                            <i class="bi bi-calendar3"></i><span class="nav-link-text"> Billing Cycles</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/interconnect/invoice-generate' in request.path %}active{% endif %}" href="{% url 'interconnect:invoice_generate' %}" title="Invoice Generation">
-                            <i class="bi bi-receipt"></i><span class="nav-link-text"> Invoice Generation</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/interconnect/invoices' in request.path %}active{% endif %}" href="{% url 'interconnect:invoice_list' %}" title="Invoicing">
-                            <i class="bi bi-file-earmark-text"></i><span class="nav-link-text"> Invoicing</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/interconnect/reconciliation' in request.path %}active{% endif %}" href="{% url 'interconnect:reconciliation_list' %}" title="Reconciliation">
-                            <i class="bi bi-arrow-left-right"></i><span class="nav-link-text"> Reconciliation</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/interconnect/settlement' in request.path %}active{% endif %}" href="{% url 'interconnect:settlement_list' %}" title="Settlement">
-                            <i class="bi bi-wallet2"></i><span class="nav-link-text"> Settlement</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/interconnect/reports' in request.path %}active{% endif %}" href="{% url 'interconnect:reports_view' %}" title="Reports">
-                            <i class="bi bi-bar-chart"></i><span class="nav-link-text"> Reports</span>
-                        </a>
-                    </li>
-                </ul>
-            </li>
-
-            <!-- Regulatory Dropdown -->
-            <li class="nav-item">
-                <a class="nav-link nav-dropdown-toggle {% if '/regulatory/' in request.path %}{% else %}collapsed{% endif %}"
-                   data-bs-toggle="collapse" href="#regulatoryMenu" role="button" title="Regulatory"
-                   aria-expanded="{% if '/regulatory/' in request.path %}true{% else %}false{% endif %}">
-                    <i class="bi bi-shield-check"></i>
-                    <span class="nav-text">Regulatory</span>
-                    <i class="bi bi-chevron-down chevron"></i>
-                </a>
-                <ul class="nav-sub collapse {% if '/regulatory/' in request.path %}show{% endif %}" id="regulatoryMenu">
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/regulatory/reports' in request.path %}active{% endif %}" href="{% url 'regulatory:report_list' %}" title="NATCOM Reports">
-                            <i class="bi bi-file-earmark-bar-graph"></i><span class="nav-link-text"> NATCOM Reports</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/regulatory/levy' in request.path %}active{% endif %}" href="{% url 'regulatory:levy_list' %}" title="Levy & USF">
-                            <i class="bi bi-cash-stack"></i><span class="nav-link-text"> Levy &amp; USF</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/regulatory/retail' in request.path %}active{% endif %}" href="{% url 'regulatory:retail_list' %}" title="Retail Revenue">
-                            <i class="bi bi-shop"></i><span class="nav-link-text"> Retail Revenue</span>
-                        </a>
-                    </li>
-                    {% if user.can_lawful_intercept %}
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/regulatory/intercept' in request.path %}active{% endif %}" href="{% url 'regulatory:intercept_list' %}" title="Lawful Intercept">
-                            <i class="bi bi-shield-lock"></i><span class="nav-link-text"> Lawful Intercept</span>
-                        </a>
-                    </li>
-                    {% endif %}
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/regulatory/qos' in request.path %}active{% endif %}" href="{% url 'regulatory:qos_view' %}" title="QoS / KPIs">
-                            <i class="bi bi-speedometer2"></i><span class="nav-link-text"> QoS / KPIs</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link nav-dropdown-toggle {% if '/regulatory/network-performance' not in request.path and '/regulatory/sites' not in request.path and '/regulatory/counters' not in request.path %}collapsed{% endif %}"
-                           data-bs-toggle="collapse" href="#netPerfMenu" role="button" title="Network Performance"
-                           style="padding-left:2rem; font-size:0.85rem;">
-                            <i class="bi bi-diagram-3"></i>
-                            <span class="nav-text">Network Performance</span>
-                            <i class="bi bi-chevron-down chevron"></i>
-                        </a>
-                        <ul class="nav-sub collapse {% if '/regulatory/network-performance' in request.path or '/regulatory/compliance' in request.path or '/regulatory/kpis' in request.path or '/regulatory/sites' in request.path or '/regulatory/counters' in request.path or '/regulatory/drive-test' in request.path %}show{% endif %}" id="netPerfMenu">
-                            <li class="nav-item">
-                                <a class="nav-link {% if '/regulatory/network-performance' in request.path %}active{% endif %}"
-                                   href="{% url 'regulatory:network_performance_view' %}" title="PM Performance KPIs"
-                                   style="padding-left:3.5rem;">
-                                    <i class="bi bi-speedometer2"></i><span class="nav-link-text"> PM Performance KPIs</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link {% if '/regulatory/compliance' in request.path %}active{% endif %}"
-                                   href="{% url 'regulatory:compliance_page_view' %}" title="NatCA Compliance Audit Matrix"
-                                   style="padding-left:3.5rem;">
-                                    <i class="bi bi-shield-check"></i><span class="nav-link-text"> Compliance Audit</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link {% if '/regulatory/drive-test' in request.path %}active{% endif %}"
-                                   href="{% url 'regulatory:drive_test_list' %}" title="Drive Test Surveys &amp; GIS Analysis"
-                                   style="padding-left:3.5rem;">
-                                    <i class="bi bi-geo-alt"></i><span class="nav-link-text"> Drive Test Surveys</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link {% if '/regulatory/kpis' in request.path %}active{% endif %}"
-                                   href="{% url 'regulatory:kpi_config_view' %}" title="PM KPI Threshold Config"
-                                   style="padding-left:3.5rem;">
-                                    <i class="bi bi-sliders"></i><span class="nav-link-text"> KPI Threshold Config</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link {% if '/regulatory/sites' in request.path %}active{% endif %}"
-                                   href="{% url 'regulatory:site_list_view' %}" title="Cell Site & Geo Inventory"
-                                   style="padding-left:3.5rem;">
-                                    <i class="bi bi-broadcast-pin"></i><span class="nav-link-text"> Cell Site Inventory</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link {% if '/regulatory/counters' in request.path %}active{% endif %}"
-                                   href="{% url 'regulatory:counter_list_view' %}" title="PM Counter Dictionary"
-                                   style="padding-left:3.5rem;">
-                                    <i class="bi bi-book"></i><span class="nav-link-text"> Counter Dictionary</span>
-                                </a>
-                            </li>
-                        </ul>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/regulatory/drive-test' in request.path %}active{% endif %}" href="{% url 'regulatory:drive_test_list' %}" title="Drive Test">
-                            <i class="bi bi-geo-alt"></i><span class="nav-link-text"> Drive Test</span>
-                        </a>
-                    </li>
-                </ul>
-            </li>
-
-            <!-- Roaming Dropdown -->
-            <li class="nav-item">
-                <a class="nav-link nav-dropdown-toggle {% if '/roaming/' in request.path %}{% else %}collapsed{% endif %}"
-                   data-bs-toggle="collapse" href="#roamingMenu" role="button" title="Roaming"
-                   aria-expanded="{% if '/roaming/' in request.path %}true{% else %}false{% endif %}">
-                    <i class="bi bi-globe2"></i>
-                    <span class="nav-text">Roaming</span>
-                    <i class="bi bi-chevron-down chevron"></i>
-                </a>
-                <ul class="nav-sub collapse {% if '/roaming/' in request.path %}show{% endif %}" id="roamingMenu">
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/roaming/partners' in request.path %}active{% endif %}" href="{% url 'roaming:partner_list' %}" title="Roaming Partners">
-                            <i class="bi bi-people"></i><span class="nav-link-text"> Partners</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/roaming/detect' in request.path %}active{% endif %}" href="{% url 'roaming:detect' %}" title="Detection">
-                            <i class="bi bi-search"></i><span class="nav-link-text"> Detection</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/roaming/cycles' in request.path %}active{% endif %}" href="{% url 'roaming:cycle_list' %}" title="Cycles">
-                            <i class="bi bi-calendar3"></i><span class="nav-link-text"> Cycles</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/roaming/files' in request.path %}active{% endif %}" href="{% url 'roaming:file_list' %}" title="Files">
-                            <i class="bi bi-file-earmark-binary"></i><span class="nav-link-text"> Files</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/roaming/disputes' in request.path %}active{% endif %}" href="{% url 'roaming:dispute_list' %}" title="Disputes">
-                            <i class="bi bi-exclamation-diamond"></i><span class="nav-link-text"> Disputes</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if '/roaming/reports' in request.path %}active{% endif %}" href="{% url 'roaming:reports_view' %}" title="Reports">
-                            <i class="bi bi-bar-chart"></i><span class="nav-link-text"> Reports</span>
-                        </a>
-                    </li>
-                </ul>
-            </li>
-
             <!-- System & Portals Dropdown -->
             <li class="nav-item">
-                <a class="nav-link nav-dropdown-toggle {% if '/portals/' not in request.path %}collapsed{% endif %}"
+                <a class="nav-link nav-dropdown-toggle {% if '/portals/' not in request.path and '/services' not in request.path %}collapsed{% endif %}"
                    data-bs-toggle="collapse" href="#portalsMenu" role="button" title="System & Portals"
-                   aria-expanded="{% if '/portals/' in request.path %}true{% else %}false{% endif %}">
+                   aria-expanded="{% if '/portals/' in request.path or '/services' in request.path %}true{% else %}false{% endif %}">
                     <i class="bi bi-diagram-3"></i>
                     <span class="nav-text">System &amp; Portals</span>
                     <i class="bi bi-chevron-down chevron"></i>
                 </a>
-                <ul class="nav-sub collapse {% if '/portals/' in request.path %}show{% endif %}" id="portalsMenu">
+                <ul class="nav-sub collapse {% if '/portals/' in request.path or '/services' in request.path %}show{% endif %}" id="portalsMenu">
                     <!-- Configure Portal sub-group -->
                     <li class="nav-item">
                         <a class="nav-link nav-dropdown-toggle {% if '/portals/input-portal' not in request.path and '/portals/output-portal' not in request.path %}collapsed{% endif %}"
@@ -449,19 +453,34 @@
                             <i class="bi bi-server"></i><span class="nav-link-text"> Resource Management</span>
                         </a>
                     </li>
+                    {% if request.user.is_superuser %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/services' in request.path %}active{% endif %}"
+                           href="{% url 'dashboard:services' %}" title="Service Control">
+                            <i class="bi bi-toggles2"></i><span class="nav-link-text"> Service Control</span>
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
             </li>
 
             <!-- Configuration Dropdown -->
             <li class="nav-item">
-                <a class="nav-link nav-dropdown-toggle {% if '/admin/' not in request.path and '/scripts/' not in request.path and '/business-logic/' not in request.path %}collapsed{% endif %}"
+                <a class="nav-link nav-dropdown-toggle {% if '/admin/' not in request.path and '/scripts/' not in request.path and '/business-logic/' not in request.path and '/users/' not in request.path %}collapsed{% endif %}"
                    data-bs-toggle="collapse" href="#configMenu" role="button" title="Configuration"
-                   aria-expanded="{% if '/admin/' in request.path or '/scripts/' in request.path or '/business-logic/' in request.path %}true{% else %}false{% endif %}">
+                   aria-expanded="{% if '/admin/' in request.path or '/scripts/' in request.path or '/business-logic/' in request.path or '/users/' in request.path %}true{% else %}false{% endif %}">
                     <i class="bi bi-gear"></i>
                     <span class="nav-text">Configuration</span>
                     <i class="bi bi-chevron-down chevron"></i>
                 </a>
-                <ul class="nav-sub collapse {% if '/admin/' in request.path or '/scripts/' in request.path or '/business-logic/' in request.path %}show{% endif %}" id="configMenu">
+                <ul class="nav-sub collapse {% if '/admin/' in request.path or '/scripts/' in request.path or '/business-logic/' in request.path or '/users/' in request.path %}show{% endif %}" id="configMenu">
+                    {% if request.user.is_superuser %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/users/' in request.path %}active{% endif %}" href="{% url 'core:user_list' %}" title="User Management">
+                            <i class="bi bi-people"></i><span class="nav-link-text"> User Management</span>
+                        </a>
+                    </li>
+                    {% endif %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'admin:index' %}" title="Admin Panel">
                             <i class="bi bi-sliders"></i><span class="nav-link-text"> Admin Panel</span>
@@ -526,6 +545,7 @@
 
     <!-- Main Content -->
     <div class="main-content">
+        {% block topbar %}
         <div class="topbar">
             <h5 class="mb-0">{% block page_title %}Dashboard{% endblock %}</h5>
             <div class="d-flex align-items-center gap-3">
@@ -547,6 +567,7 @@
                 {% endif %}
             </div>
         </div>
+        {% endblock %}
 
         {% if messages %}
         {% for message in messages %}
@@ -560,7 +581,7 @@
         {% block content %}{% endblock %}
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
     <script>
     (function () {
         const sidebar = document.getElementById('sidebar');

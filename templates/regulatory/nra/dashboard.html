@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}NRA Dashboard — UMP Mediation{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'regulatory/css/nra_dashboard.css' %}">
+{% endblock %}
+
+{% block page_title %}NRA Dashboard{% endblock %}
+
+{% block content %}
+<div class="nra-dashboard">
+
+    <!-- PAGE HEADER -->
+    <div class="nra-page-header">
+        <div>
+            <h1 class="nra-heading">NRA Dashboard</h1>
+            <p class="nra-subtitle">{{ page_subtitle }}</p>
+        </div>
+        <div class="nra-filter-bar">
+            <input type="date" class="form-control form-control-sm" name="start_date"
+                   value="{{ start_date|default:'' }}" title="Start date">
+            <span class="filter-sep">–</span>
+            <input type="date" class="form-control form-control-sm" name="end_date"
+                   value="{{ end_date|default:'' }}" title="End date">
+            <select class="form-select form-select-sm" id="operatorFilter" title="Operator">
+                <option value="">All Operators</option>
+                {% for op in operators %}
+                <option value="{{ op.name }}" {% if selected_operator == op.name %}selected{% endif %}>{{ op.name }}</option>
+                {% endfor %}
+            </select>
+            <select class="form-select form-select-sm" id="serviceFilter" title="Service">
+                <option value="">All Services</option>
+                <option>Voice</option>
+                <option>SMS</option>
+                <option>Data</option>
+                <option>International</option>
+                <option>Roaming</option>
+                <option>Interconnect</option>
+            </select>
+            <button class="btn btn-primary btn-sm" id="refreshBtn">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- LIVE STATUS -->
+    <div class="dashboard-status">
+        <span>Last updated: <strong>{{ last_updated }}</strong></span>
+        <span class="live-status"><span class="live-dot"></span> Live Data</span>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="nra-kpi-grid">
+        {% include "regulatory/nra/partials/kpi_card.html" with title="Expected Taxable Revenue" currency=kpis.expected_taxable_revenue.currency value=kpis.expected_taxable_revenue.value unit=kpis.expected_taxable_revenue.unit change=kpis.expected_taxable_revenue.change icon="bi-cash-stack" color="green" %}
+        {% include "regulatory/nra/partials/kpi_card.html" with title="Declared Taxable Revenue" currency=kpis.declared_taxable_revenue.currency value=kpis.declared_taxable_revenue.value unit=kpis.declared_taxable_revenue.unit change=kpis.declared_taxable_revenue.change icon="bi-database-fill" color="blue" %}
+        {% include "regulatory/nra/partials/kpi_card.html" with title="Expected GST" currency=kpis.expected_gst.currency value=kpis.expected_gst.value unit=kpis.expected_gst.unit change=kpis.expected_gst.change icon="bi-percent" color="orange" %}
+        {% include "regulatory/nra/partials/kpi_card.html" with title="Declared GST" currency=kpis.declared_gst.currency value=kpis.declared_gst.value unit=kpis.declared_gst.unit change=kpis.declared_gst.change icon="bi-file-earmark-text-fill" color="purple" %}
+        {% include "regulatory/nra/partials/kpi_card.html" with title="GST Variance" currency=kpis.gst_variance.currency value=kpis.gst_variance.value unit=kpis.gst_variance.unit change=kpis.gst_variance.change icon="bi-bar-chart-fill" color="red" %}
+        {% include "regulatory/nra/partials/kpi_card.html" with title="Tax Exposure" currency=kpis.tax_exposure.currency value=kpis.tax_exposure.value unit=kpis.tax_exposure.unit status=kpis.tax_exposure.status icon="bi-shield-exclamation" color="red" %}
+        {% include "regulatory/nra/partials/kpi_card.html" with title="Open Audit Cases" value=kpis.open_audit_cases.value change=kpis.open_audit_cases.change icon="bi-hammer" color="orange" %}
+        {% include "regulatory/nra/partials/kpi_card.html" with title="High-Risk Operators" value=kpis.high_risk_operators.value status=kpis.high_risk_operators.status icon="bi-exclamation-triangle-fill" color="red" %}
+    </div>
+
+    <!-- FIRST CHART ROW -->
+    <div class="dashboard-grid grid-three">
+
+        <!-- GST TREND -->
+        <div class="dashboard-card">
+            <div class="dashboard-card-header">
+                <h3>GST Trend (Last 12 Months)</h3>
+                <select class="form-select form-select-sm" id="gstTrendPeriod">
+                    <option value="monthly">Monthly</option>
+                    <option value="quarterly">Quarterly</option>
+                    <option value="yearly">Yearly</option>
+                </select>
+            </div>
+            <div class="chart-box">
+                <canvas id="gstTrendChart"></canvas>
+            </div>
+        </div>
+
+        <!-- TAXABLE REVENUE BY OPERATOR -->
+        <div class="dashboard-card">
+            <div class="dashboard-card-header">
+                <h3>Taxable Revenue by Operator</h3>
+            </div>
+            <div class="donut-wrapper">
+                <div class="donut-chart-area">
+                    <canvas id="taxableRevenueChart"></canvas>
+                    <div class="donut-center-label">
+                        <span class="donut-center-text">Total</span>
+                        <span class="donut-center-value" id="donutTotalValue">SLE 0.00</span>
+                    </div>
+                </div>
+                <div id="revenueDonutLegend" class="donut-legend"></div>
+            </div>
+        </div>
+
+        <!-- DECLARED VS EXPECTED REVENUE -->
+        <div class="dashboard-card">
+            <div class="dashboard-card-header">
+                <h3>Declared vs Expected Revenue</h3>
+                <select class="form-select form-select-sm" id="revCompPeriod">
+                    <option value="quarterly">Quarterly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                </select>
+            </div>
+            <div class="chart-box">
+                <canvas id="revenueComparisonChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECOND CHART ROW -->
+    <div class="dashboard-grid grid-three">
+
+        <!-- GST VARIANCE BY OPERATOR -->
+        <div class="dashboard-card">
+            <div class="dashboard-card-header">
+                <h3>GST Variance by Operator</h3>
+                <select class="form-select form-select-sm" id="gstVarPeriod">
+                    <option value="monthly">Monthly</option>
+                    <option value="quarterly">Quarterly</option>
+                </select>
+            </div>
+            <div class="chart-box">
+                <canvas id="gstVarianceChart"></canvas>
+            </div>
+        </div>
+
+        <!-- RECONCILIATION SUMMARY -->
+        <div class="dashboard-card">
+            <div class="dashboard-card-header">
+                <h3>Reconciliation Summary</h3>
+                <a href="#" class="card-link">View Details</a>
+            </div>
+            <div class="reconciliation-grid">
+                <div class="recon-card matched">
+                    <i class="bi bi-check-circle-fill"></i>
+                    <span>Matched</span>
+                    <strong>{{ reconciliation.matched.value }}%</strong>
+                    <small class="recon-change positive">(+{{ reconciliation.matched.change }}%)</small>
+                </div>
+                <div class="recon-card minor">
+                    <i class="bi bi-exclamation-circle-fill"></i>
+                    <span>Minor Variance</span>
+                    <strong>{{ reconciliation.minor.value }}%</strong>
+                    <small class="recon-change negative">({{ reconciliation.minor.change }}%)</small>
+                </div>
+                <div class="recon-card major">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <span>Major Variance</span>
+                    <strong>{{ reconciliation.major.value }}%</strong>
+                    <small class="recon-change">(+{{ reconciliation.major.change }}%)</small>
+                </div>
+                <div class="recon-card critical">
+                    <i class="bi bi-x-circle-fill"></i>
+                    <span>Critical Variance</span>
+                    <strong>{{ reconciliation.critical.value }}%</strong>
+                    <small class="recon-change">(+{{ reconciliation.critical.change }}%)</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- TOP TAX RISK INDICATORS -->
+        <div class="dashboard-card">
+            <div class="dashboard-card-header">
+                <h3>Top Tax Risk Indicators</h3>
+                <a href="#" class="card-link">View All</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table dashboard-table">
+                    <thead>
+                        <tr>
+                            <th>Indicator</th>
+                            <th>Count</th>
+                            <th>Trend</th>
+                            <th>Severity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for risk in risk_indicators %}
+                        <tr>
+                            <td>{{ risk.indicator }}</td>
+                            <td>{{ risk.count }}</td>
+                            <td class="{% if risk.trend > 0 %}text-danger{% else %}text-success{% endif %}">
+                                {% if risk.trend > 0 %}↑ {{ risk.trend }}%{% else %}↓ {{ risk.trend|cut:"-" }}%{% endif %}
+                            </td>
+                            <td><span class="risk-badge {{ risk.severity|lower }}">{{ risk.severity }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTOM TABLE ROW -->
+    <div class="dashboard-grid grid-bottom">
+
+        <!-- RECENT DECLARATIONS -->
+        <div class="dashboard-card">
+            <div class="dashboard-card-header">
+                <h3>Recent Declarations</h3>
+                <a href="#" class="card-link">View All</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table dashboard-table">
+                    <thead>
+                        <tr>
+                            <th>Operator</th>
+                            <th>Period</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Submitted</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in declarations %}
+                        <tr>
+                            <td><strong>{{ row.operator }}</strong></td>
+                            <td>{{ row.period }}</td>
+                            <td>{{ row.type }}</td>
+                            <td><span class="declaration-status {{ row.status|slugify }}">{{ row.status }}</span></td>
+                            <td>{{ row.submitted }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- OPERATOR TAX & REVENUE SUMMARY -->
+        <div class="dashboard-card">
+            <div class="dashboard-card-header">
+                <h3>Operator Tax &amp; Revenue Summary</h3>
+                <a href="#" class="card-link">View Detailed Analysis</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table dashboard-table">
+                    <thead>
+                        <tr>
+                            <th>Operator</th>
+                            <th>Expected Revenue</th>
+                            <th>Declared Revenue</th>
+                            <th>Expected GST</th>
+                            <th>Declared GST</th>
+                            <th>GST Variance</th>
+                            <th>Risk</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in operator_summary %}
+                        <tr>
+                            <td><strong>{{ row.operator }}</strong></td>
+                            <td>SLE {{ row.expected_revenue }}</td>
+                            <td>SLE {{ row.declared_revenue }}</td>
+                            <td>SLE {{ row.expected_gst }}</td>
+                            <td>SLE {{ row.declared_gst }}</td>
+                            <td class="text-danger">SLE {{ row.gst_variance }}</td>
+                            <td><span class="risk-badge {{ row.risk|lower }}">{{ row.risk }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{{ gst_trend|json_script:"gst-trend-data" }}
+{{ taxable_revenue|json_script:"taxable-revenue-data" }}
+{{ revenue_comparison|json_script:"revenue-comparison-data" }}
+{{ gst_variance|json_script:"gst-variance-data" }}
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script src="{% static 'regulatory/js/nra_dashboard.js' %}?v=3"></script>
+{% endblock %}

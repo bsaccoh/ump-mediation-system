@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, AuditLog, Alert, JobRecord
+from .models import User, AuditLog, Alert, AlertThreshold, ActivityLog, JobRecord
 
 
 @admin.register(User)
@@ -40,6 +40,33 @@ class AlertAdmin(admin.ModelAdmin):
     @admin.display(description='Message')
     def message_short(self, obj):
         return obj.message[:100]
+
+
+@admin.register(AlertThreshold)
+class AlertThresholdAdmin(admin.ModelAdmin):
+    list_display = ('metric', 'warning_threshold', 'major_threshold', 'critical_threshold', 'enabled')
+    list_filter = ('enabled',)
+    list_editable = ('warning_threshold', 'major_threshold', 'critical_threshold', 'enabled')
+
+
+@admin.register(ActivityLog)
+class ActivityLogAdmin(admin.ModelAdmin):
+    list_display = ('timestamp', 'stage', 'event_type', 'stream', 'level', 'message_short')
+    list_filter = ('stage', 'level', 'stream', 'event_type')
+    search_fields = ('message', 'event_type')
+    readonly_fields = ('timestamp', 'event_type', 'stage', 'stream', 'operator',
+                       'level', 'cdr_file', 'source', 'message', 'details')
+    date_hierarchy = 'timestamp'
+
+    @admin.display(description='Message')
+    def message_short(self, obj):
+        return obj.message[:120]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(JobRecord)

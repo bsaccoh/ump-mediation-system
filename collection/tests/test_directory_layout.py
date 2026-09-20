@@ -21,13 +21,12 @@ class ResolveDirectoryTests(TestCase):
     def _norm(p):
         return p.replace('\\', '/')
 
-    def test_default_template_is_operator_output_vendor_ne(self):
+    def test_default_template_uses_canonical_published_output_root(self):
         portal = OutputPortal(name='BIGDATA', portal_type='LOCAL',
                               output_format='CSV', stream_type='MSC', directory='')
-        d = portal.resolve_directory(operator='orange', vendor='huawei',
-                                     network_element='msc')
-        self.assertTrue(self._norm(d).endswith('orange/output/huawei/msc'), d)
-        self.assertTrue(d.startswith(str(settings.DATA_DIR)))
+        d = portal.resolve_directory(operator='orange', vendor='huawei', network_element='msc')
+        self.assertTrue(self._norm(d).endswith('landing/output/bigdata/orange/msc'), d)
+        self.assertTrue(d.startswith(str(settings.UMP_OUTPUT_ROOT)))
 
     def test_placeholders_in_explicit_directory(self):
         portal = OutputPortal(name='P', portal_type='LOCAL', output_format='CSV',
@@ -41,8 +40,7 @@ class ResolveDirectoryTests(TestCase):
         portal = OutputPortal(name='P', portal_type='LOCAL', output_format='CSV',
                               stream_type='MSC', directory='')
         d = portal.resolve_directory()  # nothing supplied
-        # operator/vendor -> 'unknown', ne -> stream_type lowercased
-        self.assertTrue(self._norm(d).endswith('unknown/output/unknown/msc'), d)
+        self.assertTrue(self._norm(d).endswith('landing/output/p/unknown/msc'), d)
 
 
 class BuildFilenameTests(TestCase):

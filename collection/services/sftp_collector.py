@@ -7,6 +7,8 @@ and creates CDRFile records to trigger processing.
 import os
 import fnmatch
 import logging
+import shutil
+import uuid
 from datetime import datetime
 
 import paramiko
@@ -14,7 +16,7 @@ import paramiko
 from django.conf import settings
 from collection.models import DataSource, CDRFile
 from collection.services.file_detector import detect_decoder_type, classify_file
-from collection.services.storage import input_storage_dir
+from collection.services.storage import input_storage_dir, processing_storage_dir
 from collection.services.deduplication import get_file_hash, check_duplicate
 
 logger = logging.getLogger(__name__)
@@ -105,16 +107,24 @@ class SFTPCollector:
         )
         local_filename = remote_filename  # keep original name (path carries vendor/op)
         local_path = os.path.join(local_dir, local_filename)
+        staging_dir = os.path.join(local_dir, 'staging')
+        os.makedirs(staging_dir, exist_ok=True)
+        staging_path = os.path.join(staging_dir, f'.{local_filename}.{uuid.uuid4().hex}.part')
 
         try:
-            self.sftp.get(remote_full, local_path)
+            self.sftp.get(remote_full, staging_path)
+            remote_size = self.sftp.stat(remote_full).st_size
+            if os.path.getsize(staging_path) != remote_size:
+                raise IOError(f'SFTP size verification failed for {remote_filename}')
+            os.replace(staging_path, local_path)
             file_size = os.path.getsize(local_path)
             logger.info(f'Downloaded {remote_filename} ({file_size:,} bytes)')
             return local_path
         except Exception as e:
             logger.error(f'Failed to download {remote_filename}: {e}')
-            if os.path.exists(local_path):
-                os.remove(local_path)
+            for path in (staging_path, local_path):
+                if os.path.exists(path):
+                    os.remove(path)
             return ''
 
     def collect(self) -> dict:
@@ -122,6 +132,11 @@ class SFTPCollector:
 
         Returns dict with stats: {collected, skipped, failed, errors}.
         """
+        from core.models import SystemControl
+        if SystemControl.is_intake_paused():
+            logger.info('Intake paused — SFTP collection skipped for %s', self.source.name)
+            return {'collected': 0, 'skipped': 0, 'failed': 0, 'errors': ['Intake paused']}
+
         stats = {'collected': 0, 'skipped': 0, 'failed': 0, 'errors': []}
 
         try:
@@ -145,6 +160,13 @@ class SFTPCollector:
                     stats['errors'].append(f'Download failed: {filename}')
                     continue
 
+                # Reject zero-byte files
+                if os.path.getsize(local_path) == 0:
+                    os.remove(local_path)
+                    stats['errors'].append(f'Empty file (0 bytes): {filename}')
+                    logger.warning(f'Rejected empty file from SFTP: {filename}')
+                    continue
+
                 # Dedup by hash
                 file_hash = get_file_hash(local_path)
                 if check_duplicate(local_path):
@@ -157,12 +179,23 @@ class SFTPCollector:
                 if not decoder_type or decoder_type == 'AUTO':
                     decoder_type = cls.decoder_type
 
-                # Create CDRFile — signal triggers processing
+                # Move file from input to processing directory before
+                # registering the CDRFile — the signal handler will
+                # process from the processing path.
                 file_size = os.path.getsize(local_path)
+                proc_dir = processing_storage_dir(
+                    cls.operator,
+                    cls.network_element or (self.source.network_element or None),
+                    decoder_type,
+                )
+                processing_path = os.path.join(proc_dir, filename)
+                if os.path.abspath(local_path) != os.path.abspath(processing_path):
+                    shutil.move(local_path, processing_path)
+
                 CDRFile.objects.create(
                     source=self.source,
                     filename=filename,
-                    file_path=local_path,
+                    file_path=processing_path,
                     file_size=file_size,
                     file_hash=file_hash,
                     decoder_type=decoder_type,
@@ -172,7 +205,7 @@ class SFTPCollector:
                     status=CDRFile.Status.PENDING,
                 )
                 stats['collected'] += 1
-                logger.info(f'Collected {filename} (decoder={decoder_type})')
+                logger.info(f'Collected {filename} -> processing/ (decoder={decoder_type})')
 
         except Exception as e:
             msg = f'SFTP collection error for {self.source.name}: {e}'

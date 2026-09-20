@@ -7,6 +7,7 @@ Source of truth for the Sierra Leone operator prefix map.  Extracted from
 ``interconnect`` app can call ``classify_operator(msisdn)`` without
 duplicating the table.
 """
+from functools import lru_cache
 from typing import Optional
 
 
@@ -56,6 +57,7 @@ SL_OPERATOR_ORDER = [
 ]
 
 
+@lru_cache(maxsize=8192)
 def classify_operator(msisdn: Optional[str]) -> str:
     """Return the operator name for a Sierra Leone MSISDN.
 
@@ -76,16 +78,20 @@ def classify_operator(msisdn: Optional[str]) -> str:
         return 'Unknown'
     # Strip 232 country code if present
     rest = digits_only[3:] if digits_only.startswith('232') else digits_only
-    # Short codes
+    # Short codes (up to 6 digits after stripping CC)
     if len(rest) <= 6:
         return 'Short Code'
-    # Standard 8-digit Sierra Leone MSISDN
+    # Standard 8-digit Sierra Leone MSISDN (76XXXXXX)
     if len(rest) == 8:
         return SL_OPERATOR_PREFIX_MAP.get(rest[:2], 'Other SL')
-    # 9-digit local-dial format (leading 0)
-    if len(rest) == 9 and rest[0] == '0':
-        return SL_OPERATOR_PREFIX_MAP.get(rest[1:3], 'Other SL')
-    # Anything 7+ digits not matching SL → foreign
+    # 9-digit local-dial format:
+    #   076XXXXXX  → leading 0 present, check rest[1:3]
+    #   76XXXXXXX  → no leading 0, check rest[:2] directly
+    if len(rest) == 9:
+        prefix2 = rest[1:3] if rest[0] == '0' else rest[:2]
+        op = SL_OPERATOR_PREFIX_MAP.get(prefix2)
+        return op if op else 'International'
+    # Anything else 7+ digits → foreign
     if len(rest) >= 7:
         return 'International'
     return 'Unknown'

@@ -1,0 +1,371 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}UMP | Traffic Overview{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/natca-dashboard.css' %}">
+{% endblock %}
+
+{% block topbar %}
+<div class="topbar">
+    <div class="topbar-left">
+        <h5 class="topbar-title">Traffic Overview</h5>
+        <span class="topbar-subtitle">National Telecom Regulatory Authority</span>
+    </div>
+    <div class="topbar-right">
+        <button class="btn btn-outline-light btn-sm">
+            <i class="bi bi-download"></i> Export
+        </button>
+        <button class="btn btn-outline-light btn-sm">
+            <i class="bi bi-printer"></i> Print
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Filters -->
+    <div class="row g-2 mb-3">
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" name="period">
+                <option value="7" {% if period == '7' %}selected{% endif %}>Last 7 days</option>
+                <option value="30" {% if period == '30' %}selected{% endif %}>Last 30 days</option>
+                <option value="90" {% if period == '90' %}selected{% endif %}>Last 90 days</option>
+                <option value="365" {% if period == '365' %}selected{% endif %}>Last year</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" name="operator">
+                <option value="">All Operators</option>
+                <option value="orange" {% if operator == 'orange' %}selected{% endif %}>Orange</option>
+                <option value="africell" {% if operator == 'africell' %}selected{% endif %}>Africell</option>
+                <option value="qcell" {% if operator == 'qcell' %}selected{% endif %}>Qcell</option>
+                <option value="sierratel" {% if operator == 'sierratel' %}selected{% endif %}>SierraTel</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" name="service_type">
+                <option value="">All Services</option>
+                <option value="VOICE" {% if service_type == 'VOICE' %}selected{% endif %}>Voice</option>
+                <option value="SMS" {% if service_type == 'SMS' %}selected{% endif %}>SMS</option>
+                <option value="DATA" {% if service_type == 'DATA' %}selected{% endif %}>Data</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" name="traffic_type">
+                <option value="">All Traffic Types</option>
+                <option value="ON_NET" {% if traffic_type == 'ON_NET' %}selected{% endif %}>On-Net</option>
+                <option value="OFF_NET" {% if traffic_type == 'OFF_NET' %}selected{% endif %}>Off-Net</option>
+                <option value="INTERNATIONAL" {% if traffic_type == 'INTERNATIONAL' %}selected{% endif %}>International</option>
+                <option value="ROAMING" {% if traffic_type == 'ROAMING' %}selected{% endif %}>Roaming</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" name="network_technology">
+                <option value="">All Technologies</option>
+                <option value="2G" {% if network_technology == '2G' %}selected{% endif %}>2G</option>
+                <option value="3G" {% if network_technology == '3G' %}selected{% endif %}>3G</option>
+                <option value="4G" {% if network_technology == '4G' %}selected{% endif %}>4G</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary btn-sm w-100">
+                <i class="bi bi-funnel"></i> Apply Filters
+            </button>
+        </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="row g-3 mb-3">
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon bg-primary">
+                    <i class="bi bi-telephone"></i>
+                </div>
+                <div class="metric-content">
+                    <div class="metric-value">{{ dashboard_data.kpis.total_calls.value }}</div>
+                    <div class="metric-title">Total Calls</div>
+                    <div class="metric-change positive">
+                        <i class="bi bi-arrow-up"></i> {{ dashboard_data.kpis.total_calls.change }}%
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon bg-success">
+                    <i class="bi bi-clock"></i>
+                </div>
+                <div class="metric-content">
+                    <div class="metric-value">{{ dashboard_data.kpis.total_minutes.value }}</div>
+                    <div class="metric-title">Total Minutes</div>
+                    <div class="metric-change positive">
+                        <i class="bi bi-arrow-up"></i> {{ dashboard_data.kpis.total_minutes.change }}%
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon bg-info">
+                    <i class="bi bi-chat-dots"></i>
+                </div>
+                <div class="metric-content">
+                    <div class="metric-value">{{ dashboard_data.kpis.total_sms.value }}</div>
+                    <div class="metric-title">Total SMS</div>
+                    <div class="metric-change positive">
+                        <i class="bi bi-arrow-up"></i> {{ dashboard_data.kpis.total_sms.change }}%
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon bg-warning">
+                    <i class="bi bi-speedometer2"></i>
+                </div>
+                <div class="metric-content">
+                    <div class="metric-value">{{ dashboard_data.kpis.total_data.value }}</div>
+                    <div class="metric-title">Total Data</div>
+                    <div class="metric-change positive">
+                        <i class="bi bi-arrow-up"></i> {{ dashboard_data.kpis.total_data.change }}%
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="row g-3 mb-3">
+        <div class="col-xl-8">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-graph-up text-primary"></i>
+                        <span>Traffic Trend</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <canvas id="trafficTrendChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-4">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-pie-chart text-primary"></i>
+                        <span>Traffic by Operator</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <canvas id="operatorChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Traffic by Technology -->
+    <div class="row g-3 mb-3">
+        <div class="col-xl-6">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-broadcast text-primary"></i>
+                        <span>Traffic by Technology</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <canvas id="technologyChart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-6">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-arrow-left-right text-primary"></i>
+                        <span>Traffic Direction</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <canvas id="directionChart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Traffic Table -->
+    <div class="row g-3">
+        <div class="col-12">
+            <div class="dashboard-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-table text-primary"></i>
+                        <span>Detailed Traffic Records</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Operator</th>
+                                    <th>Service</th>
+                                    <th>Traffic Type</th>
+                                    <th>Technology</th>
+                                    <th>Direction</th>
+                                    <th>Volume</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox" style="font-size: 48px;"></i>
+                                        <p class="mb-0 mt-2">No traffic data available for selected filters</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ traffic_trend_data|json_script:"traffic-trend-data" }}
+{{ traffic_by_operator_data|json_script:"operator-traffic-data" }}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script>
+// Dashboard data from server
+const trafficTrendData = JSON.parse(document.getElementById('traffic-trend-data').textContent);
+const trafficByOperatorData = JSON.parse(document.getElementById('operator-traffic-data').textContent);
+
+// Initialize charts
+document.addEventListener('DOMContentLoaded', function() {
+    // Traffic Trend Chart
+    const trafficTrendCtx = document.getElementById('trafficTrendChart');
+    if (trafficTrendCtx && trafficTrendData.labels) {
+        new Chart(trafficTrendCtx, {
+            type: 'line',
+            data: {
+                labels: trafficTrendData.labels,
+                datasets: [
+                    {
+                        label: 'Voice',
+                        data: trafficTrendData.voice || [],
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    },
+                    {
+                        label: 'SMS',
+                        data: trafficTrendData.sms || [],
+                        borderColor: '#198754',
+                        backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    },
+                    {
+                        label: 'Data',
+                        data: trafficTrendData.data || [],
+                        borderColor: '#ffc107',
+                        backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top' }
+                },
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+    }
+
+    // Operator Chart
+    const operatorCtx = document.getElementById('operatorChart');
+    if (operatorCtx && trafficByOperatorData.length > 0) {
+        const operatorNames = trafficByOperatorData.map(item => item.name);
+        const operatorPercentages = trafficByOperatorData.map(item => item.percentage);
+
+        new Chart(operatorCtx, {
+            type: 'doughnut',
+            data: {
+                labels: operatorNames,
+                datasets: [{
+                    data: operatorPercentages,
+                    backgroundColor: ['#0d6efd', '#198754', '#ffc107', '#dc3545']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    }
+
+    // Technology Chart
+    const technologyCtx = document.getElementById('technologyChart');
+    if (technologyCtx) {
+        new Chart(technologyCtx, {
+            type: 'bar',
+            data: {
+                labels: ['2G', '3G', '4G'],
+                datasets: [{
+                    label: 'Traffic Volume',
+                    data: [25, 35, 40],
+                    backgroundColor: ['#6c757d', '#0d6efd', '#198754']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    }
+
+    // Direction Chart
+    const directionCtx = document.getElementById('directionChart');
+    if (directionCtx) {
+        new Chart(directionCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Originating', 'Terminating', 'Both'],
+                datasets: [{
+                    data: [45, 40, 15],
+                    backgroundColor: ['#0d6efd', '#198754', '#ffc107']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

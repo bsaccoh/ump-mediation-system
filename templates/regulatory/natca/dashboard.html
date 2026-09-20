@@ -1,0 +1,614 @@
+{% extends "base.html" %}
+{% load static regulatory_tags %}
+
+{% block title %}UMP | NatCA Dashboard{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/natca-dashboard.css' %}">
+{% endblock %}
+
+{% block topbar %}
+<header class="topbar ump-topbar">
+    <div class="topbar-tagline">
+        National Telecom Regulatory Authority
+    </div>
+
+    <div class="topbar-actions">
+        <button class="notification-btn" type="button" title="System Alerts">
+            <i class="bi bi-bell"></i>
+            {% if alerts %}<span class="notification-count">{{ alerts|length }}</span>{% endif %}
+        </button>
+
+        <div class="user-avatar">{{ user.username|slice:":2"|upper }}</div>
+
+        <div class="user-info">
+            <div class="user-name">{{ user.get_full_name|default:user.username }}</div>
+            <div class="user-role">{% if user.is_superuser %}System Administrator{% elif user.is_regulator %}Regulator{% else %}User{% endif %}</div>
+        </div>
+
+        <div class="dropdown">
+            <button class="btn btn-link p-0 text-muted border-0" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-chevron-down user-arrow"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="font-size: 12px;">
+                <li><h6 class="dropdown-header">Signed in as <strong>{{ user.username }}</strong></h6></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="{% url 'logout' %}"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
+            </ul>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<section class="dashboard-content">
+
+    <!-- TOP HEADING & FILTERS -->
+    <div class="dashboard-heading">
+        <div>
+            <h1>{{ page_title }}</h1>
+            <p>{{ page_subtitle }}</p>
+        </div>
+
+        <div class="dashboard-filters">
+            <div class="filter-control date-filter">
+                <i class="bi bi-calendar3"></i>
+                <span>{{ date_range.start }} — {{ date_range.end }}</span>
+            </div>
+
+            <select class="form-select operator-filter" id="operatorFilter" aria-label="Operator filter">
+                <option value="" {% if not selected_operator %}selected{% endif %}>All Operators</option>
+                {% for op in operators %}
+                <option value="{{ op.code }}" {% if op.code|lower == selected_operator|lower %}selected{% endif %}>{{ op.name }}</option>
+                {% endfor %}
+            </select>
+
+            <button class="period-btn {% if selected_period == 'all' %}active{% endif %}" type="button" data-period="all">All</button>
+            <button class="period-btn {% if selected_period == 'today' %}active{% endif %}" type="button" data-period="today">Today</button>
+            <button class="period-btn {% if selected_period == '7' %}active{% endif %}" type="button" data-period="7">7 Days</button>
+            <button class="period-btn {% if selected_period == '30' %}active{% endif %}" type="button" data-period="30">30 Days</button>
+
+            <button class="btn btn-primary btn-sm" type="button" id="refreshBtn">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- =================================================
+         KPI CARDS ROW 1
+    ================================================== -->
+    <div class="row g-3 metric-row">
+        <!-- Total Subscribers -->
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-icon" style="background: #eef6ff; color: #1378ef;">
+                    <i class="bi bi-people-fill"></i>
+                </div>
+                <div>
+                    <div class="metric-number">{{ kpis.total_subscribers.value }}</div>
+                    <div class="metric-title">Total Subscribers</div>
+                    {% if kpis.total_subscribers.change %}
+                    <div class="metric-change positive">
+                        <i class="bi bi-arrow-up"></i>
+                        {{ kpis.total_subscribers.change }}%
+                    </div>
+                    <div class="metric-previous">vs last month</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Voice Traffic -->
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-icon" style="background: #eafaf1; color: #13ae69;">
+                    <i class="bi bi-telephone-fill"></i>
+                </div>
+                <div>
+                    <div class="metric-number">{{ kpis.voice.value }}</div>
+                    <div class="metric-title">Voice Traffic</div>
+                    <div class="metric-change positive">
+                        <i class="bi bi-arrow-up"></i>
+                        {{ kpis.voice.change }}%
+                    </div>
+                    <div class="metric-previous">{{ kpis.voice.unit }} vs last month</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SMS Traffic -->
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-icon" style="background: #fff4e6; color: #ff9f1c;">
+                    <i class="bi bi-chat-text-fill"></i>
+                </div>
+                <div>
+                    <div class="metric-number">{{ kpis.sms.value }}</div>
+                    <div class="metric-title">SMS Traffic</div>
+                    <div class="metric-change positive">
+                        <i class="bi bi-arrow-up"></i>
+                        {{ kpis.sms.change }}%
+                    </div>
+                    <div class="metric-previous">{{ kpis.sms.unit }} vs last month</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Traffic -->
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-icon" style="background: #f3e6ff; color: #8d48dd;">
+                    <i class="bi bi-wifi"></i>
+                </div>
+                <div>
+                    <div class="metric-number">{{ kpis.data.value }}</div>
+                    <div class="metric-title">Data Traffic</div>
+                    <div class="metric-change positive">
+                        <i class="bi bi-arrow-up"></i>
+                        {{ kpis.data.change }}%
+                    </div>
+                    <div class="metric-previous">{{ kpis.data.unit }} vs last month</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- International Traffic -->
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-icon" style="background: #ffe6e6; color: #ec3c47;">
+                    <i class="bi bi-globe"></i>
+                </div>
+                <div>
+                    <div class="metric-number">{{ kpis.international.value }}</div>
+                    <div class="metric-title">International Traffic</div>
+                    <div class="metric-change positive">
+                        <i class="bi bi-arrow-up"></i>
+                        {{ kpis.international.change }}%
+                    </div>
+                    <div class="metric-previous">{{ kpis.international.unit }} vs last month</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Roaming Traffic -->
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-icon" style="background: #e6f7ff; color: #1378ef;">
+                    <i class="bi bi-airplane"></i>
+                </div>
+                <div>
+                    <div class="metric-number">{{ kpis.roaming.value }}</div>
+                    <div class="metric-title">Roaming Traffic</div>
+                    <div class="metric-change positive">
+                        <i class="bi bi-arrow-up"></i>
+                        {{ kpis.roaming.change }}%
+                    </div>
+                    <div class="metric-previous">{{ kpis.roaming.unit }} vs last month</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================================================
+         KPI CARDS ROW 2
+    ================================================== -->
+    <div class="row g-3 metric-row">
+        <!-- Interconnect Traffic -->
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-icon" style="background: #e6f7ff; color: #1378ef;">
+                    <i class="bi bi-arrow-left-right"></i>
+                </div>
+                <div>
+                    <div class="metric-number">{{ kpis.interconnect.value }}</div>
+                    <div class="metric-title">Interconnect Traffic</div>
+                    <div class="metric-change positive">
+                        <i class="bi bi-arrow-up"></i>
+                        {{ kpis.interconnect.change }}%
+                    </div>
+                    <div class="metric-previous">{{ kpis.interconnect.unit }} vs last month</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tariff Compliance -->
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-icon success">
+                    <i class="bi bi-shield-check"></i>
+                </div>
+                <div>
+                    <div class="metric-number">{{ kpis.tariff_compliance.value }}%</div>
+                    <div class="metric-title">Tariff Compliance</div>
+                    <div class="metric-change">
+                        <span class="status processed">{{ kpis.tariff_compliance.status }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Open Complaints -->
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-icon" style="background: #ffe6e6; color: #ec3c47;">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                </div>
+                <div>
+                    <div class="metric-number">{{ kpis.open_complaints.value }}</div>
+                    <div class="metric-title">Open Complaints</div>
+                    {% if kpis.open_complaints.change %}
+                    <div class="metric-change {% if kpis.open_complaints.change > 0 %}positive{% else %}negative{% endif %}">
+                        <i class="bi bi-arrow-{% if kpis.open_complaints.change > 0 %}up{% else %}down{% endif %}"></i>
+                        {{ kpis.open_complaints.change|floatformat:"1"|cut:"-" }}%
+                    </div>
+                    <div class="metric-previous">vs last month</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- QoS Compliance -->
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-icon success">
+                    <i class="bi bi-speedometer2"></i>
+                </div>
+                <div>
+                    <div class="metric-number">{{ kpis.qos_compliance.value }}%</div>
+                    <div class="metric-title">QoS Compliance</div>
+                    <div class="metric-change positive">
+                        <i class="bi bi-arrow-up"></i>
+                        {{ kpis.qos_compliance.change }}%
+                    </div>
+                    <div class="metric-previous">vs last month</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Spectrum Utilization -->
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-icon" style="background: #fff4e6; color: #ff9f1c;">
+                    <i class="bi bi-broadcast"></i>
+                </div>
+                <div>
+                    <div class="metric-number">{{ kpis.spectrum_utilization.value }}%</div>
+                    <div class="metric-title">Spectrum Utilization</div>
+                    <div class="metric-change positive">
+                        <i class="bi bi-arrow-up"></i>
+                        {{ kpis.spectrum_utilization.change }}%
+                    </div>
+                    <div class="metric-previous">vs last month</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Operators -->
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-icon" style="background: #eef6ff; color: #1378ef;">
+                    <i class="bi bi-building"></i>
+                </div>
+                <div>
+                    <div class="metric-number">{{ kpis.active_operators.value }}</div>
+                    <div class="metric-title">Active Operators</div>
+                    <div class="metric-change">
+                        <span class="metric-previous">Licensed operators</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================================================
+         CHARTS ROW 1
+    ================================================== -->
+    <div class="row g-3 mt-1">
+        <!-- Traffic Trend -->
+        <div class="col-xl-8">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-bar-chart-line text-primary"></i>
+                        <span>Traffic Trend</span>
+                    </div>
+                    <select class="form-select form-select-sm" id="trendGranularity" style="width: auto; min-width: 120px;">
+                        <option value="daily" {% if trend_granularity == 'daily' %}selected{% endif %}>Daily</option>
+                        <option value="weekly" {% if trend_granularity == 'weekly' %}selected{% endif %}>Weekly</option>
+                        <option value="monthly" {% if trend_granularity == 'monthly' %}selected{% endif %}>Monthly</option>
+                    </select>
+                </div>
+                <div class="card-content chart-large">
+                    <canvas id="trafficTrendChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Traffic by Operator -->
+        <div class="col-xl-4">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading">
+                    Traffic by Operator
+                </div>
+                <div class="doughnut-container">
+                    <div class="doughnut-chart">
+                        <canvas id="operatorTrafficChart"></canvas>
+                        <div class="chart-center">
+                            <strong>Total</strong>
+                            <span>Traffic</span>
+                        </div>
+                    </div>
+                    <div class="chart-legend" id="operatorLegend"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================================================
+         CHARTS ROW 2
+    ================================================== -->
+    <div class="row g-3 mt-1">
+        <!-- Service Contribution -->
+        <div class="col-xl-8">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-pie-chart text-primary"></i>
+                        <span>Service Contribution</span>
+                    </div>
+                    <select class="form-select form-select-sm" style="width: auto; min-width: 110px;">
+                        <option>Traffic Volume</option>
+                        <option>Revenue</option>
+                        <option>Growth</option>
+                    </select>
+                </div>
+                <div class="card-content chart-large">
+                    <canvas id="serviceContributionChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Alerts -->
+        <div class="col-xl-4">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-bell text-primary"></i>
+                        <span>Recent Alerts</span>
+                    </div>
+                    <a href="#" style="font-size: 11px; font-weight: 600; color: #006ce8; text-decoration: none;">View All</a>
+                </div>
+                <div class="card-content" style="padding: 0;">
+                    {% for alert in alerts %}
+                    <div class="alert-row">
+                        <div>
+                            <i class="bi bi-exclamation-circle-fill text-{% if alert.severity == 'danger' %}danger{% elif alert.severity == 'warning' %}warning{% elif alert.severity == 'info' %}info{% else %}primary{% endif %}"></i>
+                        </div>
+                        <div class="alert-message">{{ alert.message }}</div>
+                        <div class="alert-time">{{ alert.time }}</div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center text-muted py-4" style="font-size: 12px;">
+                        No recent alerts
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================================================
+         TABLES ROW 1
+    ================================================== -->
+    <div class="row g-3 mt-1">
+        <!-- Operator Performance Summary -->
+        <div class="col-xl-8">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading header-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-table text-primary"></i>
+                        <span>Operator Performance Summary</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <input type="text" class="form-control form-control-sm" placeholder="Search..." style="width: 120px; font-size: 11px;">
+                        <button class="btn btn-sm btn-outline-secondary" style="font-size: 11px;">
+                            <i class="bi bi-download"></i> Export
+                        </button>
+                    </div>
+                </div>
+                <div class="card-content operator-card">
+                    <table class="table ump-table dashboard-table">
+                        <thead>
+                            <tr>
+                                <th>Operator</th>
+                                <th>Subscribers</th>
+                                <th>Voice</th>
+                                <th>SMS</th>
+                                <th>Data</th>
+                                <th>QoS</th>
+                                <th>Tariff</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for perf in operator_performance %}
+                            <tr>
+                                <td><strong>{{ perf.operator }}</strong></td>
+                                <td>{{ perf.subscribers }}</td>
+                                <td>{{ perf.voice }}</td>
+                                <td>{{ perf.sms }}</td>
+                                <td>{{ perf.data }}</td>
+                                <td>{{ perf.qos }}</td>
+                                <td>{{ perf.tariff }}</td>
+                                <td><span class="status processed">Active</span></td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center text-muted py-3">No operator data available</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Issues -->
+        <div class="col-xl-4">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading">
+                    Top Issues
+                </div>
+                <div class="card-content">
+                    <table class="table ump-table small-table">
+                        <thead>
+                            <tr>
+                                <th>Issue</th>
+                                <th>Count</th>
+                                <th>Trend</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for issue in issues %}
+                            <tr>
+                                <td>{{ issue.0 }}</td>
+                                <td>{{ issue.1 }}</td>
+                                <td>
+                                    {% if issue.2 > 0 %}
+                                    <span class="text-success"><i class="bi bi-arrow-up"></i> {{ issue.2 }}</span>
+                                    {% elif issue.2 < 0 %}
+                                    <span class="text-danger"><i class="bi bi-arrow-down"></i> {{ issue.2|abs }}</span>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="3" class="text-center text-muted py-3">No issues reported</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================================================
+         TABLES ROW 2
+    ================================================== -->
+    <div class="row g-3 mt-1">
+        <!-- Compliance Status -->
+        <div class="col-xl-4">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading">
+                    Compliance Status
+                </div>
+                <div class="card-content">
+                    {% for comp in compliance %}
+                    <div class="compliance-row">
+                        <div>{{ comp.0 }}</div>
+                        <div class="compliance-progress">
+                            <div class="compliance-bar" style="width: {{ comp.1 }}%;"></div>
+                        </div>
+                        <div>{{ comp.1 }}%</div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center text-muted py-4" style="font-size: 12px;">
+                        No compliance data available
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Traffic Anomalies -->
+        <div class="col-xl-4">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading">
+                    Traffic Anomalies
+                </div>
+                <div class="card-content">
+                    <table class="table ump-table small-table">
+                        <thead>
+                            <tr>
+                                <th>Anomaly Type</th>
+                                <th>Count</th>
+                                <th>Trend</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for anomaly in anomalies %}
+                            <tr>
+                                <td>{{ anomaly.0 }}</td>
+                                <td>{{ anomaly.1 }}</td>
+                                <td>
+                                    {% if anomaly.2 > 0 %}
+                                    <span class="text-danger"><i class="bi bi-arrow-up"></i> {{ anomaly.2 }}</span>
+                                    {% elif anomaly.2 < 0 %}
+                                    <span class="text-success"><i class="bi bi-arrow-down"></i> {{ anomaly.2|abs }}</span>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="3" class="text-center text-muted py-3">No anomalies detected</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upcoming Activities -->
+        <div class="col-xl-4">
+            <div class="dashboard-card chart-card h-100">
+                <div class="card-heading">
+                    Upcoming Activities
+                </div>
+                <div class="card-content">
+                    <table class="table ump-table small-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Activity</th>
+                                <th>Type</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for activity in activities %}
+                            <tr>
+                                <td>{{ activity.0 }}</td>
+                                <td>{{ activity.1 }}</td>
+                                <td><span class="activity-badge">{{ activity.2 }}</span></td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="3" class="text-center text-muted py-3">No upcoming activities</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</section>
+
+<!-- JSON data for charts -->
+{{ traffic_trend_data|json_script:"traffic-trend-data" }}
+{{ traffic_by_operator_data|json_script:"operator-traffic-data" }}
+{{ service_contribution_data|json_script:"service-contribution-data" }}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script src="{% static 'js/natca-dashboard.js' %}"></script>
+{% endblock %}

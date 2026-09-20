@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}{{ form_title }} | Regulatory{% endblock %}
+{% block page_title %}{{ form_title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    {% if form_errors %}<div class="alert alert-danger"><strong>Please correct the following:</strong><ul class="mb-0">{% for error in form_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>{% endif %}
+                    <div class="row g-3">
+                        <!-- Name -->
+                        <div class="col-md-6">
+                            <label class="form-label">Tariff Name <span class="text-danger">*</span></label>
+                            <input type="text" name="name" class="form-control" required
+                                   value="{{ tariff.name|default:'' }}">
+                        </div>
+
+                        <!-- Operator -->
+                        <div class="col-md-3">
+                            <label class="form-label">Operator <span class="text-danger">*</span></label>
+                            <select name="operator_code" class="form-select" required>
+                                <option value="">Select...</option>
+                                {% for code, name in operators %}
+                                <option value="{{ code }}" {% if tariff.operator_code == code %}selected{% endif %}>{{ name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Service Type -->
+                        <div class="col-md-3">
+                            <label class="form-label">Service Type <span class="text-danger">*</span></label>
+                            <select name="service_type" class="form-select" required>
+                                <option value="">Select...</option>
+                                {% for val, label in service_types %}
+                                <option value="{{ val }}" {% if tariff.service_type == val %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Traffic Type -->
+                        <div class="col-md-4">
+                            <label class="form-label">Traffic Type <span class="text-danger">*</span></label>
+                            <select name="traffic_type" class="form-select" required>
+                                <option value="">Select...</option>
+                                {% for val, label in traffic_types %}
+                                <option value="{{ val }}" {% if tariff.traffic_type == val %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Subscriber Type -->
+                        <div class="col-md-4">
+                            <label class="form-label">Subscriber Type</label>
+                            <select name="subscriber_type" class="form-select">
+                                {% for val, label in subscriber_types %}
+                                <option value="{{ val }}" {% if tariff.subscriber_type == val %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Destination -->
+                        <div class="col-md-4">
+                            <label class="form-label">Destination</label>
+                            <input type="text" name="destination" class="form-control"
+                                   placeholder="e.g. International, Guinea, etc."
+                                   value="{{ tariff.destination|default:'' }}">
+                        </div>
+
+                        <hr>
+
+                        <!-- Rate -->
+                        <div class="col-md-3">
+                            <label class="form-label">Rate <span class="text-danger">*</span></label>
+                            <input type="number" name="rate" class="form-control" step="0.000001" min="0" required
+                                   value="{{ tariff.rate|default:'' }}">
+                        </div>
+
+                        <!-- Charging Unit -->
+                        <div class="col-md-3">
+                            <label class="form-label">Charging Unit <span class="text-danger">*</span></label>
+                            <select name="charging_unit" class="form-select" required>
+                                <option value="">Select...</option>
+                                {% for val, label in charging_units %}
+                                <option value="{{ val }}" {% if tariff.charging_unit == val %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Minimum Charge -->
+                        <div class="col-md-3">
+                            <label class="form-label">Minimum Charge</label>
+                            <input type="number" name="minimum_charge" class="form-control" step="0.01" min="0"
+                                   value="{{ tariff.minimum_charge|default:'0' }}">
+                        </div>
+
+                        <!-- Currency -->
+                        <div class="col-md-3">
+                            <label class="form-label">Currency</label>
+                            <input type="text" name="currency" class="form-control" maxlength="3"
+                                   value="{{ tariff.currency|default:'SLE' }}">
+                        </div>
+
+                        <!-- Rounding Rule -->
+                        <div class="col-md-4">
+                            <label class="form-label">Rounding Rule</label>
+                            <select name="rounding_rule" class="form-select">
+                                {% for val, label in rounding_rules %}
+                                <option value="{{ val }}" {% if tariff.rounding_rule == val %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Tax Treatment -->
+                        <div class="col-md-4">
+                            <label class="form-label">Tax Treatment</label>
+                            <select name="tax_treatment" class="form-select">
+                                {% for val, label in tax_treatments %}
+                                <option value="{{ val }}" {% if tariff.tax_treatment == val %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-4"></div>
+
+                        <hr>
+
+                        <!-- Effective From -->
+                        <div class="col-md-4">
+                            <label class="form-label">Effective From <span class="text-danger">*</span></label>
+                            <input type="date" name="effective_from" class="form-control" required
+                                   value="{{ tariff.effective_from|date:'Y-m-d'|default:'' }}">
+                        </div>
+
+                        <!-- Effective To -->
+                        <div class="col-md-4">
+                            <label class="form-label">Effective To</label>
+                            <input type="date" name="effective_to" class="form-control"
+                                   value="{% if tariff.effective_to %}{{ tariff.effective_to|date:'Y-m-d' }}{% endif %}">
+                        </div>
+
+                        <div class="col-md-4"></div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Version</label>
+                            <input type="text" class="form-control" value="{% if tariff %}v{{ tariff.version }}{% else %}Assigned automatically{% endif %}" readonly>
+                        </div>
+
+                        <!-- Notes -->
+                        <div class="col-12">
+                            <label class="form-label">Notes</label>
+                            <textarea name="notes" class="form-control" rows="3">{{ tariff.notes|default:'' }}</textarea>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg me-1"></i>Save as Draft
+                        </button>
+                        <a href="{% url 'regulatory:tariff_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

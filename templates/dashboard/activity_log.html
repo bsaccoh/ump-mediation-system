@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+{% block title %}Activity Log - UMP Mediation{% endblock %}
+{% block page_title %}Activity Log{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-bar { background: #f8f9fa; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
+    .log-row { font-size: 0.85rem; }
+    .log-row td { vertical-align: middle; }
+    .badge-stage { min-width: 80px; }
+    .check-col { width: 30px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Summary Cards -->
+<div class="row mb-3" id="summaryCards">
+    <div class="col-md-2">
+        <div class="card text-center py-2">
+            <div class="fw-bold fs-4 text-primary" id="sumTotal">-</div>
+            <small class="text-muted">Total Events</small>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center py-2">
+            <div class="fw-bold fs-4 text-success" id="sumCollection">-</div>
+            <small class="text-muted">Collection</small>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center py-2">
+            <div class="fw-bold fs-4 text-info" id="sumDecoding">-</div>
+            <small class="text-muted">Decoding</small>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center py-2">
+            <div class="fw-bold fs-4 text-warning" id="sumDistribution">-</div>
+            <small class="text-muted">Distribution</small>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center py-2">
+            <div class="fw-bold fs-4 text-danger" id="sumErrors">-</div>
+            <small class="text-muted">Errors</small>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="filter-bar">
+    <form id="filterForm" class="row g-2 align-items-end">
+        <div class="col-md-2">
+            <label class="form-label small">Stage</label>
+            <select class="form-select form-select-sm" id="fStage">
+                <option value="">All</option>
+                <option value="COLLECTION">Collection</option>
+                <option value="DECODING">Decoding</option>
+                <option value="DISTRIBUTION">Distribution</option>
+                <option value="SYSTEM">System</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">Stream</label>
+            <select class="form-select form-select-sm" id="fStream">
+                <option value="">All</option>
+                <option value="MSC">MSC</option>
+                <option value="IMS">IMS</option>
+                <option value="PGW">PGW</option>
+                <option value="SGSN">SGSN</option>
+                <option value="SGW">SGW</option>
+                <option value="CBS">CBS</option>
+            </select>
+        </div>
+        <div class="col-md-1">
+            <label class="form-label small">Level</label>
+            <select class="form-select form-select-sm" id="fLevel">
+                <option value="">All</option>
+                <option value="INFO">Info</option>
+                <option value="WARNING">Warning</option>
+                <option value="ERROR">Error</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">From</label>
+            <input type="date" class="form-control form-control-sm" id="fStart">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">To</label>
+            <input type="date" class="form-control form-control-sm" id="fEnd">
+        </div>
+        <div class="col-md-auto">
+            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> Search</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btnClear"><i class="bi bi-x-circle"></i> Clear</button>
+        </div>
+        <div class="col-md-auto ms-auto">
+            <button type="button" class="btn btn-danger btn-sm" id="btnDeleteSelected" style="display:none"><i class="bi bi-trash"></i> Delete Selected (<span id="selectedCount">0</span>)</button>
+            <button type="button" class="btn btn-outline-danger btn-sm" id="btnClearLogs"><i class="bi bi-trash"></i> Clear Logs</button>
+        </div>
+    </form>
+</div>
+
+<!-- Table -->
+<div class="table-responsive">
+    <table class="table table-sm table-hover">
+        <thead class="table-light">
+            <tr>
+                <th class="check-col"><input type="checkbox" class="form-check-input" id="checkAll" title="Select all"></th>
+                <th>Timestamp</th>
+                <th>Stage</th>
+                <th>Stream</th>
+                <th>Level</th>
+                <th>Event</th>
+                <th>Message</th>
+                <th>File</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody"><tr><td colspan="8" class="text-center text-muted">Loading...</td></tr></tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+<nav class="d-flex justify-content-between align-items-center mt-2">
+    <small class="text-muted" id="pageInfo">-</small>
+    <div class="btn-group btn-group-sm" id="pageButtons"></div>
+</nav>
+
+<!-- Delete Selected Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header"><h6 class="modal-title">Delete Selected Logs</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <p>Are you sure you want to delete <strong id="deleteCount">0</strong> selected log entries?</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+            <button class="btn btn-danger btn-sm" id="btnConfirmDelete">Delete</button>
+        </div>
+    </div></div>
+</div>
+
+<!-- Clear All Modal -->
+<div class="modal fade" id="clearModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header"><h6 class="modal-title">Clear Activity Logs</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <p>Clear all logs matching current filters?</p>
+            <p class="text-muted small" id="clearInfo"></p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+            <button class="btn btn-danger btn-sm" id="btnConfirmClear">Clear All</button>
+        </div>
+    </div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+    const csrf = '{{ csrf_token }}';
+    let currentPage = 1;
+    let selectedIds = new Set();
+
+    const stageBadge = {'COLLECTION':'bg-success','DECODING':'bg-info','DISTRIBUTION':'bg-warning text-dark','SYSTEM':'bg-secondary'};
+    const levelBadge = {'INFO':'bg-primary','WARNING':'bg-warning text-dark','ERROR':'bg-danger'};
+
+    function updateSelectedUI() {
+        const count = selectedIds.size;
+        const btn = document.getElementById('btnDeleteSelected');
+        document.getElementById('selectedCount').textContent = count;
+        btn.style.display = count > 0 ? 'inline-block' : 'none';
+    }
+
+    function load(page) {
+        currentPage = page || 1;
+        selectedIds.clear();
+        updateSelectedUI();
+        document.getElementById('checkAll').checked = false;
+
+        const fd = new FormData();
+        fd.append('stage', document.getElementById('fStage').value);
+        fd.append('stream', document.getElementById('fStream').value);
+        fd.append('level', document.getElementById('fLevel').value);
+        fd.append('start_date', document.getElementById('fStart').value);
+        fd.append('end_date', document.getElementById('fEnd').value);
+        fd.append('page', currentPage);
+
+        fetch('{% url "dashboard:activity_log_api" %}', {method:'POST', headers:{'X-CSRFToken':csrf}, body:fd})
+        .then(r => r.json()).then(d => {
+            if (!d.success) return;
+            const s = d.summary;
+            document.getElementById('sumTotal').textContent = s.total.toLocaleString();
+            document.getElementById('sumCollection').textContent = (s.by_stage['COLLECTION']||0).toLocaleString();
+            document.getElementById('sumDecoding').textContent = (s.by_stage['DECODING']||0).toLocaleString();
+            document.getElementById('sumDistribution').textContent = (s.by_stage['DISTRIBUTION']||0).toLocaleString();
+            document.getElementById('sumErrors').textContent = (s.by_level['ERROR']||0).toLocaleString();
+
+            const tb = document.getElementById('tableBody');
+            if (!d.records.length) {
+                tb.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No activity logs found.</td></tr>';
+            } else {
+                tb.innerHTML = d.records.map(r => `<tr class="log-row" data-id="${r.id}">
+                    <td class="check-col"><input type="checkbox" class="form-check-input row-check" value="${r.id}"></td>
+                    <td class="text-nowrap">${r.timestamp}</td>
+                    <td><span class="badge badge-stage ${stageBadge[r.stage]||'bg-secondary'}">${r.stage}</span></td>
+                    <td>${r.stream !== '-' ? '<span class="badge bg-primary">'+r.stream+'</span>' : '-'}</td>
+                    <td><span class="badge ${levelBadge[r.level]||'bg-secondary'}">${r.level}</span></td>
+                    <td><code>${r.event_type}</code></td>
+                    <td title="${r.message}">${r.message.length > 80 ? r.message.substring(0,77)+'...' : r.message}</td>
+                    <td>${r.cdr_file_id ? '<a href="/record/MSC/'+r.cdr_file_id+'/">#'+r.cdr_file_id+'</a>' : '-'}</td>
+                </tr>`).join('');
+
+                tb.querySelectorAll('.row-check').forEach(cb => {
+                    cb.addEventListener('change', function() {
+                        if (this.checked) selectedIds.add(parseInt(this.value));
+                        else selectedIds.delete(parseInt(this.value));
+                        updateSelectedUI();
+                        const allChecks = tb.querySelectorAll('.row-check');
+                        document.getElementById('checkAll').checked = selectedIds.size === allChecks.length;
+                    });
+                });
+            }
+
+            const p = d.pagination;
+            document.getElementById('pageInfo').textContent = `Page ${p.page} of ${p.pages} (${p.total} total)`;
+            const pb = document.getElementById('pageButtons');
+            pb.innerHTML = '';
+            if (p.pages > 1) {
+                if (p.page > 1) pb.innerHTML += `<button class="btn btn-outline-primary" onclick="window._alLoad(${p.page-1})">&laquo;</button>`;
+                for (let i = Math.max(1,p.page-2); i <= Math.min(p.pages,p.page+2); i++)
+                    pb.innerHTML += `<button class="btn btn-${i===p.page?'primary':'outline-primary'}" onclick="window._alLoad(${i})">${i}</button>`;
+                if (p.page < p.pages) pb.innerHTML += `<button class="btn btn-outline-primary" onclick="window._alLoad(${p.page+1})">&raquo;</button>`;
+            }
+        });
+    }
+    window._alLoad = load;
+
+    // Select All checkbox
+    document.getElementById('checkAll').addEventListener('change', function() {
+        const checks = document.querySelectorAll('#tableBody .row-check');
+        checks.forEach(cb => {
+            cb.checked = this.checked;
+            if (this.checked) selectedIds.add(parseInt(cb.value));
+            else selectedIds.delete(parseInt(cb.value));
+        });
+        updateSelectedUI();
+    });
+
+    document.getElementById('filterForm').addEventListener('submit', e => { e.preventDefault(); load(1); });
+    document.getElementById('btnClear').addEventListener('click', () => {
+        ['fStage','fStream','fLevel','fStart','fEnd'].forEach(id => document.getElementById(id).value = '');
+        load(1);
+    });
+
+    // Delete Selected
+    document.getElementById('btnDeleteSelected').addEventListener('click', () => {
+        document.getElementById('deleteCount').textContent = selectedIds.size;
+        new bootstrap.Modal(document.getElementById('deleteModal')).show();
+    });
+
+    document.getElementById('btnConfirmDelete').addEventListener('click', () => {
+        const fd = new FormData();
+        fd.append('ids', Array.from(selectedIds).join(','));
+        fetch('{% url "dashboard:activity_log_clear" %}', {method:'POST', headers:{'X-CSRFToken':csrf}, body:fd})
+        .then(r => r.json()).then(d => {
+            bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+            if (d.success) {
+                load(currentPage);
+            }
+        });
+    });
+
+    // Clear All (filtered)
+    document.getElementById('btnClearLogs').addEventListener('click', () => {
+        const total = document.getElementById('sumTotal').textContent;
+        document.getElementById('clearInfo').textContent = `This will permanently delete ${total} log entries matching your filters.`;
+        new bootstrap.Modal(document.getElementById('clearModal')).show();
+    });
+
+    document.getElementById('btnConfirmClear').addEventListener('click', () => {
+        const fd = new FormData();
+        fd.append('stage', document.getElementById('fStage').value);
+        fd.append('start_date', document.getElementById('fStart').value);
+        fd.append('end_date', document.getElementById('fEnd').value);
+        fetch('{% url "dashboard:activity_log_clear" %}', {method:'POST', headers:{'X-CSRFToken':csrf}, body:fd})
+        .then(r => r.json()).then(d => {
+            bootstrap.Modal.getInstance(document.getElementById('clearModal')).hide();
+            if (d.success) {
+                load(1);
+            }
+        });
+    });
+
+    load(1);
+})();
+</script>
+{% endblock %}
