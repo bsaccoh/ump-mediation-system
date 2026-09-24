@@ -1,7 +1,15 @@
 {% extends "base.html" %}
-{% load humanize %}
+{% load humanize static %}
 
 {% block title %}{{ session.session_ref }} | Drive Test | UMP{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.min.css' %}">
+<style>
+  #drive-map { height: 480px; border-radius: 4px; }
+  .legend-dot { display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:4px; vertical-align:middle; }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -19,6 +27,7 @@
     </span>
   </div>
 
+  <!-- KPI row -->
   <div class="row g-3 mb-4">
     <div class="col-md-4">
       <div class="card h-100">
@@ -66,68 +75,219 @@
     </div>
   </div>
 
-  <!-- Files -->
-  <div class="card mb-4">
-    <div class="card-header"><strong>Files</strong></div>
-    <div class="table-responsive">
-      <table class="table table-sm mb-0">
-        <thead>
-          <tr><th>Filename</th><th>Format</th><th>Size</th><th>Records</th><th>Status</th><th>Uploaded</th></tr>
-        </thead>
-        <tbody>
-          {% for f in files %}
-          <tr>
-            <td>{{ f.original_filename }}</td>
-            <td>{{ f.detected_format|default:"—" }}</td>
-            <td>{{ f.file_size|filesizeformat }}</td>
-            <td>{{ f.measurement_count|intcomma }}</td>
-            <td>
-              <span class="badge bg-{% if f.status == 'COMPLETED' %}success{% elif f.status == 'FAILED' %}danger{% elif f.status in 'PARSING,MATCHING,NORMALIZING' %}warning text-dark{% else %}secondary{% endif %}">
-                {{ f.status }}
-              </span>
-              {% if f.error_message %}<small class="text-danger ms-1" title="{{ f.error_message }}"><i class="bi bi-exclamation-circle"></i></small>{% endif %}
-            </td>
-            <td>{{ f.uploaded_at|date:"Y-m-d H:i" }}</td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="6" class="text-center text-muted py-3">No files.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
+  <!-- Tabs -->
+  <ul class="nav nav-tabs mb-3" id="sessionTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="tab-map-btn" data-bs-toggle="tab" data-bs-target="#tab-map" type="button" role="tab">
+        <i class="bi bi-map me-1"></i>Route Map
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-files-btn" data-bs-toggle="tab" data-bs-target="#tab-files" type="button" role="tab">
+        <i class="bi bi-file-earmark me-1"></i>Files
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-findings-btn" data-bs-toggle="tab" data-bs-target="#tab-findings" type="button" role="tab">
+        <i class="bi bi-exclamation-triangle me-1"></i>Findings
+        {% if session.finding_count %}<span class="badge bg-warning text-dark ms-1">{{ session.finding_count }}</span>{% endif %}
+      </button>
+    </li>
+  </ul>
 
-  <!-- Findings -->
-  {% if findings %}
-  <div class="card">
-    <div class="card-header d-flex justify-content-between">
-      <strong>Recent Findings</strong>
-      <a href="{% url 'drive_test:finding_list' %}?session={{ session.session_ref }}" class="btn btn-sm btn-outline-secondary">All findings</a>
+  <div class="tab-content">
+
+    <!-- Map tab -->
+    <div class="tab-pane fade show active" id="tab-map" role="tabpanel">
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>Drive Route</strong>
+          <span class="small text-muted">
+            <span class="legend-dot" style="background:#22c55e"></span>Good (&ge;&minus;85)
+            <span class="legend-dot ms-2" style="background:#eab308"></span>Fair (&ge;&minus;95)
+            <span class="legend-dot ms-2" style="background:#f97316"></span>Poor (&ge;&minus;105)
+            <span class="legend-dot ms-2" style="background:#ef4444"></span>Very poor
+            <span class="legend-dot ms-2" style="background:#9ca3af"></span>No signal
+            <span class="ms-3">&#128306;</span> Cell tower
+          </span>
+        </div>
+        <div class="card-body p-0">
+          <div id="drive-map"></div>
+        </div>
+      </div>
     </div>
-    <div class="table-responsive">
-      <table class="table table-sm mb-0">
-        <thead>
-          <tr><th>Type</th><th>Severity</th><th>Description</th><th>Cell</th><th>Resolved</th></tr>
-        </thead>
-        <tbody>
-          {% for f in findings %}
-          <tr>
-            <td>{{ f.get_finding_type_display }}</td>
-            <td>
-              <span class="badge bg-{% if f.severity == 'CRITICAL' %}danger{% elif f.severity == 'HIGH' %}warning text-dark{% elif f.severity == 'MEDIUM' %}info{% else %}secondary{% endif %}">
-                {{ f.severity }}
-              </span>
-            </td>
-            <td>{{ f.description|truncatechars:60 }}</td>
-            <td>{{ f.cell.cell_id|default:"—" }}</td>
-            <td>{% if f.is_resolved %}<i class="bi bi-check-circle text-success"></i>{% else %}—{% endif %}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+
+    <!-- Files tab -->
+    <div class="tab-pane fade" id="tab-files" role="tabpanel">
+      <div class="card mb-4">
+        <div class="card-header"><strong>Files</strong></div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr><th>Filename</th><th>Format</th><th>Size</th><th>Records</th><th>Status</th><th>Uploaded</th></tr>
+            </thead>
+            <tbody>
+              {% for f in files %}
+              <tr>
+                <td>{{ f.original_filename }}</td>
+                <td>{{ f.detected_format|default:"—" }}</td>
+                <td>{{ f.file_size|filesizeformat }}</td>
+                <td>{{ f.measurement_count|intcomma }}</td>
+                <td>
+                  <span class="badge bg-{% if f.status == 'COMPLETED' %}success{% elif f.status == 'FAILED' %}danger{% elif f.status in 'PARSING,MATCHING,NORMALIZING' %}warning text-dark{% else %}secondary{% endif %}">
+                    {{ f.status }}
+                  </span>
+                  {% if f.error_message %}<small class="text-danger ms-1" title="{{ f.error_message }}"><i class="bi bi-exclamation-circle"></i></small>{% endif %}
+                </td>
+                <td>{{ f.uploaded_at|date:"Y-m-d H:i" }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="6" class="text-center text-muted py-3">No files.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
-  </div>
-  {% endif %}
+
+    <!-- Findings tab -->
+    <div class="tab-pane fade" id="tab-findings" role="tabpanel">
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between">
+          <strong>Findings</strong>
+          {% if findings %}
+          <a href="{% url 'drive_test:finding_list' %}?session={{ session.session_ref }}" class="btn btn-sm btn-outline-secondary">All findings</a>
+          {% endif %}
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr><th>Type</th><th>Severity</th><th>Description</th><th>Cell</th><th>Resolved</th></tr>
+            </thead>
+            <tbody>
+              {% for f in findings %}
+              <tr>
+                <td>{{ f.get_finding_type_display }}</td>
+                <td>
+                  <span class="badge bg-{% if f.severity == 'CRITICAL' %}danger{% elif f.severity == 'HIGH' %}warning text-dark{% elif f.severity == 'MEDIUM' %}info{% else %}secondary{% endif %}">
+                    {{ f.severity }}
+                  </span>
+                </td>
+                <td>{{ f.description|truncatechars:80 }}</td>
+                <td>{{ f.cell.cell_id|default:"—" }}</td>
+                <td>{% if f.is_resolved %}<i class="bi bi-check-circle text-success"></i>{% else %}—{% endif %}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="5" class="text-center text-muted py-3">No findings.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /tab-content -->
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/leaflet/leaflet.min.js' %}"></script>
+<script>
+(function () {
+  const MAP_DATA_URL = "{% url 'drive_test:session_map_data' session.session_ref %}";
+
+  // Colour palette
+  const COLOURS = {
+    green:  '#22c55e',
+    yellow: '#eab308',
+    orange: '#f97316',
+    red:    '#ef4444',
+    grey:   '#9ca3af',
+  };
+
+  function circleOpts(colour) {
+    return {
+      radius: 5,
+      fillColor: COLOURS[colour] || COLOURS.grey,
+      color: '#fff',
+      weight: 1,
+      opacity: 0.9,
+      fillOpacity: 0.85,
+    };
+  }
+
+  // Tower icon (simple div icon)
+  const towerIcon = L.divIcon({
+    html: '<span style="font-size:18px;line-height:1">&#128306;</span>',
+    className: '',
+    iconAnchor: [9, 9],
+  });
+
+  // Init map — centre on Sierra Leone if no data yet
+  const map = L.map('drive-map').setView([8.46, -11.78], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+  }).addTo(map);
+
+  // Fetch GeoJSON
+  fetch(MAP_DATA_URL)
+    .then(r => r.json())
+    .then(data => {
+      const measurements = data.features.filter(f => f.properties.ftype === 'measurement');
+      const towers       = data.features.filter(f => f.properties.ftype === 'cell_tower');
+
+      if (measurements.length === 0) {
+        document.getElementById('drive-map').insertAdjacentHTML(
+          'afterend',
+          '<p class="text-muted small px-3 py-2">No GPS-valid measurements in this session yet.</p>'
+        );
+        return;
+      }
+
+      const bounds = [];
+
+      // Draw measurement points
+      measurements.forEach(f => {
+        const [lon, lat] = f.geometry.coordinates;
+        const p = f.properties;
+        bounds.push([lat, lon]);
+
+        const popup = `
+          <strong>${p.tech || '—'}</strong><br>
+          ${p.ts}<br>
+          RSRP: ${p.rsrp != null ? p.rsrp.toFixed(1) + ' dBm' : '—'}<br>
+          RSRQ: ${p.rsrq != null ? p.rsrq.toFixed(1) + ' dB' : '—'}<br>
+          SINR: ${p.sinr != null ? p.sinr.toFixed(1) + ' dB' : '—'}<br>
+          Cell: ${p.cell_id || '—'}
+        `;
+        L.circleMarker([lat, lon], circleOpts(p.colour))
+          .bindPopup(popup)
+          .addTo(map);
+      });
+
+      // Draw cell towers
+      towers.forEach(f => {
+        const [lon, lat] = f.geometry.coordinates;
+        const p = f.properties;
+        L.marker([lat, lon], { icon: towerIcon })
+          .bindPopup(`<strong>${p.cell_id}</strong><br>${p.technology}<br>${p.site_name}`)
+          .addTo(map);
+      });
+
+      // Fit map to route
+      if (bounds.length) map.fitBounds(bounds, { padding: [20, 20] });
+    })
+    .catch(() => {
+      document.getElementById('drive-map').insertAdjacentHTML(
+        'afterend',
+        '<p class="text-danger small px-3 py-2">Failed to load map data.</p>'
+      );
+    });
+
+  // Re-invalidate when tab becomes visible (Leaflet needs this)
+  document.getElementById('tab-map-btn').addEventListener('shown.bs.tab', () => map.invalidateSize());
+})();
+</script>
 {% endblock %}

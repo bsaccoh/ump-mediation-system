@@ -9,6 +9,7 @@ urlpatterns = [
     path('sessions/', views.session_list, name='session_list'),
     path('sessions/upload/', views.session_upload, name='session_upload'),
     path('sessions/<str:session_ref>/', views.session_detail, name='session_detail'),
+    path('sessions/<str:session_ref>/map-data/', views.session_map_data, name='session_map_data'),
     path('sites/', views.site_list, name='site_list'),
     path('cells/', views.cell_list, name='cell_list'),
     path('findings/', views.finding_list, name='finding_list'),

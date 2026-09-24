@@ -264,6 +264,99 @@ def finding_list(request):
 
 
 # ---------------------------------------------------------------------------
+# Map data endpoint
+# ---------------------------------------------------------------------------
+
+@login_required
+def session_map_data(request, session_ref):
+    """
+    Return GeoJSON FeatureCollection for a session's drive route.
+
+    Two feature types:
+      - 'measurement'  — one per GPS-valid measurement; colour-coded by RSRP
+      - 'cell_tower'   — one per unique matched cell with known coordinates
+    """
+    from .models import Measurement
+
+    session = get_object_or_404(DriveTestSession, session_ref=session_ref)
+
+    # Measurements with valid GPS (exclude 0,0 sentinel)
+    qs = (
+        Measurement.objects
+        .filter(
+            drive_file__session=session,
+            is_valid=True,
+            latitude__isnull=False,
+            longitude__isnull=False,
+        )
+        .exclude(latitude=0.0, longitude=0.0)
+        .select_related('radio', 'matched_cell__sector__site')
+        .order_by('drive_file', 'sequence_num')
+    )
+
+    features = []
+
+    seen_cells = {}  # cell_id -> already emitted
+
+    for m in qs:
+        radio = getattr(m, 'radio', None)
+        rsrp = radio.rsrp if radio else None
+        rsrq = radio.rsrq if radio else None
+        sinr = radio.sinr if radio else None
+        tech = radio.technology if radio else ''
+
+        # RSRP colour classification for 4G/5G; use RSSI for 2G/3G
+        signal_val = rsrp if rsrp is not None else (radio.rssi if radio else None)
+        if signal_val is None:
+            colour = 'grey'
+        elif signal_val >= -85:
+            colour = 'green'
+        elif signal_val >= -95:
+            colour = 'yellow'
+        elif signal_val >= -105:
+            colour = 'orange'
+        else:
+            colour = 'red'
+
+        features.append({
+            'type': 'Feature',
+            'geometry': {'type': 'Point', 'coordinates': [m.longitude, m.latitude]},
+            'properties': {
+                'ftype': 'measurement',
+                'seq': m.sequence_num,
+                'ts': m.captured_at.strftime('%H:%M:%S') if m.captured_at else '',
+                'tech': tech,
+                'rsrp': rsrp,
+                'rsrq': rsrq,
+                'sinr': sinr,
+                'colour': colour,
+                'cell_id': m.matched_cell.cell_id if m.matched_cell else '',
+            },
+        })
+
+        # Emit a cell tower marker the first time we see each matched cell
+        cell = m.matched_cell
+        if cell and cell.pk not in seen_cells:
+            site = cell.sector.site if (cell.sector_id and cell.sector.site_id) else None
+            clat = getattr(site, 'latitude', None) or cell.latitude
+            clon = getattr(site, 'longitude', None) or cell.longitude
+            if clat and clon:
+                seen_cells[cell.pk] = True
+                features.append({
+                    'type': 'Feature',
+                    'geometry': {'type': 'Point', 'coordinates': [clon, clat]},
+                    'properties': {
+                        'ftype': 'cell_tower',
+                        'cell_id': cell.cell_id,
+                        'technology': cell.technology,
+                        'site_name': site.name if site else '',
+                    },
+                })
+
+    return JsonResponse({'type': 'FeatureCollection', 'features': features})
+
+
+# ---------------------------------------------------------------------------
 # Reference import (regulatory admin)
 # ---------------------------------------------------------------------------
 
