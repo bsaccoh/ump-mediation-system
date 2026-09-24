@@ -331,8 +331,8 @@ def distribution_log_download(request, log_id):
 
 def _format_file_size(bytes_val):
     """Format bytes into a human-readable string (B, KB, MB, GB)."""
-    if not bytes_val or bytes_val <= 0:
-        return "—"
+    if bytes_val is None or bytes_val <= 0:
+        return "0"
     if bytes_val < 1024:
         return f"{bytes_val} B"
     elif bytes_val < 1024 * 1024:
@@ -609,7 +609,7 @@ def distribution_export(request):
         rule_name = log.rule.name if log.rule else (log.output_portal.name if log.output_portal else "—")
         stream_name = log.rule.stream_type if (log.rule and log.rule.stream_type) else (log.cdr_file.decoder_type if (log.cdr_file and log.cdr_file.decoder_type) else "—")
         portal_name = log.output_portal.name if log.output_portal else "—"
-        retry_num = log.retry_count or (log.cdr_file.retry_count if log.cdr_file else 0)
+        retry_num = log.retry_count if log.retry_count is not None else (log.cdr_file.retry_count if log.cdr_file and log.cdr_file.retry_count is not None else 0)
         writer.writerow([
             log.delivered_at.strftime('%Y-%m-%d %H:%M:%S') if log.delivered_at else '—',
             rule_name,
@@ -618,7 +618,7 @@ def distribution_export(request):
             log.filename or (log.cdr_file.filename if log.cdr_file else '—'),
             log.record_count if log.record_count is not None else 0,
             _format_file_size(log.file_size),
-            retry_num if retry_num else '—',
+            retry_num,
             log.status,
         ])
 
@@ -648,6 +648,7 @@ def distribution_dashboard(request):
         rule_name = log.rule.name if log.rule else (log.output_portal.name if log.output_portal else "—")
         stream_name = log.rule.stream_type if (log.rule and log.rule.stream_type) else (log.cdr_file.decoder_type if (log.cdr_file and log.cdr_file.decoder_type) else "—")
         portal_name = log.output_portal.name if log.output_portal else "—"
+        retry_count = log.retry_count if log.retry_count is not None else (log.cdr_file.retry_count if log.cdr_file and log.cdr_file.retry_count is not None else 0)
         deliveries.append({
             'id': log.id,
             'delivered_at': log.delivered_at,
@@ -657,8 +658,10 @@ def distribution_dashboard(request):
             'filename': log.filename or (log.cdr_file.filename if log.cdr_file else "—"),
             'record_count': log.record_count if log.record_count is not None else 0,
             'formatted_size': _format_file_size(log.file_size),
-            'retry_count': log.retry_count or (log.cdr_file.retry_count if log.cdr_file else 0),
+            'retry_count': retry_count,
             'status': log.status,
+            'skip_reason': log.skip_reason or '',
+            'error': log.error or '',
             'detail_url': reverse('collection:distribution_log_view', args=[log.id]),
             'download_url': reverse('collection:distribution_log_download', args=[log.id]),
         })

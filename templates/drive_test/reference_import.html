@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Import Reference Data | Drive Test | UMP{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 720px;">
+  <div class="d-flex align-items-center mb-4">
+    <a href="{% url 'drive_test:dashboard' %}" class="btn btn-sm btn-outline-secondary me-3">
+      <i class="bi bi-arrow-left"></i>
+    </a>
+    <h1 class="h3 mb-0">Import Reference Data</h1>
+  </div>
+
+  {% if errors %}
+  <div class="alert alert-danger">
+    <ul class="mb-0">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  {% if results %}
+  <div class="alert alert-success">
+    {% for r in results %}<div>{{ r }}</div>{% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Entity Type <span class="text-danger">*</span></label>
+          <select name="entity" class="form-select" required>
+            <option value="cells">Cells</option>
+            <option value="sites">Sites</option>
+            <option value="regions">Regions</option>
+            <option value="districts">Districts</option>
+            <option value="chiefdoms">Chiefdoms</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Operator</label>
+          <select name="operator" class="form-select">
+            <option value="">— Select for sites/cells —</option>
+            {% for op in operators %}
+            <option value="{{ op.id }}">{{ op.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">CSV File <span class="text-danger">*</span></label>
+          <input type="file" name="csv_file" class="form-control" accept=".csv" required>
+          <div class="form-text">UTF-8 CSV. First row must be header.</div>
+        </div>
+        <div class="mb-3 form-check">
+          <input type="checkbox" name="update_coordinates" class="form-check-input" id="updateCoords">
+          <label class="form-check-label" for="updateCoords">
+            Update coordinates for existing records
+            <small class="text-muted d-block">By default, existing lat/lon values are preserved.</small>
+          </label>
+        </div>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-upload me-2"></i>Import
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">Expected CSV Column Headers</div>
+    <div class="card-body small">
+      <p><strong>Cells:</strong> <code>cell_id, site_id, sector_id, technology, mcc, mnc, lac, tac, ci, eci, pci, earfcn, latitude, longitude, azimuth_deg, is_active</code></p>
+      <p><strong>Sites:</strong> <code>site_id, name, site_type, chiefdom_code, latitude, longitude, altitude_m</code></p>
+      <p><strong>Regions:</strong> <code>code, name, country</code></p>
+      <p><strong>Districts:</strong> <code>code, name, region_code</code></p>
+      <p class="mb-0"><strong>Chiefdoms:</strong> <code>code, name, district_code</code></p>
+    </div>
+  </div>
+</div>
+{% endblock %}

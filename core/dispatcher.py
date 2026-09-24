@@ -374,7 +374,7 @@ def dispatch_cdr_file(cdr_file_id: int) -> list:
                 cdr_file=cdr_file, rule=rule, output_portal=portal,
                 filename='', record_count=0, file_size=0,
                 status=DistributionLog.Status.SKIPPED,
-                error='Output portal is missing or inactive',
+                skip_reason='Output portal is missing or inactive',
             )
             summaries.append({'rule': rule.name, 'status': 'SKIPPED'})
             continue
@@ -384,12 +384,21 @@ def dispatch_cdr_file(cdr_file_id: int) -> list:
                 # RAW format: deliver the original source file directly
                 if not os.path.exists(cdr_file.file_path):
                     raise FileNotFoundError(f"Source file not found: {cdr_file.file_path}")
-                
+
                 with open(cdr_file.file_path, 'rb') as f:
                     payload = f.read()
-                
+
                 filename = _build_filename(cdr_file, portal, 'RAW')
-                record_count = cdr_file.records_total
+                record_count = cdr_file.records_total or 0
+                if record_count == 0 or len(payload) == 0:
+                    DistributionLog.objects.create(
+                        cdr_file=cdr_file, rule=rule, output_portal=portal,
+                        filename=filename, record_count=0, file_size=0,
+                        status=DistributionLog.Status.SKIPPED,
+                        skip_reason='Zero records or empty file size',
+                    )
+                    summaries.append({'rule': rule.name, 'status': 'SKIPPED', 'reason': 'zero_records_or_size'})
+                    continue
             else:
                 # Normal format: filter, map, and render records
                 qs = _get_record_queryset(cdr_file)
@@ -398,6 +407,17 @@ def dispatch_cdr_file(cdr_file_id: int) -> list:
                     continue
 
                 filtered = _apply_filter(qs, rule.filter_kwargs())
+
+                if not filtered.exists():
+                    DistributionLog.objects.create(
+                        cdr_file=cdr_file, rule=rule, output_portal=portal,
+                        filename='', record_count=0, file_size=0,
+                        status=DistributionLog.Status.SKIPPED,
+                        skip_reason='Zero records after filtering',
+                    )
+                    summaries.append({'rule': rule.name, 'status': 'SKIPPED', 'reason': 'no_records_after_filter'})
+                    continue
+
                 mapping = (schema.mapping_json if schema else {}) or {}
                 if isinstance(mapping, str):
                     import json
@@ -418,6 +438,16 @@ def dispatch_cdr_file(cdr_file_id: int) -> list:
                     payload = _render(rows, portal.output_format, schema)
                     record_count = len(rows)
                 filename = _build_filename(cdr_file, portal, portal.output_format)
+
+                if (record_count or 0) == 0 or not payload or len(payload) == 0:
+                    DistributionLog.objects.create(
+                        cdr_file=cdr_file, rule=rule, output_portal=portal,
+                        filename=filename, record_count=0, file_size=0,
+                        status=DistributionLog.Status.SKIPPED,
+                        skip_reason='Zero records or empty file size',
+                    )
+                    summaries.append({'rule': rule.name, 'status': 'SKIPPED', 'reason': 'zero_records_or_size'})
+                    continue
 
             transport = get_transport(portal.portal_type)
 
@@ -473,9 +503,14 @@ def dispatch_cdr_file(cdr_file_id: int) -> list:
             })
         except Exception as e:
             logger.error(f'Dispatch failed for rule {rule.name}: {e}', exc_info=True)
+            cur_records = record_count if 'record_count' in locals() and record_count is not None else 0
+            cur_size = len(payload) if 'payload' in locals() and payload is not None else 0
+            cur_filename = filename if 'filename' in locals() and filename else (cdr_file.filename if cdr_file else '')
             DistributionLog.objects.create(
                 cdr_file=cdr_file, rule=rule, output_portal=portal,
-                filename='', record_count=0, file_size=0,
+                filename=cur_filename,
+                record_count=cur_records,
+                file_size=cur_size,
                 status=DistributionLog.Status.FAILED,
                 error=str(e)[:1000],
                 retry_count=max(0, int(getattr(rule, 'max_retries', None) or DELIVERY_MAX_ATTEMPTS) - 1),
@@ -550,6 +585,16 @@ def dispatch_selective(cdr_file, records: list, portal_id: int) -> list:
                     payload = _render(rows, portal.output_format, schema)
                     record_count = len(rows)
             filename = _build_filename(cdr_file, portal, portal.output_format)
+            if (record_count or 0) == 0 or not payload or len(payload) == 0:
+                DistributionLog.objects.create(
+                    cdr_file=cdr_file, rule=rule, output_portal=portal,
+                    filename=filename, record_count=0, file_size=0,
+                    status=DistributionLog.Status.SKIPPED,
+                    skip_reason='Zero records or empty file size',
+                )
+                summaries.append({'rule': rule.name, 'status': 'SKIPPED', 'reason': 'zero_records_or_size'})
+                continue
+
             get_transport(portal.portal_type).deliver(payload, filename, portal, deliver_context)
             _archive_output(payload, filename, portal, deliver_context)
             DistributionLog.objects.create(
@@ -561,10 +606,13 @@ def dispatch_selective(cdr_file, records: list, portal_id: int) -> list:
         except Exception as e:
             logger.error(f'dispatch_selective failed for rule {rule.name}: {e}', exc_info=True)
             try:
+                cur_records = record_count if 'record_count' in locals() and record_count is not None else 0
+                cur_size = len(payload) if 'payload' in locals() and payload is not None else 0
                 DistributionLog.objects.create(
                     cdr_file=cdr_file, rule=rule, output_portal=portal,
                     filename=_build_filename(cdr_file, portal, portal.output_format),
-                    record_count=0, file_size=0,
+                    record_count=cur_records,
+                    file_size=cur_size,
                     status=DistributionLog.Status.FAILED,
                     error=str(e)[:500],
                 )
@@ -648,6 +696,12 @@ def dispatch_in_memory(cdr_file, records: list) -> list:
         schema = rule.output_schema
         deliver_context['downstream'] = portal.name if portal else None
         if not portal or not portal.is_active:
+            DistributionLog.objects.create(
+                cdr_file=cdr_file, rule=rule, output_portal=portal,
+                filename='', record_count=0, file_size=0,
+                status=DistributionLog.Status.SKIPPED,
+                skip_reason='Output portal is missing or inactive',
+            )
             summaries.append({'rule': rule.name, 'status': 'SKIPPED'})
             continue
         try:
@@ -661,14 +715,39 @@ def dispatch_in_memory(cdr_file, records: list) -> list:
                     payload = f.read()
                 record_count = len(records)
             elif not records:
+                DistributionLog.objects.create(
+                    cdr_file=cdr_file, rule=rule, output_portal=portal,
+                    filename='', record_count=0, file_size=0,
+                    status=DistributionLog.Status.SKIPPED,
+                    skip_reason='No records in source file',
+                )
                 summaries.append({'rule': rule.name, 'status': 'SKIPPED', 'reason': 'no_records'})
                 continue
             else:
                 rule_records = (
                     [r for r in records if _record_matches(r, fkw)] if fkw else records
                 )
+                if not rule_records:
+                    DistributionLog.objects.create(
+                        cdr_file=cdr_file, rule=rule, output_portal=portal,
+                        filename='', record_count=0, file_size=0,
+                        status=DistributionLog.Status.SKIPPED,
+                        skip_reason='Zero records after filtering',
+                    )
+                    summaries.append({'rule': rule.name, 'status': 'SKIPPED', 'reason': 'no_records_after_filter'})
+                    continue
                 payload, record_count = _cached_render(rule_records, fkw, schema, portal.output_format)
             filename = _build_filename(cdr_file, portal, portal.output_format)
+            if (record_count or 0) == 0 or not payload or len(payload) == 0:
+                DistributionLog.objects.create(
+                    cdr_file=cdr_file, rule=rule, output_portal=portal,
+                    filename=filename, record_count=0, file_size=0,
+                    status=DistributionLog.Status.SKIPPED,
+                    skip_reason='Zero records or empty file size',
+                )
+                summaries.append({'rule': rule.name, 'status': 'SKIPPED', 'reason': 'zero_records_or_size'})
+                continue
+
             get_transport(portal.portal_type).deliver(payload, filename, portal, deliver_context)
             _archive_output(payload, filename, portal, deliver_context)
             DistributionLog.objects.create(
@@ -680,10 +759,13 @@ def dispatch_in_memory(cdr_file, records: list) -> list:
         except Exception as e:
             logger.error(f'dispatch_in_memory failed for rule {rule.name}: {e}', exc_info=True)
             try:
+                cur_records = record_count if 'record_count' in locals() and record_count is not None else 0
+                cur_size = len(payload) if 'payload' in locals() and payload is not None else 0
                 DistributionLog.objects.create(
                     cdr_file=cdr_file, rule=rule, output_portal=portal,
                     filename=_build_filename(cdr_file, portal, portal.output_format),
-                    record_count=0, file_size=0,
+                    record_count=cur_records,
+                    file_size=cur_size,
                     status=DistributionLog.Status.FAILED,
                     error=str(e)[:500],
                 )

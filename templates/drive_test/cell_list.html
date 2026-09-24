@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Cell Reference | Drive Test | UMP{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h3 mb-0">Cell Reference</h1>
+      <small class="text-muted">Authoritative cell identifiers used for drive-test matching</small>
+    </div>
+    <a href="{% url 'drive_test:reference_import' %}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-file-earmark-arrow-up me-1"></i>Import CSV
+    </a>
+  </div>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Cell ID</th><th>Operator</th><th>Tech</th><th>MCC</th><th>MNC</th>
+            <th>LAC/TAC</th><th>CI/ECI</th><th>PCI</th><th>CGI/ECGI</th><th>Active</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for cell in page_obj %}
+          <tr>
+            <td><code>{{ cell.cell_id }}</code></td>
+            <td>{{ cell.operator.name }}</td>
+            <td><span class="badge bg-{% if cell.technology == '4G' %}primary{% elif cell.technology == '5G' %}success{% elif cell.technology == '3G' %}info{% else %}secondary{% endif %}">{{ cell.technology }}</span></td>
+            <td>{{ cell.mcc|default:"—" }}</td>
+            <td>{{ cell.mnc|default:"—" }}</td>
+            <td>{{ cell.lac|default:cell.tac|default:"—" }}</td>
+            <td>{{ cell.ci|default:cell.eci|default:"—" }}</td>
+            <td>{{ cell.pci|default:"—" }}</td>
+            <td><small>{{ cell.cgi|default:cell.ecgi|default:"—" }}</small></td>
+            <td>{% if cell.is_active %}<i class="bi bi-check-circle text-success"></i>{% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="10" class="text-center text-muted py-4">No cells found. <a href="{% url 'drive_test:reference_import' %}">Import from CSV.</a></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page_obj.has_other_pages %}
+    <div class="card-footer d-flex justify-content-between">
+      <small>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</small>
+      <div>
+        {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}" class="btn btn-sm btn-outline-secondary">Previous</a>{% endif %}
+        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}" class="btn btn-sm btn-outline-secondary">Next</a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

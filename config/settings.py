@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'scripts',
     'businesslogic',
     'regulatory',
+    'drive_test',
 ]
 
 MIDDLEWARE = [

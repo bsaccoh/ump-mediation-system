@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Drive Test Dashboard | UMP{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h3 mb-1">Drive Test Dashboard</h1>
+      <p class="text-muted mb-0">Network quality surveys, cell matching, and regulatory findings</p>
+    </div>
+    <a href="{% url 'drive_test:session_upload' %}" class="btn btn-primary">
+      <i class="bi bi-upload me-2"></i>Upload Drive Test
+    </a>
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small">Total Sessions</div>
+          <div class="h2 fw-bold">{{ stats.total|default:"0"|intcomma }}</div>
+          <div class="small text-success">{{ stats.completed|default:"0" }} completed</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small">Processing</div>
+          <div class="h2 fw-bold">{{ stats.pending|default:"0"|intcomma }}</div>
+          <div class="small text-warning">pending / in progress</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small">Open Findings</div>
+          <div class="h2 fw-bold">{{ open_findings|intcomma }}</div>
+          <div class="small text-danger">{{ critical_findings }} critical</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small">Failed Sessions</div>
+          <div class="h2 fw-bold text-danger">{{ stats.failed|default:"0"|intcomma }}</div>
+          <div class="small text-muted">require attention</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Sessions -->
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <strong>Recent Sessions</strong>
+      <a href="{% url 'drive_test:session_list' %}" class="btn btn-sm btn-outline-primary">
+        View all <i class="bi bi-arrow-right ms-1"></i>
+      </a>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Reference</th>
+            <th>Operator</th>
+            <th>Test Date</th>
+            <th>Type</th>
+            <th>Measurements</th>
+            <th>Findings</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in recent_sessions %}
+          <tr>
+            <td>
+              <a href="{% url 'drive_test:session_detail' s.session_ref %}">{{ s.session_ref }}</a>
+            </td>
+            <td>{{ s.operator.name }}</td>
+            <td>{{ s.test_date }}</td>
+            <td>{{ s.get_test_type_display }}</td>
+            <td>{{ s.total_measurements|intcomma }}</td>
+            <td>{{ s.finding_count }}</td>
+            <td>
+              <span class="badge bg-{% if s.status == 'COMPLETED' %}success{% elif s.status == 'FAILED' %}danger{% elif s.status == 'PROCESSING' %}warning{% else %}secondary{% endif %}">
+                {{ s.status }}
+              </span>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="text-center text-muted py-4">
+              No sessions yet. <a href="{% url 'drive_test:session_upload' %}">Upload the first one.</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Quick Links -->
+  <div class="row g-3 mt-2">
+    <div class="col-md-3">
+      <a href="{% url 'drive_test:site_list' %}" class="card text-decoration-none h-100">
+        <div class="card-body text-center py-3">
+          <i class="bi bi-broadcast-pin fs-3 text-primary"></i>
+          <div class="mt-2 fw-semibold">Sites</div>
+          <div class="small text-muted">Base station reference</div>
+        </div>
+      </a>
+    </div>
+    <div class="col-md-3">
+      <a href="{% url 'drive_test:cell_list' %}" class="card text-decoration-none h-100">
+        <div class="card-body text-center py-3">
+          <i class="bi bi-reception-4 fs-3 text-primary"></i>
+          <div class="mt-2 fw-semibold">Cells</div>
+          <div class="small text-muted">Cell reference data</div>
+        </div>
+      </a>
+    </div>
+    <div class="col-md-3">
+      <a href="{% url 'drive_test:finding_list' %}" class="card text-decoration-none h-100">
+        <div class="card-body text-center py-3">
+          <i class="bi bi-exclamation-triangle fs-3 text-warning"></i>
+          <div class="mt-2 fw-semibold">Findings</div>
+          <div class="small text-muted">Quality & compliance issues</div>
+        </div>
+      </a>
+    </div>
+    <div class="col-md-3">
+      <a href="{% url 'drive_test:reference_import' %}" class="card text-decoration-none h-100">
+        <div class="card-body text-center py-3">
+          <i class="bi bi-file-earmark-arrow-up fs-3 text-secondary"></i>
+          <div class="mt-2 fw-semibold">Import Reference</div>
+          <div class="small text-muted">Sites, cells CSV import</div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

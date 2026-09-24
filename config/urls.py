@@ -31,8 +31,10 @@ urlpatterns = [
     path('scripts/', include('scripts.urls', namespace='scripts')),
     path('business-logic/', include('businesslogic.urls', namespace='businesslogic')),
     path('regulatory/', include('regulatory.urls', namespace='regulatory')),
+    path('drive-test/', include('drive_test.urls', namespace='drive_test')),
     path('', include('dashboard.urls')),
 ]
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+

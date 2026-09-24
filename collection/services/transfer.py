@@ -5,6 +5,8 @@ import hashlib
 import logging
 import os
 import shutil
+import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -13,6 +15,22 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 _CHUNK_SIZE = 1024 * 1024
+_REPLACE_RETRIES = 4
+_REPLACE_BACKOFF = (0.1, 0.3, 0.5, 1.0)
+
+
+def _replace_with_retry(src: Path, dst: Path) -> None:
+    """os.replace with retry for transient Windows file locks (antivirus, indexer)."""
+    for attempt in range(_REPLACE_RETRIES):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if sys.platform != 'win32' or attempt == _REPLACE_RETRIES - 1:
+                raise
+            delay = _REPLACE_BACKOFF[min(attempt, len(_REPLACE_BACKOFF) - 1)]
+            logger.debug(f'os.replace blocked (attempt {attempt + 1}), retrying in {delay}s')
+            time.sleep(delay)
 
 _UMP_ROOTS = None
 
@@ -85,7 +103,7 @@ def publish_file(source: str | Path, staging_directory: str | Path,
             os.fsync(staging_file.fileno())
         if staged.stat().st_size != source.stat().st_size or _sha256(staged) != _sha256(source):
             raise IOError(f'Verification failed for {source.name}')
-        os.replace(staged, destination)
+        _replace_with_retry(staged, destination)
         if remove_source:
             source.unlink()
         return destination
@@ -113,7 +131,7 @@ def publish_bytes(payload: bytes, staging_directory: str | Path,
             os.fsync(output.fileno())
         if staged.stat().st_size != len(payload):
             raise IOError(f'Verification failed for generated output {filename}')
-        os.replace(staged, destination)
+        _replace_with_retry(staged, destination)
         return destination
     finally:
         if staged.exists():

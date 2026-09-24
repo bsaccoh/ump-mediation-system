@@ -1,7 +1,7 @@
-from django.urls import path
+from django.urls import include, path
 
 app_name = 'api'
 
 urlpatterns = [
-    # API endpoints will be added here
+    path('drive-test/', include('drive_test.api.urls')),
 ]

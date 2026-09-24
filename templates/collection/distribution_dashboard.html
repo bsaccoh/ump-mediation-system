@@ -286,13 +286,13 @@
                             {{ delivery.record_count|default:"0" }}
                         </td>
                         <td>
-                            {{ delivery.formatted_size|default:"—" }}
+                            {{ delivery.formatted_size|default:"0" }}
                         </td>
                         <td>
-                            {% if delivery.retry_count %}
+                            {% if delivery.retry_count is not None %}
                                 {{ delivery.retry_count }}
                             {% else %}
-                                —
+                                0
                             {% endif %}
                         </td>
                         <td>
@@ -302,15 +302,21 @@
                                     SUCCESS
                                 </span>
                             {% elif delivery.status == "FAILED" %}
-                                <span class="distribution-status failed">
+                                <span class="distribution-status failed" {% if delivery.error %}title="{{ delivery.error }}"{% endif %}>
                                     <i class="bi bi-x-circle-fill"></i>
                                     FAILED
                                 </span>
+                                {% if delivery.error %}
+                                    <div class="text-muted small text-truncate" style="max-width: 160px;" title="{{ delivery.error }}">{{ delivery.error }}</div>
+                                {% endif %}
                             {% elif delivery.status == "SKIPPED" %}
-                                <span class="distribution-status skipped">
+                                <span class="distribution-status skipped" {% if delivery.skip_reason %}title="{{ delivery.skip_reason }}"{% endif %}>
                                     <i class="bi bi-skip-forward-fill"></i>
                                     SKIPPED
                                 </span>
+                                {% if delivery.skip_reason %}
+                                    <div class="text-muted small text-truncate" style="max-width: 160px;" title="{{ delivery.skip_reason }}">{{ delivery.skip_reason }}</div>
+                                {% endif %}
                             {% else %}
                                 <span class="distribution-status pending">
                                     {{ delivery.status }}

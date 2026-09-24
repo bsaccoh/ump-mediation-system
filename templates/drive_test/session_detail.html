@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}{{ session.session_ref }} | Drive Test | UMP{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center mb-4">
+    <a href="{% url 'drive_test:session_list' %}" class="btn btn-sm btn-outline-secondary me-3">
+      <i class="bi bi-arrow-left"></i>
+    </a>
+    <div>
+      <h1 class="h3 mb-0">{{ session.session_ref }}</h1>
+      <small class="text-muted">{{ session.operator.name }} &bull; {{ session.test_date }} &bull; {{ session.get_test_type_display }}</small>
+    </div>
+    <span class="ms-3 badge bg-{% if session.status == 'COMPLETED' %}success{% elif session.status == 'FAILED' %}danger{% elif session.status == 'PROCESSING' %}warning text-dark{% else %}secondary{% endif %} fs-6">
+      {{ session.status }}
+    </span>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-header">Session Details</div>
+        <div class="card-body">
+          <dl class="row mb-0 small">
+            <dt class="col-5">Title</dt><dd class="col-7">{{ session.title|default:"—" }}</dd>
+            <dt class="col-5">Region</dt><dd class="col-7">{{ session.region.name|default:"—" }}</dd>
+            <dt class="col-5">Tester</dt><dd class="col-7">{{ session.tester_name|default:"—" }}</dd>
+            <dt class="col-5">Vehicle</dt><dd class="col-7">{{ session.vehicle_id|default:"—" }}</dd>
+            <dt class="col-5">Uploaded by</dt><dd class="col-7">{{ session.uploaded_by.get_full_name|default:session.uploaded_by.username }}</dd>
+            <dt class="col-5">Created</dt><dd class="col-7">{{ session.created_at|date:"Y-m-d H:i" }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-8">
+      <div class="row g-3 h-100">
+        <div class="col-4">
+          <div class="card text-center h-100">
+            <div class="card-body">
+              <div class="text-muted small">Measurements</div>
+              <div class="h2">{{ session.total_measurements|intcomma }}</div>
+              <div class="small text-muted">{{ session.matched_measurements|intcomma }} matched</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="card text-center h-100">
+            <div class="card-body">
+              <div class="text-muted small">Files</div>
+              <div class="h2">{{ files|length }}</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="card text-center h-100">
+            <div class="card-body">
+              <div class="text-muted small">Findings</div>
+              <div class="h2 {% if session.finding_count > 0 %}text-warning{% endif %}">{{ session.finding_count }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Files -->
+  <div class="card mb-4">
+    <div class="card-header"><strong>Files</strong></div>
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr><th>Filename</th><th>Format</th><th>Size</th><th>Records</th><th>Status</th><th>Uploaded</th></tr>
+        </thead>
+        <tbody>
+          {% for f in files %}
+          <tr>
+            <td>{{ f.original_filename }}</td>
+            <td>{{ f.detected_format|default:"—" }}</td>
+            <td>{{ f.file_size|filesizeformat }}</td>
+            <td>{{ f.measurement_count|intcomma }}</td>
+            <td>
+              <span class="badge bg-{% if f.status == 'COMPLETED' %}success{% elif f.status == 'FAILED' %}danger{% elif f.status in 'PARSING,MATCHING,NORMALIZING' %}warning text-dark{% else %}secondary{% endif %}">
+                {{ f.status }}
+              </span>
+              {% if f.error_message %}<small class="text-danger ms-1" title="{{ f.error_message }}"><i class="bi bi-exclamation-circle"></i></small>{% endif %}
+            </td>
+            <td>{{ f.uploaded_at|date:"Y-m-d H:i" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-muted py-3">No files.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Findings -->
+  {% if findings %}
+  <div class="card">
+    <div class="card-header d-flex justify-content-between">
+      <strong>Recent Findings</strong>
+      <a href="{% url 'drive_test:finding_list' %}?session={{ session.session_ref }}" class="btn btn-sm btn-outline-secondary">All findings</a>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr><th>Type</th><th>Severity</th><th>Description</th><th>Cell</th><th>Resolved</th></tr>
+        </thead>
+        <tbody>
+          {% for f in findings %}
+          <tr>
+            <td>{{ f.get_finding_type_display }}</td>
+            <td>
+              <span class="badge bg-{% if f.severity == 'CRITICAL' %}danger{% elif f.severity == 'HIGH' %}warning text-dark{% elif f.severity == 'MEDIUM' %}info{% else %}secondary{% endif %}">
+                {{ f.severity }}
+              </span>
+            </td>
+            <td>{{ f.description|truncatechars:60 }}</td>
+            <td>{{ f.cell.cell_id|default:"—" }}</td>
+            <td>{% if f.is_resolved %}<i class="bi bi-check-circle text-success"></i>{% else %}—{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

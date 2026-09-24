@@ -563,7 +563,7 @@
                 {% endif %}
                 <span class="text-muted small me-1" title="Last Login" style="font-size: 0.75rem;"><i class="bi bi-clock-history"></i> {{ user.last_login|date:"M d, Y H:i" }}</span>
                 <span class="text-muted"><i class="bi bi-person-circle"></i> {{ user.username }}</span>
-                <a href="{% url 'logout' %}" class="btn btn-sm btn-outline-secondary">Logout</a>
+                <form method="post" action="{% url 'logout' %}" style="display:inline">{% csrf_token %}<button type="submit" class="btn btn-sm btn-outline-secondary">Logout</button></form>
                 {% endif %}
             </div>
         </div>

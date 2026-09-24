@@ -295,6 +295,7 @@ class DistributionLog(models.Model):
         max_length=10, choices=Status.choices, default=Status.SUCCESS, db_index=True
     )
     error = models.TextField(blank=True)
+    skip_reason = models.CharField(max_length=200, blank=True)
     retry_count = models.IntegerField(default=0, help_text='Number of retry attempts performed')
     delivered_at = models.DateTimeField(auto_now_add=True, db_index=True)
 

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Drive Test Sessions | UMP{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">Drive Test Sessions</h1>
+    <a href="{% url 'drive_test:session_upload' %}" class="btn btn-primary">
+      <i class="bi bi-upload me-2"></i>Upload New
+    </a>
+  </div>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Reference</th><th>Operator</th><th>Date</th><th>Type</th>
+            <th>Files</th><th>Measurements</th><th>Findings</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in page_obj %}
+          <tr>
+            <td><a href="{% url 'drive_test:session_detail' s.session_ref %}">{{ s.session_ref }}</a></td>
+            <td>{{ s.operator.name }}</td>
+            <td>{{ s.test_date }}</td>
+            <td>{{ s.get_test_type_display }}</td>
+            <td>{{ s.files.count }}</td>
+            <td>{{ s.total_measurements|intcomma }}</td>
+            <td>{{ s.finding_count }}</td>
+            <td>
+              <span class="badge bg-{% if s.status == 'COMPLETED' %}success{% elif s.status == 'FAILED' %}danger{% elif s.status == 'PROCESSING' %}warning text-dark{% else %}secondary{% endif %}">
+                {{ s.status }}
+              </span>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="text-center text-muted py-4">No sessions found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page_obj.has_other_pages %}
+    <div class="card-footer d-flex justify-content-between align-items-center">
+      <small>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</small>
+      <div>
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-sm btn-outline-secondary">Previous</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}" class="btn btn-sm btn-outline-secondary">Next</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
