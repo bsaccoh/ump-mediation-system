@@ -239,19 +239,35 @@ def _audit_processing_event(drive_file, *, status: str, **extra) -> None:
 
 
 def _resolve_parser(drive_file):
-    """Instantiate the correct parser. Falls back to CsvDriveTestParser."""
-    if drive_file.parser_profile and drive_file.parser_profile.parser_class:
-        try:
-            module_path, cls_name = drive_file.parser_profile.parser_class.rsplit('.', 1)
-            module = importlib.import_module(module_path)
-            cls = getattr(module, cls_name)
-            return cls(config=drive_file.parser_profile.default_config)
-        except Exception as exc:
-            logger.warning('Could not load parser %s: %s — falling back to CSV',
-                           drive_file.parser_profile.parser_class, exc)
+    """Instantiate the parser named by the file's ParserProfile.
 
-    from drive_test.parsers.csv_parser import CsvDriveTestParser
-    return CsvDriveTestParser()
+    Raises rather than guessing. The upload path already rejects files with no
+    matching profile (drive_test.views._handle_upload), so reaching this with a
+    missing or unloadable parser_class means the profile itself is broken —
+    parsing such a file as CSV would silently produce garbage measurements.
+    """
+    profile = drive_file.parser_profile
+    if profile is None:
+        raise ValueError(
+            f'No parser profile is set for {drive_file.original_filename!r}. '
+            f'The file format could not be identified.'
+        )
+    if not profile.parser_class:
+        raise ValueError(
+            f'Parser profile {profile.name!r} has no parser_class configured.'
+        )
+
+    try:
+        module_path, cls_name = profile.parser_class.rsplit('.', 1)
+        module = importlib.import_module(module_path)
+        cls = getattr(module, cls_name)
+    except Exception as exc:
+        raise ValueError(
+            f'Parser profile {profile.name!r} names an unloadable parser '
+            f'{profile.parser_class!r}: {type(exc).__name__}: {exc}'
+        ) from exc
+
+    return cls(config=profile.default_config)
 
 
 def _flush_chunk(chunk: list, chunk_radio: list, chunk_service: list, drive_file) -> int:
@@ -265,11 +281,13 @@ def _flush_chunk(chunk: list, chunk_radio: list, chunk_service: list, drive_file
     service_rows = []
 
     for m_obj, pm in zip(created, [item[1] for item in chunk]):
-        has_radio = any([
-            pm.rsrp, pm.rsrq, pm.sinr, pm.rssi, pm.rscp, pm.ecio,
+        # `is not None`, not truthiness: SINR 0 dB and CQI 0 are valid readings.
+        radio_values = (
+            pm.rsrp, pm.rsrq, pm.sinr, pm.rssi, pm.rscp, pm.ecio, pm.cqi,
+            pm.ss_rsrp, pm.ss_rsrq, pm.ss_sinr,
             pm.dl_throughput_kbps, pm.ul_throughput_kbps,
-        ])
-        if has_radio or pm.technology:
+        )
+        if pm.technology or any(v is not None for v in radio_values):
             radio_rows.append(RadioMeasurement(
                 measurement=m_obj,
                 technology=pm.technology,
@@ -280,6 +298,9 @@ def _flush_chunk(chunk: list, chunk_radio: list, chunk_service: list, drive_file
                 rsrq=pm.rsrq,
                 sinr=pm.sinr,
                 cqi=pm.cqi,
+                ss_rsrp=pm.ss_rsrp,
+                ss_rsrq=pm.ss_rsrq,
+                ss_sinr=pm.ss_sinr,
                 dl_throughput_kbps=pm.dl_throughput_kbps,
                 ul_throughput_kbps=pm.ul_throughput_kbps,
                 raw_data=pm.raw_data,
@@ -386,7 +407,9 @@ def _update_session_aggregates(session) -> None:
     # Update session status based on file statuses
     from drive_test.models import DriveTestFile
     statuses = set(session.files.values_list('status', flat=True))
-    if all(s == 'COMPLETED' for s in statuses):
+    if not statuses:
+        pass  # No files yet — leave the session status as it is, never COMPLETED.
+    elif all(s == 'COMPLETED' for s in statuses):
         session.status = 'COMPLETED'
     elif any(s == 'FAILED' for s in statuses):
         session.status = 'PARTIAL' if any(s == 'COMPLETED' for s in statuses) else 'FAILED'
