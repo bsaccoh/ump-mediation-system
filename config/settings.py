@@ -29,15 +29,6 @@ ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,test
 # =============================================================================
 
 INSTALLED_APPS = [
-    # Must precede django.contrib.staticfiles: it disables runserver's own
-    # static handler so WhiteNoise serves static in development too. Without
-    # it, runserver intercepts /static/ before any middleware and sends no
-    # Cache-Control at all, so browsers cache heuristically and keep serving a
-    # stale stylesheet or script after an edit — including serving new
-    # JavaScript against old CSS, which looks like a bug in the change rather
-    # than in the cache.
-    'whitenoise.runserver_nostatic',
-
     # Django built-in
     'django.contrib.admin',
     'django.contrib.auth',
@@ -63,12 +54,10 @@ INSTALLED_APPS = [
     'processing',
     'reference',
     'dashboard',
-    'api',
     'portals',
     'scripts',
     'businesslogic',
     'regulatory',
-    'drive_test',
 ]
 
 MIDDLEWARE = [
@@ -208,29 +197,9 @@ STORAGES = {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
     },
     'staticfiles': {
-        'BACKEND': (
-            # Production serves hashed, immutable filenames so long cache
-            # lifetimes are safe. In DEBUG the filenames are plain, so the
-            # manifest backend would also demand a collectstatic run before any
-            # template referencing a new asset could render.
-            'whitenoise.storage.CompressedManifestStaticFilesStorage'
-            if not DEBUG else
-            'django.contrib.staticfiles.storage.StaticFilesStorage'
-        ),
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
     },
 }
-
-if DEBUG:
-    # Never cache static assets in development, and serve them straight from
-    # STATICFILES_DIRS so no collectstatic run is needed to see an edit.
-    #
-    # Paired with 'whitenoise.runserver_nostatic' in INSTALLED_APPS above:
-    # that hands /static/ to WhiteNoise in development, and these make it
-    # re-read from disk and tell the browser not to cache. Together they are
-    # what stops an edited file from silently serving its previous body.
-    WHITENOISE_MAX_AGE = 0
-    WHITENOISE_AUTOREFRESH = True
-    WHITENOISE_USE_FINDERS = True
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -421,12 +390,8 @@ SERVICE_POLL_INTERVAL = int(os.environ.get('SERVICE_POLL_INTERVAL', '10'))
 # File upload
 FILE_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024  # 100MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024
-DATA_UPLOAD_MAX_NUMBER_FILES = 1000  # Support bulk drive test folder uploads (up to 1000 files)
-DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000  # 1000 files × 2 fields (file + relative_path) + form fields
-
-# Drive Test: single-file upload size limit, enforced in drive_test.views._handle_upload.
-# Above DATA_UPLOAD_MAX_MEMORY_SIZE since a single TEMS/NEMO log can exceed 100MB.
-DRIVE_TEST_MAX_UPLOAD_BYTES = int(os.environ.get('DRIVE_TEST_MAX_UPLOAD_BYTES', 250 * 1024 * 1024))  # 250MB
+DATA_UPLOAD_MAX_NUMBER_FILES = 1000
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -479,13 +444,6 @@ LOGGING = {
             'backupCount': 5,
             'formatter': 'service',
         },
-        'file_drive_test': {
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(LOG_DIR, 'drive_test.log'),
-            'maxBytes': 50 * 1024 * 1024,
-            'backupCount': 5,
-            'formatter': 'service',
-        },
     },
     'loggers': {
         'mediation.collector': {
@@ -505,14 +463,6 @@ LOGGING = {
         },
         'mediation.api': {
             'handlers': ['console', 'file_api'],
-            'level': 'DEBUG' if DEBUG else 'INFO',
-            'propagate': False,
-        },
-        # drive_test modules call logging.getLogger(__name__), so this catches the
-        # whole package. Without it, ingestion failures go to the root logger,
-        # which has no handler — they were silently dropped in production.
-        'drive_test': {
-            'handlers': ['console', 'file_drive_test'],
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },

@@ -19,7 +19,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('django.contrib.auth.urls')),
     path('', include('core.urls', namespace='core')),
-    path('api/v1/', include('api.urls')),
     path('collection/', include('collection.urls')),
     path('cdr/', include('streams.msc.urls')),
     path('ims/', include('streams.ims.urls')),
@@ -31,7 +30,6 @@ urlpatterns = [
     path('scripts/', include('scripts.urls', namespace='scripts')),
     path('business-logic/', include('businesslogic.urls', namespace='businesslogic')),
     path('regulatory/', include('regulatory.urls', namespace='regulatory')),
-    path('drive-test/', include('drive_test.urls', namespace='drive_test')),
     path('', include('dashboard.urls')),
 ]
 

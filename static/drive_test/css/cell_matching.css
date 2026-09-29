@@ -1,3 +1,0 @@
-/* Drive Test — Cell Matching. Builds on measurement_list.css (.dt-ms-match) and the .dt-sl-* / .dt-st-* primitives. */
-.dt-cm-ids { font-size: 0.78rem; font-variant-numeric: tabular-nums; }
-.dt-cm-facts { display: flex; flex-direction: column; gap: 2px; margin: -4px 0 12px; font-size: 0.78rem; color: #6b7280; }
