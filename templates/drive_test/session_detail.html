@@ -33,6 +33,9 @@
       </div>
     </div>
     <div>
+      {% if session.total_measurements %}
+      <a href="{% url 'drive_test:session_workspace' session.session_ref %}" class="dt-sl-btn dt-sl-btn-outline"><i class="bi bi-layout-sidebar-inset"></i> Open Workspace</a>
+      {% endif %}
       <a href="{% url 'drive_test:processing_monitor' %}?session={{ session.session_ref }}" class="dt-sl-btn"><i class="bi bi-activity"></i> Processing</a>
       <a href="{% url 'drive_test:kpi_analysis' %}?session={{ session.session_ref }}" class="dt-sl-btn"><i class="bi bi-graph-up"></i> KPI Analysis</a>
       <a href="{% url 'drive_test:data_quality' %}?session={{ session.session_ref }}" class="dt-sl-btn"><i class="bi bi-clipboard2-check"></i> Data Quality</a>

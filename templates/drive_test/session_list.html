@@ -130,6 +130,7 @@
             <td><span class="dt-sl-badge dt-sl-badge-{{ s.status|lower }}">{{ s.status }}</span></td>
             <td class="dt-sl-nowrap">
               <a href="{% url 'drive_test:session_detail' s.session_ref %}{% if request.GET %}?back={{ request.GET.urlencode|urlencode }}{% endif %}" class="dt-sl-link">View</a>
+              {% if s.total_measurements %}<span class="dt-sl-sep">|</span><a href="{% url 'drive_test:session_workspace' s.session_ref %}" class="dt-sl-link">Workspace</a>{% endif %}
               {% if s.status == 'COMPLETED' %}<span class="dt-sl-sep">|</span><a href="{% url 'drive_test:session_report_excel' s.session_ref %}" class="dt-sl-link">Report</a>{% endif %}
             </td>
           </tr>
