@@ -124,7 +124,8 @@ def session_timeseries(session, *, metrics=None, primary='rsrp',
                 'session_ref': session.session_ref,
                 'source_count': 0, 'returned': 0, 'decimated': False,
                 'available_metrics': [], 'absent_metrics': requested,
-                'primary_metric': None, 'started_at': None,
+                'unsupported_metrics': _unsupported_metrics(session, requested),
+                'primary_metric': None, 'started_at': None, 'event_count': 0,
             },
         }
 
@@ -142,6 +143,12 @@ def session_timeseries(session, *, metrics=None, primary='rsrp',
             available.append(metric)
         else:
             absent.append(metric)
+
+    # Of the absent metrics, which could the source format never have carried?
+    # "This drive recorded no RSRP" and "this format cannot carry RSRP" are
+    # different facts, and only the second is a property of the file. Reporting
+    # them together would tell the reader nothing about which they are seeing.
+    unsupported = _unsupported_metrics(session, absent)
 
     decimate_on = primary if primary in available else (available[0] if available else None)
     if decimate_on:
@@ -196,11 +203,42 @@ def session_timeseries(session, *, metrics=None, primary='rsrp',
         'decimated': len(kept) < len(rows),
         'available_metrics': available,
         'absent_metrics': absent,
+        'unsupported_metrics': unsupported,
         'primary_metric': decimate_on,
         'started_at': started.isoformat(),
         'event_count': len(events),
     }
     return payload
+
+
+def _unsupported_metrics(session, absent: list[str]) -> list[str]:
+    """Which absent metrics the session's source formats cannot carry at all.
+
+    A session may hold files from several formats, so a metric counts as
+    unsupported only when NO contributing format claims it — if any source
+    could have produced it, its absence is a fact about the drive rather than
+    about the format.
+
+    A parser declaring no metrics makes no claim (the generic CSV importer maps
+    whatever columns a file has), and no claim never marks anything unsupported.
+    """
+    from drive_test.models import DriveTestFile
+    from drive_test.services.file_handler import capabilities_for
+
+    profiles = {
+        f.parser_profile
+        for f in DriveTestFile.objects.filter(session=session)
+                                      .select_related('parser_profile')
+        if f.parser_profile_id
+    }
+    if not profiles:
+        return []
+
+    claims = [c for c in (capabilities_for(p) for p in profiles) if c and c.metrics]
+    if not claims:
+        return []
+
+    return [m for m in absent if not any(c.supports(m) for c in claims)]
 
 
 def _nearest_index(offsets: list[int], target: int) -> int | None:

@@ -130,6 +130,9 @@
   font-size: 0.74rem; color: var(--ws-muted); line-height: 1.5;
 }
 .dt-ws-absent strong { color: var(--ws-ink); }
+/* A format limitation is a different fact from a quiet drive, so it is marked
+   differently rather than merged into the same grey note. */
+.dt-ws-unsupported { border-left: 3px solid var(--ws-border); }
 
 /* ── Detail ─────────────────────────────────────────────────────── */
 .dt-ws-detail { flex: 1; overflow-y: auto; padding: 10px 12px; }

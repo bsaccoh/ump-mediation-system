@@ -17,7 +17,7 @@ from datetime import datetime, timezone as dt_tz
 from pathlib import Path
 from typing import Generator
 
-from .base import DriveTestParser, ParsedMeasurement
+from .base import DriveTestParser, ParsedMeasurement, ParserCapabilities
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +123,54 @@ class CsvDriveTestParser(DriveTestParser):
 
     name = 'CSV Generic'
     file_extensions = ['.csv', '.txt']
+
+    #: Deliberately makes NO metric claim. This parser maps whatever columns a
+    #: file happens to have via _ALIASES, so what it can carry is a property of
+    #: the file, not of the format. An empty `metrics` set means "no claim",
+    #: which the UI reads as "cannot say" rather than "carries nothing" — the
+    #: honest answer for a generic tabular importer.
+    capabilities = ParserCapabilities(
+        metrics=frozenset(),
+        events=False,
+        voice_quality=True,   # 'mos' is an understood alias
+        throughput=True,      # 'dl_throughput' / 'ul_throughput' are understood
+    )
+
+    @classmethod
+    def sniff(cls, file_path: Path) -> float:
+        """Score on header content, not just extension.
+
+        .csv and .txt collide with several formats in this domain, so a generic
+        importer must not win on extension alone. Recognising known column
+        aliases in the header is what distinguishes a drive-test export from
+        any other delimited file, and keeps this below a container format that
+        can confirm its own structure.
+        """
+        if file_path.suffix.lower() not in cls.file_extensions:
+            return 0.0
+
+        try:
+            with open(file_path, 'rb') as fh:
+                head = fh.read(8192).decode('utf-8-sig', errors='replace')
+        except OSError:
+            return 0.0
+
+        line = head.splitlines()[0] if head.splitlines() else ''
+        if not line:
+            return 0.0
+
+        known = {alias for aliases in _ALIASES.values() for alias in aliases}
+        for delimiter in (',', ';', '\t'):
+            cells = [c.strip().strip('"').lower() for c in line.split(delimiter)]
+            if len(cells) < 2:
+                continue
+            matched = sum(1 for c in cells if c in known)
+            if matched >= 2:
+                # Scale with how much of the header we recognise, capped below
+                # a structural match so a real container format always wins.
+                return min(0.75, 0.35 + 0.05 * matched)
+
+        return 0.0
 
     def parse(self, file_path: Path) -> Generator[ParsedMeasurement, None, None]:
         encoding = self.config.get('encoding', 'utf-8-sig')

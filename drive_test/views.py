@@ -587,12 +587,14 @@ def _handle_upload(request):
         tmp_path = Path(tmp.name)
 
     try:
-        # Parser detection is authoritative (extension + magic bytes), never content_type.
+        # Parser detection is authoritative — each parser scores the file by
+        # content and the highest confidence wins. Never content_type.
         parser_profile = detect_parser(tmp_path)
         if parser_profile is None:
+            from .services.file_handler import explain_detection_failure
             return _upload_error(
                 request, wants_json, 'unsupported_format',
-                'The file was received, but no supported parser could be identified.', 422)
+                explain_detection_failure(tmp_path), 422)
 
         sha256 = sha256_of_file(tmp_path)
         if check_duplicate(sha256):

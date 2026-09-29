@@ -101,9 +101,14 @@
       return (state.data && state.data.meta.available_metrics) || [];
     },
 
-    /** Metrics the source could not supply — rendered as unavailable, not zero. */
+    /** Metrics with no values in this session — rendered as absent, not zero. */
     absentMetrics: function () {
       return (state.data && state.data.meta.absent_metrics) || [];
+    },
+
+    /** Metrics the source FORMAT cannot carry at all, a subset of absent. */
+    unsupportedMetrics: function () {
+      return (state.data && state.data.meta.unsupported_metrics) || [];
     }
   };
 

@@ -178,14 +178,27 @@
       if (available.indexOf(metric) !== -1) buildChart(metric);
     });
 
-    var absent = WS.absentMetrics();
+    // Two different facts, reported separately. "This drive recorded none" is
+    // about the drive; "this format cannot carry it" is about the file. Merging
+    // them would tell the reader nothing about which they are looking at.
+    var unsupported = WS.unsupportedMetrics();
+    var absent = WS.absentMetrics().filter(function (m) {
+      return unsupported.indexOf(m) === -1;
+    });
+    var label = function (m) { return DT.metric(m).label; };
+
     if (absent.length) {
       var note = DT.el('div', 'dt-ws-absent');
-      note.appendChild(DT.el('strong', null, 'Not available in source data: '));
-      note.appendChild(DT.el('span', null, absent.map(function (m) {
-        return DT.metric(m).label;
-      }).join(', ')));
+      note.appendChild(DT.el('strong', null, 'No values recorded: '));
+      note.appendChild(DT.el('span', null, absent.map(label).join(', ')));
       host.appendChild(note);
+    }
+
+    if (unsupported.length) {
+      var unsupportedNote = DT.el('div', 'dt-ws-absent dt-ws-unsupported');
+      unsupportedNote.appendChild(DT.el('strong', null, 'Not carried by this format: '));
+      unsupportedNote.appendChild(DT.el('span', null, unsupported.map(label).join(', ')));
+      host.appendChild(unsupportedNote);
     }
   }
 

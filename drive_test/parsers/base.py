@@ -84,15 +84,26 @@ class ParsedEvent:
     payload: dict = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(frozen=True)
 class ParserCapabilities:
     """
-    What a parser can extract from its format.
+    What a format can carry, as opposed to what one file happened to contain.
 
-    Lets the UI distinguish *this source cannot carry that* from *this run
-    found none of it*, instead of rendering an empty panel that looks broken.
+    This is the difference between two facts the UI must never conflate:
+
+        "this session recorded no RSRP"      — the drive produced none
+        "this format cannot carry RSRP"      — it never could
+
+    Showing an empty RSRP chart for a GSM-only log looks like a fault. Saying
+    the source does not carry it is the truth, and it is the same
+    absent-is-not-zero discipline applied one level up, to the format itself.
+
+    `metrics` names the metric keys (as used by services.timeseries) that the
+    format is able to produce. An empty set means "unknown", which is treated as
+    no claim rather than as a claim of nothing.
     """
 
+    metrics: frozenset[str] = frozenset()
     neighbours: bool = False
     events: bool = False
     carriers: bool = False
@@ -100,6 +111,10 @@ class ParserCapabilities:
     layer3: bool = False
     voice_quality: bool = False
     throughput: bool = False
+
+    def supports(self, metric: str) -> bool:
+        """True when the format can carry `metric`, or makes no claim either way."""
+        return not self.metrics or metric in self.metrics
 
 
 @dataclass
@@ -221,14 +236,34 @@ class DriveTestParser:
     @classmethod
     def can_parse(cls, file_path: Path) -> bool:
         """Quick detection check — extension + optional magic bytes."""
+        return cls.sniff(file_path) > 0.0
+
+    @classmethod
+    def sniff(cls, file_path: Path) -> float:
+        """Confidence from 0.0 (cannot parse) to 1.0 (certain), for the registry.
+
+        Resolution picks the HIGHEST confidence above a threshold rather than
+        the first extension match, so a format whose extension collides with
+        another (.txt, .log and .csv all overlap in this domain) is decided on
+        content rather than on whichever profile happened to be created first.
+
+        The default scores extension and magic bytes. Subclasses override to
+        inspect structure — a container format can confirm its own members.
+
+        Never raises: an unreadable file is simply not a match.
+        """
         if cls.file_extensions:
             if file_path.suffix.lower() not in [e.lower() for e in cls.file_extensions]:
-                return False
-        if cls.magic_bytes:
-            try:
-                with open(file_path, 'rb') as fh:
-                    header = fh.read(len(cls.magic_bytes) // 2).hex()
-                return header.startswith(cls.magic_bytes.lower())
-            except OSError:
-                return False
-        return True
+                return 0.0
+
+        if not cls.magic_bytes:
+            # Extension alone is weak evidence; content checks should beat it.
+            return 0.5
+
+        try:
+            with open(file_path, 'rb') as fh:
+                header = fh.read(max(4, len(cls.magic_bytes) // 2)).hex()
+        except OSError:
+            return 0.0
+
+        return 0.9 if header.startswith(cls.magic_bytes.lower()) else 0.0

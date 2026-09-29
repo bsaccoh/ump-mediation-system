@@ -31,7 +31,7 @@ from datetime import datetime, timedelta, timezone as dt_tz
 from pathlib import Path
 from typing import Generator
 
-from .base import DriveTestParser, ParsedMeasurement
+from .base import DriveTestParser, ParsedMeasurement, ParserCapabilities
 
 logger = logging.getLogger(__name__)
 
@@ -980,6 +980,49 @@ class TrpDriveTestParser(DriveTestParser):
     name = 'TEMS Pocket TRP'
     file_extensions = ['.trp']
     magic_bytes = '504b'  # ZIP "PK" header
+
+    #: What this format carries, from what the parser actually extracts below —
+    #: not from what TEMS Pocket is capable of in general. Everything absent
+    #: here is reported to the UI as unsupported rather than as missing, so a
+    #: GSM log does not show an empty RSRP chart that looks like a fault.
+    capabilities = ParserCapabilities(
+        metrics=frozenset({
+            'rssi', 'rxqual',           # GSM serving cell
+            'speed', 'heading', 'altitude',
+        }),
+        neighbours=False,               # no neighbour list in the TRP export
+        carriers=False,
+        beams=False,
+        layer3=False,
+        events=True,                    # call / MOS events from services.xml
+        voice_quality=True,             # MOS
+        throughput=False,
+    )
+
+    @classmethod
+    def sniff(cls, file_path: Path) -> float:
+        """Confirm this is a TEMS archive by looking inside it.
+
+        A .trp is a ZIP, and so is a .zip, a .docx and an .apk. Checking for the
+        members the parser actually reads is the difference between "looks like
+        a TRP" and "is a TRP", and it lets this beat a generic extension match.
+        """
+        base = super().sniff(file_path)
+        if base <= 0.0:
+            return 0.0
+
+        try:
+            with zipfile.ZipFile(file_path, 'r') as zf:
+                names = {n.lower() for n in zf.namelist()}
+        except (zipfile.BadZipFile, OSError):
+            return 0.0
+
+        # The members _parse_zip depends on.
+        markers = ('wptrack.xml', 'data.cdf', 'content.xml', 'services.xml')
+        hits = sum(1 for m in markers if any(m in n for n in names))
+        if hits == 0:
+            return 0.0
+        return min(1.0, 0.7 + 0.1 * hits)
 
     def parse(self, file_path: Path) -> Generator[ParsedMeasurement, None, None]:
         try:

@@ -51,11 +51,34 @@ class UploadEndpointTest(TestCase):
         r = self._post('x.exe', b'MZ....')
         self.assertEqual(r.status_code, 422)
         self.assertEqual(r.json()['code'], 'unsupported_format')
+        # An unknown extension should say the format is unsupported, and list
+        # what is supported, rather than implying the file is damaged.
+        self.assertIn('.exe', r.json()['message'])
         self.assertEqual(DriveTestSession.objects.count(), 0)
 
-    def test_fake_trp_fails_validation_without_session(self):
+    def test_corrupt_trp_rejected_at_detection(self):
+        """A file with the right extension and magic bytes but wrong contents.
+
+        Detection used to accept this on extension + magic alone and only fail
+        later, during parsing, as 'validation_failed'. Parsers now confirm
+        structure — the TRP parser opens the archive and looks for the members
+        it reads — so a corrupt file is refused at the door instead of being
+        admitted and failing downstream.
+
+        The message must distinguish 'damaged file' from 'unsupported format',
+        because sending someone to convert a file that is merely truncated
+        wastes their time.
+        """
         r = self._post('fake.trp', b'PK not really a zip')
-        self.assertEqual(r.json()['code'], 'validation_failed')
+        self.assertEqual(r.status_code, 422)
+        self.assertEqual(r.json()['code'], 'unsupported_format')
+
+        message = r.json()['message'].lower()
+        self.assertIn('.trp', message)
+        self.assertTrue(
+            'corrupt' in message or 'truncated' in message,
+            f'message should say the file looks damaged, got: {message!r}',
+        )
         self.assertEqual(DriveTestSession.objects.count(), 0)
 
     def test_no_file(self):
