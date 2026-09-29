@@ -41,3 +41,18 @@ CDR_PERSIST_RECORDS = True
 
 # Faster password hashing in tests
 PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
+
+# Plain static storage in tests.
+#
+# Production uses WhiteNoise's CompressedManifestStaticFilesStorage, which
+# resolves every {% static %} tag through a manifest built by collectstatic.
+# In tests that manifest is either absent or stale, so rendering any template
+# that references a newly added asset raises
+# "Missing staticfiles manifest entry". Tests should exercise templates, not a
+# build artefact.
+STORAGES = {
+    **STORAGES,  # noqa: F405  (from `from .settings import *`)
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+    },
+}

@@ -720,6 +720,64 @@ def session_upload_status(request, file_id):
 # ---------------------------------------------------------------------------
 
 @login_required
+def session_workspace(request, session_ref):
+    """The synchronised analysis workspace: map, charts, events and detail.
+
+    Ships only the session shell; the panes fetch their data from
+    session_timeseries so the page renders before the series arrives.
+    """
+    from .services.timeseries import ALL_METRICS
+
+    session = get_object_or_404(
+        DriveTestSession.objects.select_related('operator', 'region'),
+        session_ref=session_ref,
+    )
+    return render(request, 'drive_test/session_workspace.html', {
+        'session': session,
+        'page_title': f'Workspace · {session.session_ref}',
+        'config': {
+            'sessionRef': session.session_ref,
+            'timeseriesUrl': reverse('drive_test:session_timeseries',
+                                     args=[session.session_ref]),
+            'detailUrlBase': '/drive-test/measurements/',
+            'tileUrl': getattr(settings, 'DRIVE_TEST_MAP_TILE_URL', ''),
+            'tileAttribution': getattr(settings, 'DRIVE_TEST_MAP_ATTRIBUTION', ''),
+            'metrics': ALL_METRICS,
+        },
+    })
+
+
+@login_required
+def session_timeseries(request, session_ref):
+    """Column-oriented, server-decimated time series for the analysis workspace.
+
+    Query params:
+        metrics=rsrp,sinr   restrict the returned series (default: all available)
+        primary=rsrp        the metric decimation preserves the extremes of
+        max_points=4000     cap on returned samples
+    """
+    from .services.timeseries import DEFAULT_MAX_POINTS, session_timeseries as build
+
+    session = get_object_or_404(DriveTestSession, session_ref=session_ref)
+
+    raw_metrics = (request.GET.get('metrics') or '').strip()
+    metrics = [m.strip() for m in raw_metrics.split(',') if m.strip()] or None
+
+    try:
+        max_points = int(request.GET.get('max_points') or DEFAULT_MAX_POINTS)
+    except (TypeError, ValueError):
+        max_points = DEFAULT_MAX_POINTS
+    max_points = max(100, min(max_points, 50000))
+
+    return JsonResponse(build(
+        session,
+        metrics=metrics,
+        primary=(request.GET.get('primary') or 'rsrp').strip(),
+        max_points=max_points,
+    ))
+
+
+@login_required
 def session_kpis(request, session_ref):
     """Return computed KPIs for a session as JSON."""
     from .services.kpi import DriveTestKpiService
