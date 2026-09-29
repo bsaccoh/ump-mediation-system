@@ -6,7 +6,7 @@
     "call_setup_time_ms": 501,
     "cqi": 501,
     "dl_throughput_kbps": 501,
-    "ecio": 18,
+    "ecio": 501,
     "gps_accuracy_m": 501,
     "gps_hdop": 501,
     "heading_deg": 501,
@@ -28,7 +28,7 @@
     "rsrp": 501,
     "rsrq": 501,
     "rssi": 2,
-    "rxqual": 501,
+    "rxqual": 18,
     "service_outcome": 55,
     "service_type": 55,
     "sinr": 501,
@@ -56,7 +56,7 @@
     "call_setup_time_ms": 0,
     "cqi": 0,
     "dl_throughput_kbps": 0,
-    "ecio": 483,
+    "ecio": 0,
     "gps_accuracy_m": 0,
     "gps_hdop": 0,
     "heading_deg": 0,
@@ -78,7 +78,7 @@
     "rsrp": 0,
     "rsrq": 0,
     "rssi": 499,
-    "rxqual": 0,
+    "rxqual": 483,
     "service_outcome": 446,
     "service_type": 446,
     "sinr": 0,
@@ -97,5 +97,5 @@
     "events": 0,
     "neighbours": 0
   },
-  "stream_sha256": "b60f4dc63f26b054c59f7f3a39acc016d8332df083d16c6e089aaf8a95ced30b"
+  "stream_sha256": "e8d1cc14f270cc9347bd09d140f1b93a892eae9a6d08001caacea0285b0d35c0"
 }

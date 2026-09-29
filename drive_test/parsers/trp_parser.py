@@ -81,7 +81,7 @@ _PID_MNO       = 3357      # Radio.Common.SimOperator (string "mcc-mnc")
 _PARAM_FIELD: dict[int, tuple[str | None, str]] = {
     _PID_RSSI_FULL: ('rssi',      'float'),
     _PID_RSSI_SUB:  ('rssi',      'float'),
-    _PID_RXQUAL:    ('ecio',      'float'),   # stored in ecio; RxQual 0-7
+    _PID_RXQUAL:    ('rxqual',    'int'),     # GSM RxQual, 0-7, LOWER is better
     _PID_ARFCN:     ('obs_earfcn','int'),
     _PID_CUR_ARFCN: ('obs_earfcn','int'),
     _PID_LAC:       ('obs_lac',   'int'),
@@ -1159,7 +1159,7 @@ class TrpDriveTestParser(DriveTestParser):
                 call_dur_s  = int(d) if d is not None else None
 
             rssi  = _to_float(radio_params.get('rssi'))
-            ecio  = _to_float(radio_params.get('ecio'))
+            rxq   = _to_int(radio_params.get('rxqual'))
             spd   = _to_float(radio_params.get('speed_kmh'))
             arfcn = _to_int(radio_params.get('obs_earfcn'))
             lac   = _to_int(radio_params.get('obs_lac'))
@@ -1169,6 +1169,10 @@ class TrpDriveTestParser(DriveTestParser):
             # RSSI sanity: GSM RssiFull is typically -110..-47 dBm
             if rssi is not None and not (-130.0 <= rssi <= -30.0):
                 rssi = None
+
+            # RxQual is a 0-7 band (3GPP TS 45.008). Anything else is not RxQual.
+            if rxq is not None and not (0 <= rxq <= 7):
+                rxq = None
 
             raw: dict = {}
             for rk in ('gsm_bsic', 'gsm_ta', 'gsm_txpower'):
@@ -1195,7 +1199,7 @@ class TrpDriveTestParser(DriveTestParser):
                 obs_earfcn=arfcn,
                 technology=tech,
                 rssi=rssi,
-                ecio=ecio,
+                rxqual=rxq,
                 service_type=svc_type,
                 service_outcome=svc_outcome,
                 call_duration_s=call_dur_s,

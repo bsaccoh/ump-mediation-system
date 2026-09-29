@@ -37,7 +37,8 @@ _RADIO_FIELDS = [
 #: Numeric columns summarised as min/max/mean.
 _RADIO_NUMERIC = [
     'rssi', 'rscp', 'ecio', 'rsrp', 'rsrq', 'sinr', 'cqi',
-    'ss_rsrp', 'ss_rsrq', 'ss_sinr', 'dl_throughput_kbps', 'ul_throughput_kbps',
+    'ss_rsrp', 'ss_rsrq', 'ss_sinr', 'rxqual', 'c_over_i',
+    'dl_throughput_kbps', 'ul_throughput_kbps',
 ]
 
 
