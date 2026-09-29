@@ -20,9 +20,12 @@ urlpatterns = [
     path('campaigns/<int:pk>/edit/', views.campaign_edit, name='campaign_edit'),
     path('campaigns/<int:campaign_pk>/upload/', views.file_upload, name='file_upload'),
     path('campaigns/<int:pk>/analysis/', views.map_analysis, name='map_analysis'),
+    path('campaigns/<int:pk>/analytics/', views.campaign_analytics, name='campaign_analytics'),
+    path('campaigns/<int:pk>/analytics/<str:section>/', views.campaign_analytics, name='campaign_analytics_section'),
 
     # Map Analysis chooser + JSON APIs
     path('map/', views.map_index, name='map_index'),
+    path('analytics/<str:section>/', views.analytics_index, name='analytics_index'),
     path('api/', include('drive_test.api.urls')),
 
     # Files

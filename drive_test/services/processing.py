@@ -132,6 +132,14 @@ def process_file(file_id: int) -> dict:
             dtf.error_message = 'No samples could be parsed from this file.'
         dtf.save()
 
+    # Refresh campaign-scope KPI roll-ups so analytics pages stay fast.
+    if total:
+        try:
+            from drive_test.services.analytics import store_campaign_rollups
+            store_campaign_rollups(campaign)
+        except Exception:  # pragma: no cover - roll-ups must not fail an ingest
+            logger.exception('Roll-up computation failed for campaign %s', campaign.pk)
+
     logger.info('Processed file %s: %d samples, quality=%s', file_id, total, score)
     return {
         'message': f'Ingested {total} samples',
