@@ -74,32 +74,65 @@
     return (h > 0 ? h + ':' : '') + pad(m) + ':' + pad(s);
   };
 
-  /* ── Technology ──────────────────────────────────────────────────── */
+  /* ── Palette, read from the CSS tokens ─────────────────────────────
+   * Colour is DEFINED ONCE, in design-system.css, and read here. Charts and
+   * Leaflet need real values rather than custom properties, so without this
+   * bridge the palette would have to exist twice and drift — which is how
+   * three different 4G colours ended up in the older scripts.
+   *
+   * Reading the tokens also means a theme change needs no JS change: swap the
+   * tokens and call DT.refreshPalette().
+   * ----------------------------------------------------------------- */
 
-  DT.TECH = {
-    1: { label: '2G', colour: '#7c3aed' },
-    2: { label: '3G', colour: '#0891b2' },
-    3: { label: '4G', colour: '#2563eb' },
-    4: { label: '5G', colour: '#d97706' },
-    0: { label: DT.DASH, colour: '#94a3b8' }
+  function token(name, fallback) {
+    try {
+      var value = getComputedStyle(document.documentElement)
+        .getPropertyValue(name).trim();
+      return value || fallback;
+    } catch (err) {
+      return fallback;
+    }
+  }
+
+  DT.TECH = {};
+  DT.SEVERITY = {};
+  var SIGNAL_RAMP = [];
+
+  DT.refreshPalette = function () {
+    DT.TECH = {
+      0: { label: DT.DASH, colour: token('--dt-neutral', '#94a3b8') },
+      1: { label: '2G', colour: token('--dt-tech-2g', '#7c3aed') },
+      2: { label: '3G', colour: token('--dt-tech-3g', '#0891b2') },
+      3: { label: '4G', colour: token('--dt-tech-4g', '#2563eb') },
+      4: { label: '5G', colour: token('--dt-tech-5g', '#d97706') }
+    };
+
+    DT.SEVERITY = {
+      CRITICAL: token('--dt-sev-critical', '#b91c1c'),
+      HIGH:     token('--dt-sev-high', '#c2410c'),
+      MEDIUM:   token('--dt-sev-medium', '#a16207'),
+      LOW:      token('--dt-sev-low', '#1d4ed8'),
+      INFO:     token('--dt-sev-info', '#64748b')
+    };
+
+    SIGNAL_RAMP = [
+      token('--dt-signal-1', '#dc2626'),
+      token('--dt-signal-2', '#ea580c'),
+      token('--dt-signal-3', '#eab308'),
+      token('--dt-signal-4', '#16a34a'),
+      token('--dt-signal-5', '#1d4ed8')
+    ];
+
+    // Metric specs hold a ramp reference; repoint them at the new values.
+    Object.keys(DT.METRICS || {}).forEach(function (key) {
+      var spec = DT.METRICS[key];
+      spec.ramp = spec.reversed ? SIGNAL_RAMP.slice().reverse() : SIGNAL_RAMP;
+    });
   };
 
   DT.techLabel = function (code) { return (DT.TECH[code] || DT.TECH[0]).label; };
   DT.techColour = function (code) { return (DT.TECH[code] || DT.TECH[0]).colour; };
-
-  /* ── Severity ────────────────────────────────────────────────────── */
-
-  DT.SEVERITY = {
-    CRITICAL: '#b91c1c',
-    HIGH: '#c2410c',
-    MEDIUM: '#a16207',
-    LOW: '#1d4ed8',
-    INFO: '#64748b'
-  };
-
-  DT.severityColour = function (name) {
-    return DT.SEVERITY[name] || DT.SEVERITY.INFO;
-  };
+  DT.severityColour = function (name) { return DT.SEVERITY[name] || DT.SEVERITY.INFO; };
 
   /* ── Metric scales ───────────────────────────────────────────────────
    * Bin edges are ordered worst → best, matching the drive-test convention.
@@ -107,30 +140,35 @@
    * way in the chart, the map popup and the detail pane.
    * ------------------------------------------------------------------ */
 
-  var SIGNAL_RAMP = ['#dc2626', '#ea580c', '#eab308', '#16a34a', '#1d4ed8'];
-
+  /* `reversed: true` means LOWER is better, so the ramp is flipped. RxQual is
+     the case that matters: 0 is perfect and 7 is unusable, the opposite of
+     every other quality metric here. Getting this wrong makes unusable 2G
+     coverage render as excellent. */
   DT.METRICS = {
-    rsrp:     { label: 'RSRP',       unit: 'dBm',  digits: 1, bins: [-110, -100, -90, -80], ramp: SIGNAL_RAMP },
-    rsrq:     { label: 'RSRQ',       unit: 'dB',   digits: 1, bins: [-20, -15, -12, -9],    ramp: SIGNAL_RAMP },
-    sinr:     { label: 'SINR',       unit: 'dB',   digits: 1, bins: [0, 5, 13, 20],         ramp: SIGNAL_RAMP },
-    rssi:     { label: 'RSSI',       unit: 'dBm',  digits: 1, bins: [-95, -85, -75, -65],   ramp: SIGNAL_RAMP },
-    rscp:     { label: 'RSCP',       unit: 'dBm',  digits: 1, bins: [-100, -90, -85, -75],  ramp: SIGNAL_RAMP },
-    ecio:     { label: 'Ec/Io',      unit: 'dB',   digits: 1, bins: [-16, -12, -9, -6],     ramp: SIGNAL_RAMP },
-    cqi:      { label: 'CQI',        unit: '',     digits: 0, bins: [3, 6, 9, 12],          ramp: SIGNAL_RAMP },
-    ss_rsrp:  { label: 'SS-RSRP',    unit: 'dBm',  digits: 1, bins: [-110, -100, -90, -80], ramp: SIGNAL_RAMP },
-    ss_rsrq:  { label: 'SS-RSRQ',    unit: 'dB',   digits: 1, bins: [-20, -15, -12, -9],    ramp: SIGNAL_RAMP },
-    ss_sinr:  { label: 'SS-SINR',    unit: 'dB',   digits: 1, bins: [0, 5, 13, 20],         ramp: SIGNAL_RAMP },
-    rxqual:   { label: 'RxQual',     unit: '',     digits: 0, bins: [1, 3, 5, 6],           ramp: SIGNAL_RAMP.slice().reverse() },
-    c_over_i: { label: 'C/I',        unit: 'dB',   digits: 1, bins: [3, 6, 9, 12],          ramp: SIGNAL_RAMP },
-    dl_kbps:  { label: 'DL',         unit: 'kbps', digits: 0, bins: [128, 1024, 5120, 20480], ramp: SIGNAL_RAMP },
-    ul_kbps:  { label: 'UL',         unit: 'kbps', digits: 0, bins: [64, 512, 2048, 10240],   ramp: SIGNAL_RAMP },
-    speed:    { label: 'Speed',      unit: 'km/h', digits: 1, bins: [5, 20, 50, 80],        ramp: SIGNAL_RAMP },
-    heading:  { label: 'Heading',    unit: '°', digits: 0, bins: [90, 180, 270, 360],  ramp: SIGNAL_RAMP },
-    altitude: { label: 'Altitude',   unit: 'm',    digits: 0, bins: [50, 150, 300, 600],    ramp: SIGNAL_RAMP }
+    rsrp:     { label: 'RSRP',     unit: 'dBm',    digits: 1, bins: [-110, -100, -90, -80] },
+    rsrq:     { label: 'RSRQ',     unit: 'dB',     digits: 1, bins: [-20, -15, -12, -9] },
+    sinr:     { label: 'SINR',     unit: 'dB',     digits: 1, bins: [0, 5, 13, 20] },
+    rssi:     { label: 'RSSI',     unit: 'dBm',    digits: 1, bins: [-95, -85, -75, -65] },
+    rscp:     { label: 'RSCP',     unit: 'dBm',    digits: 1, bins: [-100, -90, -85, -75] },
+    ecio:     { label: 'Ec/Io',    unit: 'dB',     digits: 1, bins: [-16, -12, -9, -6] },
+    cqi:      { label: 'CQI',      unit: '',       digits: 0, bins: [3, 6, 9, 12] },
+    ss_rsrp:  { label: 'SS-RSRP',  unit: 'dBm',    digits: 1, bins: [-110, -100, -90, -80] },
+    ss_rsrq:  { label: 'SS-RSRQ',  unit: 'dB',     digits: 1, bins: [-20, -15, -12, -9] },
+    ss_sinr:  { label: 'SS-SINR',  unit: 'dB',     digits: 1, bins: [0, 5, 13, 20] },
+    rxqual:   { label: 'RxQual',   unit: '',       digits: 0, bins: [1, 3, 5, 6], reversed: true },
+    c_over_i: { label: 'C/I',      unit: 'dB',     digits: 1, bins: [3, 6, 9, 12] },
+    dl_kbps:  { label: 'DL',       unit: 'kbps',   digits: 0, bins: [128, 1024, 5120, 20480] },
+    ul_kbps:  { label: 'UL',       unit: 'kbps',   digits: 0, bins: [64, 512, 2048, 10240] },
+    speed:    { label: 'Speed',    unit: 'km/h',   digits: 1, bins: [5, 20, 50, 80] },
+    heading:  { label: 'Heading',  unit: '°', digits: 0, bins: [90, 180, 270, 360] },
+    altitude: { label: 'Altitude', unit: 'm',      digits: 0, bins: [50, 150, 300, 600] }
   };
 
+  DT.refreshPalette();
+
   DT.metric = function (key) {
-    return DT.METRICS[key] || { label: key, unit: '', digits: 2, bins: [], ramp: SIGNAL_RAMP };
+    return DT.METRICS[key] ||
+      { label: key, unit: '', digits: 2, bins: [], ramp: SIGNAL_RAMP };
   };
 
   DT.metricColour = function (key, value) {
