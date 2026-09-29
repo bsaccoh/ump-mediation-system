@@ -11,3 +11,21 @@ from core.tasks import tracked_task
 def process_drive_test_file(file_id: int):
     from drive_test.services.processing import process_file
     return process_file(file_id)
+
+
+@tracked_task('drive_test.detect_events')
+def detect_events_and_areas(campaign_id: int):
+    """Run the event engine then cluster the results into problem areas."""
+    from drive_test.models import Campaign
+    from drive_test.services.events import detect_events
+    from drive_test.services.problem_areas import cluster_problem_areas
+
+    campaign = Campaign.objects.get(pk=campaign_id)
+    events = detect_events(campaign)
+    areas = cluster_problem_areas(campaign)
+    return {
+        'message': f'Detected {events} events, {areas} problem areas',
+        'events': events, 'problem_areas': areas,
+        'result_entity_type': 'Campaign', 'result_entity_id': str(campaign_id),
+        'result_url': f'/drive-test/campaigns/{campaign_id}/events/',
+    }

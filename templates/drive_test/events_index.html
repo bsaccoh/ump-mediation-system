@@ -1,0 +1,29 @@
+{% extends "drive_test/_base.html" %}
+{% load humanize %}
+{% block title %}Events | Drive Test{% endblock %}
+{% block page_title %}Events{% endblock %}
+{% block dt_content %}
+<div class="dt-page-head">
+  <div class="dt-crumb"><a href="{% url 'drive_test:dashboard' %}">Drive Test Intelligence</a> / Events</div>
+  <h1>Events</h1>
+  <div class="dt-sub">Campaigns with detected network events.</div>
+</div>
+{% if campaigns %}
+<div class="dt-table-wrap"><table class="dt-table">
+  <thead><tr><th>Campaign</th><th>Project</th><th class="num">Events</th><th></th></tr></thead>
+  <tbody>
+    {% for c in campaigns %}
+      <tr><td>{{ c.name }}</td><td>{{ c.project.name }}</td><td class="num">{{ c.event_count|intcomma }}</td>
+        <td><a class="dt-btn dt-btn-primary" style="padding:2px 10px;" href="{% url 'drive_test:event_list' c.pk %}">Open</a></td></tr>
+    {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<div class="dt-card"><div class="dt-empty">
+  <div class="dt-empty-icon"><i class="bi bi-exclamation-triangle"></i></div>
+  <h3>No events detected yet</h3>
+  <p>Process a campaign's logs, then run event detection from the campaign page.</p>
+  <a class="dt-btn dt-btn-primary" href="{% url 'drive_test:campaign_list' %}">Go to Campaigns</a>
+</div></div>
+{% endif %}
+{% endblock %}

@@ -22,9 +22,18 @@ urlpatterns = [
     path('campaigns/<int:pk>/analysis/', views.map_analysis, name='map_analysis'),
     path('campaigns/<int:pk>/analytics/', views.campaign_analytics, name='campaign_analytics'),
     path('campaigns/<int:pk>/analytics/<str:section>/', views.campaign_analytics, name='campaign_analytics_section'),
+    path('campaigns/<int:pk>/events/', views.event_list, name='event_list'),
+    path('campaigns/<int:pk>/events/detect/', views.campaign_detect, name='campaign_detect'),
+    path('campaigns/<int:pk>/problem-areas/', views.problem_area_list, name='problem_area_list'),
 
-    # Map Analysis chooser + JSON APIs
+    # Events
+    path('events/<int:pk>/', views.event_detail, name='event_detail'),
+    path('events/<int:pk>/status/', views.event_set_status, name='event_set_status'),
+
+    # Choosers + comparison + JSON APIs
     path('map/', views.map_index, name='map_index'),
+    path('events/', views.events_index, name='events_index'),
+    path('comparison/', views.comparison_view, name='comparison'),
     path('analytics/<str:section>/', views.analytics_index, name='analytics_index'),
     path('api/', include('drive_test.api.urls')),
 

@@ -1,0 +1,102 @@
+{% extends "drive_test/_base.html" %}
+{% load static humanize %}
+
+{% block title %}Events | {{ campaign.name }}{% endblock %}
+{% block page_title %}Events{% endblock %}
+
+{% block dt_extra_css %}
+<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.min.css' %}">
+<style>#dt-ev-map{height:320px;border-radius:var(--dt-radius);border:1px solid var(--dt-border);}</style>
+{% endblock %}
+
+{% block dt_content %}
+<div class="dt-page-head d-flex justify-content-between align-items-start flex-wrap gap-2">
+  <div>
+    <div class="dt-crumb">
+      <a href="{% url 'drive_test:dashboard' %}">Drive Test</a> /
+      <a href="{% url 'drive_test:campaign_detail' campaign.pk %}">{{ campaign.name }}</a> / Events
+    </div>
+    <h1>Events <span class="dt-sub">{{ total|intcomma }} detected</span></h1>
+  </div>
+  <div class="dt-actions">
+    <a class="dt-btn dt-btn-ghost" href="{% url 'drive_test:problem_area_list' campaign.pk %}"><i class="bi bi-diagram-3"></i> Problem Areas</a>
+    <form method="post" action="{% url 'drive_test:campaign_detect' campaign.pk %}" style="display:inline;">
+      {% csrf_token %}<button class="dt-btn dt-btn-primary"><i class="bi bi-search"></i> Re-run detection</button>
+    </form>
+  </div>
+</div>
+
+<div class="dt-card mb-3"><div class="dt-card-body" style="padding:0;"><div id="dt-ev-map"></div></div></div>
+
+<form method="get" class="dt-filter-bar">
+  <div class="dt-field"><label>Type</label>
+    <select name="type" onchange="this.form.submit()">
+      <option value="">All</option>
+      {% for t in types %}<option value="{{ t }}" {% if t == filters.type %}selected{% endif %}>{{ t }}</option>{% endfor %}
+    </select></div>
+  <div class="dt-field"><label>Severity</label>
+    <select name="severity" onchange="this.form.submit()">
+      <option value="">All</option>
+      {% for v, lbl in severities %}<option value="{{ v }}" {% if v == filters.severity %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
+    </select></div>
+  <div class="dt-field"><label>Status</label>
+    <select name="status" onchange="this.form.submit()">
+      <option value="">All</option>
+      {% for v, lbl in statuses %}<option value="{{ v }}" {% if v == filters.status %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
+    </select></div>
+</form>
+
+{% if events %}
+<div class="dt-table-wrap"><table class="dt-table">
+  <thead><tr><th>Type</th><th>Severity</th><th>Technology</th><th class="num">Measured</th>
+    <th>Time</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+    {% for e in events %}
+      <tr>
+        <td>{{ e.event_type }}</td>
+        <td><span class="dt-sev {{ e.severity|lower }}">{{ e.get_severity_display }}</span></td>
+        <td>{{ e.technology|default:'—' }}</td>
+        <td class="num">{% if e.measured_value is None %}<span class="dt-na">—</span>{% else %}{{ e.measured_value }}{% endif %}</td>
+        <td>{{ e.timestamp|date:'Y-m-d H:i:s'|default:'—' }}</td>
+        <td><span class="dt-badge status-{% if e.status == 'RESOLVED' %}completed{% elif e.status == 'DISMISSED' %}archived{% elif e.status == 'ACKNOWLEDGED' %}processing{% else %}failed{% endif %}">{{ e.get_status_display }}</span></td>
+        <td><a href="{% url 'drive_test:event_detail' e.pk %}">Detail</a></td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<div class="dt-card"><div class="dt-empty">
+  <div class="dt-empty-icon"><i class="bi bi-shield-check"></i></div>
+  <h3>No events match</h3>
+  <p>{% if total %}No events match the current filters.{% else %}No events detected for this campaign. Run detection to scan for network problems.{% endif %}</p>
+</div></div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script src="{% static 'vendor/leaflet/leaflet.min.js' %}"></script>
+<script>
+(function(){
+  if (typeof L === 'undefined') return;
+  function tok(n){var v=getComputedStyle(document.documentElement).getPropertyValue(n);return (v&&v.trim())||'#888';}
+  var COL={critical:tok('--dt-signal-critical'),poor:tok('--dt-signal-poor'),fair:tok('--dt-signal-fair'),good:tok('--dt-signal-good'),none:tok('--dt-signal-none')};
+  var map=L.map('dt-ev-map',{preferCanvas:true}).setView([8.484,-13.23],12);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:19,attribution:'&copy; OpenStreetMap &copy; CARTO'}).addTo(map);
+  fetch("{% url 'drive_test:drive_test_api:campaign_events' campaign.pk %}").then(function(r){return r.json();}).then(function(d){
+    var pts=[];
+    (d.events||[]).forEach(function(e){
+      if(e.lat==null)return;
+      L.circleMarker([e.lat,e.lon],{radius:4,weight:0,fillColor:COL[e.color]||COL.none,fillOpacity:0.85})
+        .bindTooltip(e.type+' ('+e.severity+')').addTo(map); pts.push([e.lat,e.lon]);
+    });
+    (d.problem_areas||[]).forEach(function(a){
+      if(a.lat==null)return;
+      L.circle([a.lat,a.lon],{radius:150,color:COL[a.color]||COL.none,weight:2,fillOpacity:0.1})
+        .bindTooltip(a.type+' — '+a.count+' events').addTo(map); pts.push([a.lat,a.lon]);
+    });
+    if(pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.15));
+  });
+})();
+</script>
+{% endblock %}

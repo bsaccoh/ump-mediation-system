@@ -1,0 +1,50 @@
+{% extends "drive_test/_base.html" %}
+{% block title %}Event #{{ event.pk }} | Drive Test{% endblock %}
+{% block page_title %}Event #{{ event.pk }}{% endblock %}
+{% block dt_content %}
+<div class="dt-page-head">
+  <div class="dt-crumb">
+    <a href="{% url 'drive_test:dashboard' %}">Drive Test</a> /
+    <a href="{% url 'drive_test:event_list' event.campaign.pk %}">{{ event.campaign.name }} Events</a> / #{{ event.pk }}
+  </div>
+  <h1>{{ event.event_type }} <span class="dt-sev {{ event.severity|lower }}">{{ event.get_severity_display }}</span></h1>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-7">
+    <div class="dt-card"><div class="dt-card-head"><h2>Details</h2></div>
+      <div class="dt-card-body">
+        <div class="dt-kv" style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;">
+          <span>Type</span><strong>{{ event.event_type }}</strong>
+          <span>Severity</span><strong>{{ event.get_severity_display }}</strong>
+          <span>Technology</span><strong>{{ event.technology|default:'—' }}</strong>
+          <span>KPI</span><strong>{{ event.kpi|default:'—' }}</strong>
+          <span>Measured value</span><strong>{% if event.measured_value is None %}—{% else %}{{ event.measured_value }}{% endif %}</strong>
+          <span>Threshold</span><strong>{% if event.threshold_value is None %}—{% else %}{{ event.threshold_value }}{% endif %}</strong>
+          <span>Timestamp</span><strong>{{ event.timestamp|date:'Y-m-d H:i:s'|default:'—' }}</strong>
+          <span>Location</span><strong>{% if event.latitude %}{{ event.latitude|floatformat:5 }}, {{ event.longitude|floatformat:5 }}{% else %}—{% endif %}</strong>
+          <span>Operator</span><strong>{{ event.operator.name|default:'—' }}</strong>
+          <span>Problem area</span><strong>{% if event.problem_area %}<a href="{% url 'drive_test:problem_area_list' event.campaign.pk %}">{{ event.problem_area.area_type }}</a>{% else %}—{% endif %}</strong>
+        </div>
+        {% if event.sample_id %}
+          <p class="mt-3"><a class="dt-btn dt-btn-ghost" href="{% url 'drive_test:map_analysis' event.campaign.pk %}">View on map</a></p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-md-5">
+    <div class="dt-card"><div class="dt-card-head"><h2>Status</h2></div>
+      <div class="dt-card-body">
+        <p>Current: <span class="dt-badge status-{% if event.status == 'RESOLVED' %}completed{% elif event.status == 'DISMISSED' %}archived{% elif event.status == 'ACKNOWLEDGED' %}processing{% else %}failed{% endif %}">{{ event.get_status_display }}</span></p>
+        <form method="post" action="{% url 'drive_test:event_set_status' event.pk %}">
+          {% csrf_token %}
+          <select name="status" class="form-select form-select-sm mb-2">
+            {% for v, lbl in statuses %}<option value="{{ v }}" {% if v == event.status %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
+          </select>
+          <button class="dt-btn dt-btn-primary"><i class="bi bi-check-lg"></i> Update status</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

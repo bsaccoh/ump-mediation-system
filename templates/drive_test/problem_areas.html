@@ -1,0 +1,73 @@
+{% extends "drive_test/_base.html" %}
+{% load static humanize %}
+
+{% block title %}Problem Areas | {{ campaign.name }}{% endblock %}
+{% block page_title %}Problem Areas{% endblock %}
+
+{% block dt_extra_css %}
+<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.min.css' %}">
+<style>#dt-pa-map{height:360px;border-radius:var(--dt-radius);border:1px solid var(--dt-border);}</style>
+{% endblock %}
+
+{% block dt_content %}
+<div class="dt-page-head">
+  <div class="dt-crumb">
+    <a href="{% url 'drive_test:dashboard' %}">Drive Test</a> /
+    <a href="{% url 'drive_test:campaign_detail' campaign.pk %}">{{ campaign.name }}</a> /
+    <a href="{% url 'drive_test:event_list' campaign.pk %}">Events</a> / Problem Areas
+  </div>
+  <h1>Problem Areas <span class="dt-sub">{{ areas|length }} clustered</span></h1>
+</div>
+
+<div class="dt-card mb-3"><div class="dt-card-body" style="padding:0;"><div id="dt-pa-map"></div></div></div>
+
+{% if areas %}
+<div class="dt-table-wrap"><table class="dt-table">
+  <thead><tr><th>Type</th><th>Severity</th><th class="num">Events</th><th class="num">Affected (m)</th>
+    <th>Centroid</th><th>Detail</th></tr></thead>
+  <tbody>
+    {% for a in areas %}
+      <tr>
+        <td>{{ a.area_type }}</td>
+        <td><span class="dt-sev {{ a.severity|lower }}">{{ a.get_severity_display }}</span></td>
+        <td class="num">{{ a.sample_count|intcomma }}</td>
+        <td class="num">{% if a.affected_distance_m %}{{ a.affected_distance_m|floatformat:0 }}{% else %}—{% endif %}</td>
+        <td>{% if a.centroid_lat %}{{ a.centroid_lat|floatformat:4 }}, {{ a.centroid_lon|floatformat:4 }}{% else %}—{% endif %}</td>
+        <td>{% if a.stats.mean_measured is not None %}mean {{ a.stats.event_type }} = {{ a.stats.mean_measured }}{% else %}—{% endif %}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<div class="dt-card"><div class="dt-empty">
+  <div class="dt-empty-icon"><i class="bi bi-diagram-3"></i></div>
+  <h3>No problem areas</h3>
+  <p>Problem areas cluster repeated events at the same place. None were found — run event detection, or the network had no clustered issues.</p>
+  <a class="dt-btn dt-btn-ghost" href="{% url 'drive_test:event_list' campaign.pk %}">Back to events</a>
+</div></div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script src="{% static 'vendor/leaflet/leaflet.min.js' %}"></script>
+<script>
+(function(){
+  if (typeof L === 'undefined') return;
+  function tok(n){var v=getComputedStyle(document.documentElement).getPropertyValue(n);return (v&&v.trim())||'#888';}
+  var COL={critical:tok('--dt-signal-critical'),poor:tok('--dt-signal-poor'),fair:tok('--dt-signal-fair'),good:tok('--dt-signal-good'),none:tok('--dt-signal-none')};
+  var map=L.map('dt-pa-map').setView([8.484,-13.23],12);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:19,attribution:'&copy; OpenStreetMap &copy; CARTO'}).addTo(map);
+  fetch("{% url 'drive_test:drive_test_api:campaign_events' campaign.pk %}").then(function(r){return r.json();}).then(function(d){
+    var pts=[];
+    (d.problem_areas||[]).forEach(function(a){
+      if(a.lat==null)return;
+      var r=Math.min(400,120+a.count*8);
+      L.circle([a.lat,a.lon],{radius:r,color:COL[a.color]||COL.none,weight:2,fillColor:COL[a.color]||COL.none,fillOpacity:0.15})
+        .bindTooltip(a.type+' — '+a.count+' events ('+a.severity+')').addTo(map); pts.push([a.lat,a.lon]);
+    });
+    if(pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.2));
+  });
+})();
+</script>
+{% endblock %}

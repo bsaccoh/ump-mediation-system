@@ -127,6 +127,32 @@ def campaign_thresholds(request, pk):
 
 @login_required
 @dt_view_required
+def campaign_events(request, pk):
+    """Event markers + problem-area circles for the map layers."""
+    from drive_test.models import Event, ProblemArea
+    campaign = get_object_or_404(Campaign, pk=pk)
+
+    sev_color = {'CRITICAL': 'critical', 'HIGH': 'poor', 'MEDIUM': 'fair', 'LOW': 'good'}
+    events = [{
+        'id': e['id'], 'lat': e['latitude'], 'lon': e['longitude'],
+        'type': e['event_type'], 'severity': e['severity'],
+        'color': sev_color.get(e['severity'], 'none'),
+    } for e in Event.objects.filter(campaign=campaign, latitude__isnull=False,
+                                    longitude__isnull=False)
+        .values('id', 'latitude', 'longitude', 'event_type', 'severity')[:5000]]
+
+    areas = [{
+        'id': a['id'], 'lat': a['centroid_lat'], 'lon': a['centroid_lon'],
+        'type': a['area_type'], 'severity': a['severity'],
+        'count': a['sample_count'], 'color': sev_color.get(a['severity'], 'none'),
+    } for a in ProblemArea.objects.filter(campaign=campaign, centroid_lat__isnull=False)
+        .values('id', 'centroid_lat', 'centroid_lon', 'area_type', 'severity', 'sample_count')]
+
+    return JsonResponse({'events': events, 'problem_areas': areas})
+
+
+@login_required
+@dt_view_required
 def sample_detail(request, pk):
     """Full sample inspector payload, grouped by layer, with provenance."""
     s = get_object_or_404(Sample.objects.select_related('cell', 'operator'), pk=pk)

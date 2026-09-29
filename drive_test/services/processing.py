@@ -132,13 +132,22 @@ def process_file(file_id: int) -> dict:
             dtf.error_message = 'No samples could be parsed from this file.'
         dtf.save()
 
-    # Refresh campaign-scope KPI roll-ups so analytics pages stay fast.
+    # Refresh campaign-scope KPI roll-ups and detect events/problem areas so the
+    # analytics, events and map surfaces reflect the new data. Best-effort:
+    # neither must ever fail the ingest itself.
     if total:
         try:
             from drive_test.services.analytics import store_campaign_rollups
             store_campaign_rollups(campaign)
-        except Exception:  # pragma: no cover - roll-ups must not fail an ingest
+        except Exception:  # pragma: no cover
             logger.exception('Roll-up computation failed for campaign %s', campaign.pk)
+        try:
+            from drive_test.services.events import detect_events
+            from drive_test.services.problem_areas import cluster_problem_areas
+            detect_events(campaign)
+            cluster_problem_areas(campaign)
+        except Exception:  # pragma: no cover
+            logger.exception('Event detection failed for campaign %s', campaign.pk)
 
     logger.info('Processed file %s: %d samples, quality=%s', file_id, total, score)
     return {

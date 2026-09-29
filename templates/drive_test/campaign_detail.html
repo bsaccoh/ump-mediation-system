@@ -24,6 +24,7 @@
     {% if sample_count %}
       <a class="dt-btn dt-btn-ghost" href="{% url 'drive_test:map_analysis' campaign.pk %}"><i class="bi bi-geo-alt"></i> Analyse on Map</a>
       <a class="dt-btn dt-btn-ghost" href="{% url 'drive_test:campaign_analytics' campaign.pk %}"><i class="bi bi-bar-chart"></i> Analytics</a>
+      <a class="dt-btn dt-btn-ghost" href="{% url 'drive_test:event_list' campaign.pk %}"><i class="bi bi-exclamation-triangle"></i> Events</a>
     {% endif %}
     <a class="dt-btn dt-btn-primary" href="{% url 'drive_test:file_upload' campaign.pk %}"><i class="bi bi-upload"></i> Upload Logs</a>
   </div>
