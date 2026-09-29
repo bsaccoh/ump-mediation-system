@@ -1,0 +1,116 @@
+{% extends "drive_test/_base.html" %}
+{% load static %}
+
+{% block title %}Map Analysis | {{ campaign.name }}{% endblock %}
+{% block page_title %}Map Analysis{% endblock %}
+
+{% block dt_extra_css %}
+  <link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.min.css' %}">
+  <style>
+    .dt-ws { display: grid; grid-template-columns: 1fr 320px; grid-template-rows: auto 1fr 200px;
+      gap: var(--dt-space-3); height: calc(100vh - 150px); min-height: 560px; }
+    .dt-ws-toolbar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--dt-space-3);
+      align-items: center; }
+    .dt-ws-map { grid-row: 2; position: relative; border: 1px solid var(--dt-border);
+      border-radius: var(--dt-radius); overflow: hidden; }
+    #dt-map { position: absolute; inset: 0; }
+    .dt-ws-side { grid-row: 2; display: flex; flex-direction: column; gap: var(--dt-space-3); overflow: auto; }
+    .dt-ws-timeline { grid-column: 1 / -1; grid-row: 3; }
+    .dt-legend { display: flex; flex-wrap: wrap; gap: var(--dt-space-3); align-items: center; }
+    .dt-legend .item { display: inline-flex; align-items: center; gap: 5px; font-size: var(--dt-fs-xs); color: var(--dt-text-muted); }
+    .dt-legend .swatch { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+    .dt-layer { display: flex; align-items: center; gap: 8px; font-size: var(--dt-fs-sm); padding: 3px 0; }
+    .dt-inspect dt { font-size: var(--dt-fs-xs); color: var(--dt-text-muted); text-transform: uppercase; letter-spacing: .04em; }
+    .dt-inspect dd { font-family: var(--dt-font-mono); font-size: var(--dt-fs-sm); margin: 0 0 6px; }
+    .dt-inspect .grp { border-top: 1px solid var(--dt-border); padding-top: 8px; margin-top: 8px; }
+    .dt-inspect .grp h4 { font-size: var(--dt-fs-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--dt-text-faint); margin: 0 0 6px; }
+    .dt-kv { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; }
+    .dt-kv .k { font-size: var(--dt-fs-xs); color: var(--dt-text-muted); }
+    .dt-kv .v { font-family: var(--dt-font-mono); font-size: var(--dt-fs-sm); text-align: right; }
+    #dt-chart-wrap { position: relative; height: 100%; }
+    @media (max-width: 900px) { .dt-ws { grid-template-columns: 1fr; grid-template-rows: auto 340px auto 200px; }
+      .dt-ws-side { grid-row: 3; } .dt-ws-timeline { grid-row: 4; } }
+  </style>
+{% endblock %}
+
+{% block dt_content %}
+<div class="dt-page-head">
+  <div class="dt-crumb">
+    <a href="{% url 'drive_test:dashboard' %}">Drive Test</a> /
+    <a href="{% url 'drive_test:campaign_detail' campaign.pk %}">{{ campaign.name }}</a> / Map Analysis
+  </div>
+  <h1>Map Analysis <span class="dt-sub">{{ campaign.name }} · {{ sample_count }} samples</span></h1>
+</div>
+
+{% if metric_options %}
+{{ config|json_script:"dt-config" }}
+<div class="dt-ws">
+  <div class="dt-ws-toolbar dt-card" style="padding: var(--dt-space-3);">
+    <div class="dt-field">
+      <label>Metric</label>
+      <select id="dt-metric" class="form-select form-select-sm">
+        {% for m in metric_options %}
+          <option value="{{ m.key }}" {% if m.key == default_metric %}selected{% endif %}>{{ m.label }}{% if m.unit %} ({{ m.unit }}){% endif %}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="dt-field">
+      <label>Technology</label>
+      <select id="dt-tech" class="form-select form-select-sm">
+        <option value="">All</option>
+        {% for t in technologies %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="dt-legend" id="dt-legend"></div>
+  </div>
+
+  <div class="dt-ws-map"><div id="dt-map"></div></div>
+
+  <div class="dt-ws-side">
+    <div class="dt-card">
+      <div class="dt-card-head"><h2>Layers</h2></div>
+      <div class="dt-card-body">
+        <label class="dt-layer"><input type="checkbox" id="dt-layer-route" checked> Route track</label>
+        <label class="dt-layer"><input type="checkbox" id="dt-layer-points" checked> Measurement points</label>
+      </div>
+    </div>
+    <div class="dt-card" style="flex:1;">
+      <div class="dt-card-head"><h2>Sample Inspector</h2></div>
+      <div class="dt-card-body dt-inspect" id="dt-inspect">
+        <div class="dt-empty" style="padding:var(--dt-space-4);">
+          <p>Click a point on the map or timeline to inspect the sample.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dt-ws-timeline dt-card">
+    <div class="dt-card-body" style="height:100%;">
+      <div id="dt-chart-wrap"><canvas id="dt-chart"></canvas></div>
+    </div>
+  </div>
+</div>
+{% if absent_metrics %}
+  <p class="dt-sub mt-2">Not available in source data: {{ absent_metrics|join:", " }}.</p>
+{% endif %}
+{% else %}
+<div class="dt-card">
+  <div class="dt-empty">
+    <div class="dt-empty-icon"><i class="bi bi-geo-alt"></i></div>
+    <h3>No mappable samples</h3>
+    <p>This campaign has no processed samples with GPS positions and RF metrics yet.
+       Upload and process a log with location data to analyse it here.</p>
+    <a class="dt-btn dt-btn-primary" href="{% url 'drive_test:campaign_detail' campaign.pk %}">Back to campaign</a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+{% if metric_options %}
+<script src="{% static 'vendor/leaflet/leaflet.min.js' %}"></script>
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script src="{% static 'drive_test/js/dt-map.js' %}"></script>
+{% endif %}
+{% endblock %}

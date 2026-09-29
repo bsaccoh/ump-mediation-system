@@ -21,6 +21,9 @@
   </div>
   <div class="dt-actions">
     <a class="dt-btn dt-btn-ghost" href="{% url 'drive_test:campaign_edit' campaign.pk %}"><i class="bi bi-pencil"></i> Edit</a>
+    {% if sample_count %}
+      <a class="dt-btn dt-btn-ghost" href="{% url 'drive_test:map_analysis' campaign.pk %}"><i class="bi bi-geo-alt"></i> Analyse on Map</a>
+    {% endif %}
     <a class="dt-btn dt-btn-primary" href="{% url 'drive_test:file_upload' campaign.pk %}"><i class="bi bi-upload"></i> Upload Logs</a>
   </div>
 </div>

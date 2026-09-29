@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import include, path
 
 from . import views
 
@@ -19,6 +19,11 @@ urlpatterns = [
     path('campaigns/<int:pk>/', views.campaign_detail, name='campaign_detail'),
     path('campaigns/<int:pk>/edit/', views.campaign_edit, name='campaign_edit'),
     path('campaigns/<int:campaign_pk>/upload/', views.file_upload, name='file_upload'),
+    path('campaigns/<int:pk>/analysis/', views.map_analysis, name='map_analysis'),
+
+    # Map Analysis chooser + JSON APIs
+    path('map/', views.map_index, name='map_index'),
+    path('api/', include('drive_test.api.urls')),
 
     # Files
     path('files/', views.file_list, name='file_list'),

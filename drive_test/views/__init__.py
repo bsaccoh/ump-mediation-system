@@ -7,6 +7,7 @@ from .campaigns import (
 )
 from .files import file_list, file_upload, file_delete, file_process
 from .processing import processing_monitor, file_status
+from .analysis import map_index, map_analysis
 
 __all__ = [
     'dashboard', 'placeholder',
@@ -14,4 +15,5 @@ __all__ = [
     'campaign_list', 'campaign_detail', 'campaign_create', 'campaign_edit',
     'file_list', 'file_upload', 'file_delete', 'file_process',
     'processing_monitor', 'file_status',
+    'map_index', 'map_analysis',
 ]
