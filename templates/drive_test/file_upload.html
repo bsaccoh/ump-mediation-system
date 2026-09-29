@@ -1,0 +1,64 @@
+{% extends "drive_test/_base.html" %}
+
+{% block title %}Upload Logs | {{ campaign.name }}{% endblock %}
+{% block page_title %}Import Drive Test Logs{% endblock %}
+
+{% block dt_content %}
+<div class="dt-page-head">
+  <div class="dt-crumb">
+    <a href="{% url 'drive_test:dashboard' %}">Drive Test</a> /
+    <a href="{% url 'drive_test:campaign_detail' campaign.pk %}">{{ campaign.name }}</a> / Upload
+  </div>
+  <h1>Import Drive Test Logs</h1>
+  <div class="dt-sub">Files are stored against <strong>{{ campaign.name }}</strong>. Parsing and analysis run in the next phase.</div>
+</div>
+
+<div class="dt-card" style="max-width:820px;">
+  <div class="dt-card-body">
+    <form method="post" enctype="multipart/form-data" id="dt-upload-form">
+      {% csrf_token %}
+      <label for="dt-file-input" class="dt-dropzone d-block" id="dt-dropzone">
+        <div class="dt-dz-icon"><i class="bi bi-cloud-arrow-up"></i></div>
+        <div><strong>Drop drive test files here</strong> or click to browse</div>
+        <div class="dt-dz-formats">{{ allowed|join:" · " }}</div>
+        <input type="file" name="files" id="dt-file-input" multiple hidden
+               accept="{{ allowed|join:',' }}">
+      </label>
+      <ul id="dt-file-preview" class="mt-3 mb-0 small text-muted" style="list-style:none;padding:0;"></ul>
+      <div class="mt-4 d-flex gap-2">
+        <button type="submit" class="dt-btn dt-btn-primary"><i class="bi bi-upload"></i> Upload</button>
+        <a class="dt-btn dt-btn-ghost" href="{% url 'drive_test:campaign_detail' campaign.pk %}">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script>
+  (function () {
+    var dz = document.getElementById('dt-dropzone');
+    var input = document.getElementById('dt-file-input');
+    var preview = document.getElementById('dt-file-preview');
+    if (!dz || !input) return;
+
+    function render() {
+      preview.innerHTML = '';
+      Array.prototype.forEach.call(input.files, function (f) {
+        var li = document.createElement('li');
+        li.textContent = '• ' + f.name + '  (' + Math.round(f.size / 1024) + ' KB)';
+        preview.appendChild(li);
+      });
+    }
+    input.addEventListener('change', render);
+    ['dragenter', 'dragover'].forEach(function (e) {
+      dz.addEventListener(e, function (ev) { ev.preventDefault(); dz.classList.add('dragover'); });
+    });
+    ['dragleave', 'drop'].forEach(function (e) {
+      dz.addEventListener(e, function (ev) { ev.preventDefault(); dz.classList.remove('dragover'); });
+    });
+    dz.addEventListener('drop', function (ev) { input.files = ev.dataTransfer.files; render(); });
+  })();
+</script>
+{% endblock %}

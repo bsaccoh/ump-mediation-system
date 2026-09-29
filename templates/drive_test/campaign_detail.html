@@ -1,0 +1,77 @@
+{% extends "drive_test/_base.html" %}
+{% load humanize %}
+
+{% block title %}{{ campaign.name }} | Drive Test{% endblock %}
+{% block page_title %}{{ campaign.name }}{% endblock %}
+
+{% block dt_content %}
+<div class="dt-page-head d-flex justify-content-between align-items-start flex-wrap gap-2">
+  <div>
+    <div class="dt-crumb">
+      <a href="{% url 'drive_test:dashboard' %}">Drive Test</a> /
+      <a href="{% url 'drive_test:project_detail' campaign.project.pk %}">{{ campaign.project.name }}</a> /
+      {{ campaign.name }}
+    </div>
+    <h1>{{ campaign.name }}</h1>
+    <div class="dt-sub">
+      {{ campaign.operator.name|default:'Operator —' }} ·
+      {{ campaign.get_technology_display|default:'Technology —' }} ·
+      {{ campaign.region|default:'Region —' }}
+    </div>
+  </div>
+  <div class="dt-actions">
+    <a class="dt-btn dt-btn-ghost" href="{% url 'drive_test:campaign_edit' campaign.pk %}"><i class="bi bi-pencil"></i> Edit</a>
+    <a class="dt-btn dt-btn-primary" href="{% url 'drive_test:file_upload' campaign.pk %}"><i class="bi bi-upload"></i> Upload Logs</a>
+  </div>
+</div>
+
+<div class="dt-stat-row mb-4">
+  <div class="dt-stat"><div class="dt-stat-label">Files</div><div class="dt-stat-value">{{ files|length }}</div></div>
+  <div class="dt-stat"><div class="dt-stat-label">Samples</div><div class="dt-stat-value">{{ sample_count|intcomma }}</div></div>
+  <div class="dt-stat"><div class="dt-stat-label">Routes</div><div class="dt-stat-value">{{ route_count }}</div></div>
+  <div class="dt-stat"><div class="dt-stat-label">Events</div><div class="dt-stat-value">{{ event_count }}</div></div>
+</div>
+
+<div class="dt-card">
+  <div class="dt-card-head"><h2>Imported Files</h2>
+    <a class="dt-btn dt-btn-ghost" href="{% url 'drive_test:file_upload' campaign.pk %}"><i class="bi bi-upload"></i> Upload</a>
+  </div>
+  {% if files %}
+    <div class="dt-table-wrap" style="border:0;">
+      <table class="dt-table">
+        <thead>
+          <tr><th>File</th><th>Format</th><th class="num">Size</th><th>GPS</th>
+            <th class="num">Samples</th><th>Validation</th><th>Status</th><th>Uploaded</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for f in files %}
+            <tr>
+              <td>{{ f.original_name }}</td>
+              <td>{{ f.detected_format|default:'—' }}</td>
+              <td class="num">{{ f.size_bytes|filesizeformat }}</td>
+              <td>{% if f.gps_available is None %}<span class="dt-na">—</span>{% elif f.gps_available %}Yes{% else %}No{% endif %}</td>
+              <td class="num">{% if f.sample_count is None %}<span class="dt-na">—</span>{% else %}{{ f.sample_count|intcomma }}{% endif %}</td>
+              <td>{{ f.get_validation_status_display }}</td>
+              <td><span class="dt-badge status-{{ f.status|lower }}">{{ f.get_status_display }}</span></td>
+              <td>{{ f.uploaded_at|date:'Y-m-d H:i' }}</td>
+              <td>
+                <form method="post" action="{% url 'drive_test:file_delete' f.pk %}" onsubmit="return confirm('Delete this file?');" style="display:inline;">
+                  {% csrf_token %}
+                  <button class="dt-btn dt-btn-ghost" style="padding:2px 8px;" title="Delete"><i class="bi bi-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="dt-empty">
+      <div class="dt-empty-icon"><i class="bi bi-file-earmark-arrow-up"></i></div>
+      <h3>No files uploaded</h3>
+      <p>Upload drive-test logs to this campaign. Processing and analysis arrive in the next phase.</p>
+      <a class="dt-btn dt-btn-primary" href="{% url 'drive_test:file_upload' campaign.pk %}"><i class="bi bi-upload"></i> Upload Logs</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

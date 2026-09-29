@@ -1,0 +1,45 @@
+{% extends "drive_test/_base.html" %}
+
+{% block title %}Campaigns | Drive Test{% endblock %}
+{% block page_title %}Campaigns{% endblock %}
+
+{% block dt_content %}
+<div class="dt-page-head">
+  <div class="dt-crumb"><a href="{% url 'drive_test:dashboard' %}">Drive Test Intelligence</a> / Campaigns</div>
+  <h1>Campaigns</h1>
+  <div class="dt-sub">Drive-test exercises across all projects.</div>
+</div>
+
+{% if campaigns %}
+<div class="dt-table-wrap">
+  <table class="dt-table">
+    <thead>
+      <tr><th>Campaign</th><th>Project</th><th>Operator</th><th>Technology</th>
+        <th class="num">Files</th><th class="num">Samples</th><th>Created</th></tr>
+    </thead>
+    <tbody>
+      {% for c in campaigns %}
+        <tr>
+          <td><a href="{% url 'drive_test:campaign_detail' c.pk %}">{{ c.name }}</a></td>
+          <td><a href="{% url 'drive_test:project_detail' c.project.pk %}">{{ c.project.name }}</a></td>
+          <td>{{ c.operator.name|default:'—' }}</td>
+          <td>{{ c.get_technology_display|default:'—' }}</td>
+          <td class="num">{{ c.file_count }}</td>
+          <td class="num">{{ c.sample_count }}</td>
+          <td>{{ c.created_at|date:'Y-m-d' }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="dt-card">
+  <div class="dt-empty">
+    <div class="dt-empty-icon"><i class="bi bi-flag"></i></div>
+    <h3>No campaigns yet</h3>
+    <p>Campaigns live inside a project. Create a project first, then add a campaign.</p>
+    <a class="dt-btn dt-btn-primary" href="{% url 'drive_test:project_list' %}">Go to Projects</a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

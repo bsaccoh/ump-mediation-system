@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     'scripts',
     'businesslogic',
     'regulatory',
+    'drive_test',
 ]
 
 MIDDLEWARE = [
@@ -444,6 +445,13 @@ LOGGING = {
             'backupCount': 5,
             'formatter': 'service',
         },
+        'file_drive_test': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(LOG_DIR, 'drive_test.log'),
+            'maxBytes': 50 * 1024 * 1024,
+            'backupCount': 5,
+            'formatter': 'service',
+        },
     },
     'loggers': {
         'mediation.collector': {
@@ -463,6 +471,11 @@ LOGGING = {
         },
         'mediation.api': {
             'handlers': ['console', 'file_api'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+        'drive_test': {
+            'handlers': ['console', 'file_drive_test'],
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },

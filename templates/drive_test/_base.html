@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% comment %}
+Shared shell for every Drive Test Intelligence screen. Loads the design-token
+and component layers once, and wraps content in .dt-app so tokens apply.
+Child templates override {% block dt_content %}.
+{% endcomment %}
+
+{% block extra_css %}
+  <link rel="stylesheet" href="{% static 'drive_test/css/dt-tokens.css' %}">
+  <link rel="stylesheet" href="{% static 'drive_test/css/dt-components.css' %}">
+  <style>
+    .dt-app { padding-bottom: var(--dt-space-6); }
+    .dt-app .dt-actions { display: flex; gap: var(--dt-space-2); }
+  </style>
+  {% block dt_extra_css %}{% endblock %}
+{% endblock %}
+
+{% block content %}
+<div class="dt-app">
+  {% if messages %}
+    <div class="mb-3">
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }} py-2 px-3 mb-2">{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+  {% block dt_content %}{% endblock %}
+</div>
+{% endblock %}

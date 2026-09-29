@@ -1,0 +1,88 @@
+{% extends "drive_test/_base.html" %}
+{% load humanize %}
+
+{% block title %}Drive Test Intelligence{% endblock %}
+{% block page_title %}Drive Test Intelligence{% endblock %}
+
+{% block dt_content %}
+<div class="dt-page-head d-flex justify-content-between align-items-start flex-wrap gap-2">
+  <div>
+    <h1>Drive Test Intelligence</h1>
+    <div class="dt-sub">
+      Overview of network measurement campaigns and RF performance
+      {% if regulator_view %}· regulatory view{% else %}· engineering view{% endif %}
+    </div>
+  </div>
+  <div class="dt-actions">
+    <a class="dt-btn dt-btn-ghost" href="{% url 'drive_test:project_list' %}"><i class="bi bi-folder"></i> Projects</a>
+    <a class="dt-btn dt-btn-primary" href="{% url 'drive_test:project_create' %}"><i class="bi bi-plus-lg"></i> New Project</a>
+  </div>
+</div>
+
+<div class="dt-stat-row mb-4">
+  {% for s in summary %}
+    <div class="dt-stat">
+      <div class="dt-stat-label"><i class="bi {{ s.icon }}"></i> {{ s.label }}</div>
+      <div class="dt-stat-value">{{ s.value|intcomma }}</div>
+    </div>
+  {% endfor %}
+</div>
+
+<div class="dt-card mb-4">
+  <div class="dt-card-head"><h2>Network KPIs</h2></div>
+  <div class="dt-card-body">
+    <div class="dt-stat-row">
+      {% for k in network_kpis %}
+        <div class="dt-stat">
+          <div class="dt-stat-label">{{ k.label }}</div>
+          {% if has_data %}
+            {# Populated once samples are processed (Phase 2+). #}
+            <div class="dt-stat-value dt-na">—</div>
+          {% else %}
+            <div class="dt-stat-value dt-na">—</div>
+            <div class="dt-stat-sub">No processed samples yet</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="dt-card">
+  <div class="dt-card-head">
+    <h2>Recent Campaigns</h2>
+    <a class="dt-btn dt-btn-ghost" href="{% url 'drive_test:campaign_list' %}">View all</a>
+  </div>
+  {% if recent_campaigns %}
+    <div class="dt-table-wrap" style="border:0;">
+      <table class="dt-table">
+        <thead>
+          <tr>
+            <th>Campaign</th><th>Project</th><th>Operator</th><th>Technology</th>
+            <th class="num">Files</th><th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in recent_campaigns %}
+            <tr>
+              <td><a href="{% url 'drive_test:campaign_detail' c.pk %}">{{ c.name }}</a></td>
+              <td>{{ c.project.name }}</td>
+              <td>{{ c.operator.name|default:'—' }}</td>
+              <td>{{ c.get_technology_display|default:'—' }}</td>
+              <td class="num">{{ c.file_count }}</td>
+              <td>{{ c.created_at|date:'Y-m-d' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="dt-empty">
+      <div class="dt-empty-icon"><i class="bi bi-flag"></i></div>
+      <h3>No campaigns yet</h3>
+      <p>Create a project, then add a campaign to begin analysing network performance.</p>
+      <a class="dt-btn dt-btn-primary" href="{% url 'drive_test:project_create' %}"><i class="bi bi-plus-lg"></i> Create Project</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
