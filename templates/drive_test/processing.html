@@ -1,0 +1,84 @@
+{% extends "drive_test/_base.html" %}
+{% load humanize %}
+
+{% block title %}Processing | Drive Test{% endblock %}
+{% block page_title %}Processing{% endblock %}
+
+{% block dt_content %}
+<div class="dt-page-head">
+  <div class="dt-crumb"><a href="{% url 'drive_test:dashboard' %}">Drive Test Intelligence</a> / Processing</div>
+  <h1>Processing Monitor</h1>
+  <div class="dt-sub">
+    {% if active %}{{ active }} file(s) queued or processing.{% else %}No active jobs.{% endif %}
+  </div>
+</div>
+
+{% if files %}
+<div class="dt-table-wrap">
+  <table class="dt-table">
+    <thead>
+      <tr><th>File</th><th>Campaign</th><th>Format</th><th class="num">Samples</th>
+        <th class="num">Quality</th><th>Progress</th><th>Status</th><th>Processed</th></tr>
+    </thead>
+    <tbody>
+      {% for f in files %}
+        <tr data-file="{{ f.pk }}" data-active="{% if f.status == 'QUEUED' or f.status == 'PROCESSING' %}1{% else %}0{% endif %}">
+          <td>{{ f.original_name }}</td>
+          <td><a href="{% url 'drive_test:campaign_detail' f.campaign.pk %}">{{ f.campaign.name }}</a></td>
+          <td>{{ f.detected_format|default:'—' }}</td>
+          <td class="num js-samples">{% if f.sample_count is None %}<span class="dt-na">—</span>{% else %}{{ f.sample_count|intcomma }}{% endif %}</td>
+          <td class="num js-quality">{% if f.quality_score is None %}<span class="dt-na">—</span>{% else %}{{ f.quality_score }}%{% endif %}</td>
+          <td style="min-width:120px;">
+            <div class="dt-progress"><span class="js-progress" style="width:{{ f.job.progress_pct|default:0 }}%"></span></div>
+          </td>
+          <td><span class="dt-badge status-{{ f.status|lower }} js-status">{{ f.get_status_display }}</span></td>
+          <td>{{ f.processed_at|date:'Y-m-d H:i'|default:'—' }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="dt-card">
+  <div class="dt-empty">
+    <div class="dt-empty-icon"><i class="bi bi-cpu"></i></div>
+    <h3>Nothing to process</h3>
+    <p>Upload drive-test logs to a campaign, then start processing from the campaign page.</p>
+    <a class="dt-btn dt-btn-primary" href="{% url 'drive_test:campaign_list' %}">Go to Campaigns</a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script>
+  (function () {
+    var rows = Array.prototype.slice.call(document.querySelectorAll('tr[data-active="1"]'));
+    if (!rows.length) return;
+    var tmpl = "{% url 'drive_test:file_status' 999999 %}";
+    function poll() {
+      var stillActive = false;
+      rows.forEach(function (row) {
+        if (row.dataset.done === '1') return;
+        stillActive = true;
+        fetch(tmpl.replace('999999', row.dataset.file))
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            var badge = row.querySelector('.js-status');
+            if (badge) { badge.textContent = d.status_display; badge.className = 'dt-badge status-' + d.status.toLowerCase() + ' js-status'; }
+            if (d.progress != null) row.querySelector('.js-progress').style.width = d.progress + '%';
+            if (d.sample_count != null) row.querySelector('.js-samples').textContent = d.sample_count.toLocaleString();
+            if (d.quality_score != null) row.querySelector('.js-quality').textContent = d.quality_score + '%';
+            if (d.status !== 'QUEUED' && d.status !== 'PROCESSING') {
+              row.dataset.done = '1';
+              row.querySelector('.js-progress').style.width = '100%';
+            }
+          }).catch(function () {});
+      });
+      if (stillActive) setTimeout(poll, 2000);
+    }
+    setTimeout(poll, 1500);
+  })();
+</script>
+{% endblock %}

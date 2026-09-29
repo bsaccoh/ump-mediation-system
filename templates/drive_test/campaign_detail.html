@@ -40,21 +40,29 @@
     <div class="dt-table-wrap" style="border:0;">
       <table class="dt-table">
         <thead>
-          <tr><th>File</th><th>Format</th><th class="num">Size</th><th>GPS</th>
-            <th class="num">Samples</th><th>Validation</th><th>Status</th><th>Uploaded</th><th></th></tr>
+          <tr><th>File</th><th>Format</th><th>Technology</th><th class="num">Size</th><th>GPS</th>
+            <th class="num">Samples</th><th class="num">Quality</th><th>Status</th><th>Uploaded</th><th></th></tr>
         </thead>
         <tbody>
           {% for f in files %}
             <tr>
               <td>{{ f.original_name }}</td>
               <td>{{ f.detected_format|default:'—' }}</td>
+              <td>{{ f.get_detected_technology_display|default:'—' }}</td>
               <td class="num">{{ f.size_bytes|filesizeformat }}</td>
               <td>{% if f.gps_available is None %}<span class="dt-na">—</span>{% elif f.gps_available %}Yes{% else %}No{% endif %}</td>
               <td class="num">{% if f.sample_count is None %}<span class="dt-na">—</span>{% else %}{{ f.sample_count|intcomma }}{% endif %}</td>
-              <td>{{ f.get_validation_status_display }}</td>
+              <td class="num">{% if f.quality_score is None %}<span class="dt-na">—</span>{% else %}{{ f.quality_score }}%{% endif %}</td>
               <td><span class="dt-badge status-{{ f.status|lower }}">{{ f.get_status_display }}</span></td>
               <td>{{ f.uploaded_at|date:'Y-m-d H:i' }}</td>
-              <td>
+              <td class="dt-actions">
+                {% if f.status == 'READY' or f.status == 'COMPLETED' or f.status == 'FAILED' %}
+                  <form method="post" action="{% url 'drive_test:file_process' f.pk %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button class="dt-btn dt-btn-ghost" style="padding:2px 8px;" title="{% if f.status == 'COMPLETED' %}Reprocess{% else %}Process{% endif %}">
+                      <i class="bi bi-play-fill"></i></button>
+                  </form>
+                {% endif %}
                 <form method="post" action="{% url 'drive_test:file_delete' f.pk %}" onsubmit="return confirm('Delete this file?');" style="display:inline;">
                   {% csrf_token %}
                   <button class="dt-btn dt-btn-ghost" style="padding:2px 8px;" title="Delete"><i class="bi bi-trash"></i></button>

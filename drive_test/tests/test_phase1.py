@@ -115,8 +115,10 @@ class UploadTests(TestCase):
         self._upload()  # same content
         self.assertEqual(DriveTestFile.objects.filter(campaign=self.campaign).count(), 1)
 
-    def test_missing_sample_count_is_null_not_zero(self):
+    def test_upload_profiles_file(self):
+        # Since Phase 2, upload profiles the file: real counts, not zero.
         self._upload()
         dtf = DriveTestFile.objects.get(campaign=self.campaign)
-        self.assertIsNone(dtf.sample_count)  # not yet parsed → NULL, never 0
-        self.assertIsNone(dtf.gps_available)
+        self.assertEqual(dtf.detected_format, 'CSV')
+        self.assertEqual(dtf.sample_count, 1)      # one data row
+        self.assertTrue(dtf.gps_available)         # lat/lon present

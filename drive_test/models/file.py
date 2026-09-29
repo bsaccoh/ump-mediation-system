@@ -39,6 +39,13 @@ class DriveTestFile(models.Model):
     )
     error_message = models.TextField(blank=True)
 
+    # Pre-ingest profile (format/tech/gps/bbox/timespan) and post-ingest data
+    # quality. quality_score is NULL until validated — never defaulted to 0.
+    profile = models.JSONField(default=dict, blank=True)
+    quality_score = models.FloatField(null=True, blank=True)
+    quality_report = models.JSONField(default=dict, blank=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+
     # Reuse core.JobRecord for background processing + progress polling.
     # db_constraint=False mirrors the platform's cross-app FK convention.
     job = models.ForeignKey(

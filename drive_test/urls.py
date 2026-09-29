@@ -22,7 +22,12 @@ urlpatterns = [
 
     # Files
     path('files/', views.file_list, name='file_list'),
+    path('files/<int:pk>/process/', views.file_process, name='file_process'),
+    path('files/<int:pk>/status/', views.file_status, name='file_status'),
     path('files/<int:pk>/delete/', views.file_delete, name='file_delete'),
+
+    # Processing monitor
+    path('processing/', views.processing_monitor, name='processing_monitor'),
 
     # Sections delivered in later phases (honest placeholders keep nav complete).
     path('<str:section>/', views.placeholder, name='placeholder'),
