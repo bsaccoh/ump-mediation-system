@@ -17,10 +17,7 @@ def check_duplicate(file_path: str) -> bool:
         True if this file is a duplicate.
     """
     file_hash = file_md5(file_path)
-    return CDRFile.objects.filter(
-        file_hash=file_hash,
-        status__in=[CDRFile.Status.COMPLETED, CDRFile.Status.PROCESSING]
-    ).exists()
+    return CDRFile.objects.filter(file_hash=file_hash).exists()
 
 
 def get_file_hash(file_path: str) -> str:

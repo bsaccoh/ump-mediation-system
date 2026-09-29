@@ -93,11 +93,7 @@ class Command(BaseCommand):
 
     def _process_batch(self, batch_size):
         with transaction.atomic():
-            files = list(
-                CDRFile.objects.filter(status=CDRFile.Status.COLLECTED)
-                .order_by('created_at')[:batch_size]
-                .select_for_update(skip_locked=True)
-            )
+            files = list(self._round_robin_select(batch_size))
             if not files:
                 return 0
 
@@ -124,6 +120,34 @@ class Command(BaseCommand):
                              operator=cdr_file.operator_code or '',
                              cdr_file=cdr_file)
         return processed
+
+    def _round_robin_select(self, batch_size):
+        """Pick files evenly across stream types so no single stream starves others."""
+        pending = CDRFile.objects.filter(status=CDRFile.Status.COLLECTED)
+        streams = list(
+            pending.values_list('decoder_type', flat=True)
+            .distinct()
+        )
+        if not streams:
+            return []
+
+        per_stream = max(1, batch_size // len(streams))
+        remainder = batch_size - per_stream * len(streams)
+        selected_ids = []
+
+        for i, stream in enumerate(sorted(streams)):
+            limit = per_stream + (1 if i < remainder else 0)
+            ids = list(
+                pending.filter(decoder_type=stream)
+                .order_by('created_at')
+                .values_list('id', flat=True)[:limit]
+            )
+            selected_ids.extend(ids)
+
+        return (
+            CDRFile.objects.filter(id__in=selected_ids)
+            .select_for_update(skip_locked=True)
+        )
 
     def _decode_file(self, cdr_file):
         if not cdr_file.decoder_type or cdr_file.decoder_type == 'AUTO':
