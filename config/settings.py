@@ -29,6 +29,15 @@ ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,test
 # =============================================================================
 
 INSTALLED_APPS = [
+    # Must precede django.contrib.staticfiles: it disables runserver's own
+    # static handler so WhiteNoise serves static in development too. Without
+    # it, runserver intercepts /static/ before any middleware and sends no
+    # Cache-Control at all, so browsers cache heuristically and keep serving a
+    # stale stylesheet or script after an edit — including serving new
+    # JavaScript against old CSS, which looks like a bug in the change rather
+    # than in the cache.
+    'whitenoise.runserver_nostatic',
+
     # Django built-in
     'django.contrib.admin',
     'django.contrib.auth',
@@ -199,9 +208,29 @@ STORAGES = {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
     },
     'staticfiles': {
-        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+        'BACKEND': (
+            # Production serves hashed, immutable filenames so long cache
+            # lifetimes are safe. In DEBUG the filenames are plain, so the
+            # manifest backend would also demand a collectstatic run before any
+            # template referencing a new asset could render.
+            'whitenoise.storage.CompressedManifestStaticFilesStorage'
+            if not DEBUG else
+            'django.contrib.staticfiles.storage.StaticFilesStorage'
+        ),
     },
 }
+
+if DEBUG:
+    # Never cache static assets in development, and serve them straight from
+    # STATICFILES_DIRS so no collectstatic run is needed to see an edit.
+    #
+    # Paired with 'whitenoise.runserver_nostatic' in INSTALLED_APPS above:
+    # that hands /static/ to WhiteNoise in development, and these make it
+    # re-read from disk and tell the browser not to cache. Together they are
+    # what stops an edited file from silently serving its previous body.
+    WHITENOISE_MAX_AGE = 0
+    WHITENOISE_AUTOREFRESH = True
+    WHITENOISE_USE_FINDERS = True
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
