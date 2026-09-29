@@ -1,7 +1,12 @@
 {
+  "beam_count": 0,
+  "carrier_count": 0,
   "distinct_gsm_cells": 1,
   "distinct_lte_cells": 1,
   "distinct_pci": 0,
+  "event_count": 0,
+  "event_severities": {},
+  "event_types": {},
   "file_status": "COMPLETED",
   "first_captured_at": "2026-01-18T08:58:23.562000",
   "handover_count": 0,
@@ -19,8 +24,10 @@
   "matched_count": 0,
   "measurement_count": 523,
   "measurement_count_on_file": 523,
+  "neighbour_count": 0,
   "quality_flags": {},
   "radio_absent": {
+    "c_over_i": 523,
     "cqi": 523,
     "dl_throughput_kbps": 523,
     "ecio": 523,
@@ -28,6 +35,7 @@
     "rsrp": 523,
     "rsrq": 523,
     "rssi": 523,
+    "rxqual": 523,
     "sinr": 523,
     "ss_rsrp": 523,
     "ss_rsrq": 523,
@@ -36,6 +44,7 @@
     "ul_throughput_kbps": 523
   },
   "radio_present": {
+    "c_over_i": 0,
     "cqi": 0,
     "dl_throughput_kbps": 0,
     "ecio": 0,
@@ -43,6 +52,7 @@
     "rsrp": 0,
     "rsrq": 0,
     "rssi": 0,
+    "rxqual": 0,
     "sinr": 0,
     "ss_rsrp": 0,
     "ss_rsrq": 0,

@@ -1,6 +1,7 @@
 {
   "absent_counts": {
     "altitude_m": 0,
+    "c_over_i": 264,
     "call_duration_s": 264,
     "call_setup_time_ms": 264,
     "cqi": 264,
@@ -27,6 +28,7 @@
     "rsrp": 264,
     "rsrq": 264,
     "rssi": 264,
+    "rxqual": 264,
     "service_outcome": 264,
     "service_type": 264,
     "sinr": 264,
@@ -38,11 +40,18 @@
     "throughput_kbps": 264,
     "ul_throughput_kbps": 264
   },
+  "collection_item_counts": {
+    "beams": 0,
+    "carriers": 0,
+    "events": 0,
+    "neighbours": 0
+  },
   "first_captured_at": "2026-01-19T15:35:39.953000+00:00",
   "last_captured_at": "2026-01-19T15:41:17.936000+00:00",
   "measurement_count": 264,
   "present_counts": {
     "altitude_m": 264,
+    "c_over_i": 0,
     "call_duration_s": 0,
     "call_setup_time_ms": 0,
     "cqi": 0,
@@ -69,6 +78,7 @@
     "rsrp": 0,
     "rsrq": 0,
     "rssi": 0,
+    "rxqual": 0,
     "service_outcome": 0,
     "service_type": 0,
     "sinr": 0,
@@ -81,5 +91,11 @@
     "ul_throughput_kbps": 0
   },
   "quality_flags": {},
-  "stream_sha256": "1232ab26e71e1e602e74f91da0288af517401524c5ba494cbf42668275f21ea1"
+  "samples_with_collection": {
+    "beams": 0,
+    "carriers": 0,
+    "events": 0,
+    "neighbours": 0
+  },
+  "stream_sha256": "faab57d807150b810060b2eb46284650a514e33f6f5cd9b479f2d93fc241a7e6"
 }

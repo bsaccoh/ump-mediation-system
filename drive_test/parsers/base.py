@@ -13,6 +13,96 @@ from typing import Generator
 
 
 @dataclass
+class ParsedNeighbour:
+    """One detected neighbour cell, ranked by received level (0 = strongest)."""
+
+    rank: int
+    rat: str = ''
+    obs_pci: int | None = None          # 4G/5G
+    obs_psc: int | None = None          # 3G
+    obs_bsic: int | None = None         # 2G
+    obs_arfcn: int | None = None
+    rssi: float | None = None
+    rscp: float | None = None
+    ecio: float | None = None
+    rsrp: float | None = None
+    rsrq: float | None = None
+    ss_rsrp: float | None = None
+    raw_data: dict = field(default_factory=dict)
+
+
+@dataclass
+class ParsedCarrier:
+    """One component carrier under carrier aggregation (index 0 = PCell)."""
+
+    cc_index: int
+    is_primary: bool = False
+    arfcn: int | None = None
+    band: str = ''
+    bandwidth_mhz: float | None = None
+    rsrp: float | None = None
+    rsrq: float | None = None
+    sinr: float | None = None
+    mimo_layers: int | None = None
+    modulation: str = ''
+    dl_throughput_kbps: float | None = None
+    ul_throughput_kbps: float | None = None
+    raw_data: dict = field(default_factory=dict)
+
+
+@dataclass
+class ParsedBeam:
+    """One 5G NR SSB beam."""
+
+    ssb_index: int
+    is_serving: bool = False
+    ss_rsrp: float | None = None
+    ss_rsrq: float | None = None
+    ss_sinr: float | None = None
+    raw_data: dict = field(default_factory=dict)
+
+
+@dataclass
+class ParsedEvent:
+    """
+    A timestamped event.
+
+    Yielded either inside a ParsedMeasurement (when the source ties events to
+    samples, as TRP does) or from ``DriveTestParser.parse_events`` (when the
+    source is message-oriented, as .nmf and .qmdl are and where events arrive
+    decoupled from sample cadence).
+    """
+
+    event_type: str                     # MeasurementEvent.EventType value
+    occurred_at: datetime
+    severity: str = 'INFO'
+    latitude: float | None = None
+    longitude: float | None = None
+    technology: str = ''
+    duration_ms: int | None = None
+    description: str = ''
+    payload: dict = field(default_factory=dict)
+
+
+@dataclass
+class ParserCapabilities:
+    """
+    What a parser can extract from its format.
+
+    Lets the UI distinguish *this source cannot carry that* from *this run
+    found none of it*, instead of rendering an empty panel that looks broken.
+    """
+
+    neighbours: bool = False
+    events: bool = False
+    carriers: bool = False
+    beams: bool = False
+    layer3: bool = False
+    voice_quality: bool = False
+    throughput: bool = False
+
+
+@dataclass
 class ParsedMeasurement:
     """
     One point in time from a drive-test file.
@@ -72,6 +162,17 @@ class ParsedMeasurement:
     latency_ms: int | None = None
     packet_loss_pct: float | None = None
 
+    # 2G quality
+    rxqual: int | None = None
+    c_over_i: float | None = None
+
+    # Collections. Default-empty, so existing parsers that never set them are
+    # unaffected and the persistence layer's bulk inserts become no-ops.
+    neighbours: list['ParsedNeighbour'] = field(default_factory=list)
+    carriers: list['ParsedCarrier'] = field(default_factory=list)
+    beams: list['ParsedBeam'] = field(default_factory=list)
+    events: list['ParsedEvent'] = field(default_factory=list)
+
     # Extra fields from the raw row (parser-specific overflow)
     raw_data: dict = field(default_factory=dict)
 
@@ -91,6 +192,10 @@ class DriveTestParser:
     file_extensions: list[str] = []
     magic_bytes: str = ''
 
+    #: What this format can carry. Declared per subclass so the UI can say
+    #: "this format has no neighbour data" rather than showing an empty panel.
+    capabilities: ParserCapabilities = ParserCapabilities()
+
     def __init__(self, config: dict | None = None):
         self.config = config or {}
 
@@ -100,6 +205,18 @@ class DriveTestParser:
         Must never raise for individual bad rows — mark them invalid and continue.
         """
         raise NotImplementedError
+
+    def parse_events(self, file_path: Path) -> Generator[ParsedEvent, None, None]:
+        """
+        Yield events that are not tied to a sample.
+
+        Sample-oriented formats (CSV, TRP) attach events to the measurement they
+        occurred at and leave this empty. Message-oriented formats (.nmf, .qmdl)
+        carry Layer-3 signalling on its own clock, decoupled from sample cadence;
+        without this hook they would have to invent a carrier measurement for
+        every system information block.
+        """
+        return iter(())
 
     @classmethod
     def can_parse(cls, file_path: Path) -> bool:

@@ -29,11 +29,16 @@ _TRACKED = [
     'ss_rsrp', 'ss_rsrq', 'ss_sinr', 'dl_throughput_kbps', 'ul_throughput_kbps',
     'latitude', 'longitude', 'altitude_m', 'speed_kmh', 'heading_deg',
     'gps_accuracy_m', 'gps_hdop',
+    'rxqual', 'c_over_i',
     'obs_mcc', 'obs_mnc', 'obs_lac', 'obs_ci', 'obs_tac', 'obs_eci',
     'obs_pci', 'obs_earfcn', 'obs_nrarfcn',
     'service_type', 'service_outcome', 'call_setup_time_ms', 'call_duration_s',
     'mos', 'throughput_kbps', 'latency_ms', 'packet_loss_pct',
 ]
+
+#: Collections on ParsedMeasurement. Counted rather than presence-checked —
+#: a format that carries none yields 0, which is a fact worth asserting.
+_COLLECTIONS = ['neighbours', 'carriers', 'beams', 'events']
 
 
 def _encode(value):
@@ -73,6 +78,8 @@ class TrpParserStreamTests(SimpleTestCase):
         digest = hashlib.sha256()
         count = 0
         present = {f: 0 for f in _TRACKED}
+        collected = {c: 0 for c in _COLLECTIONS}
+        samples_with = {c: 0 for c in _COLLECTIONS}
         quality_flags: dict[str, int] = {}
         first_ts = last_ts = None
 
@@ -92,6 +99,12 @@ class TrpParserStreamTests(SimpleTestCase):
                 if _is_present(row.get(field)):
                     present[field] += 1
 
+            for name in _COLLECTIONS:
+                items = getattr(pm, name, None) or []
+                collected[name] += len(items)
+                if items:
+                    samples_with[name] += 1
+
             for flag in (pm.quality_flags or []):
                 quality_flags[flag] = quality_flags.get(flag, 0) + 1
 
@@ -106,6 +119,8 @@ class TrpParserStreamTests(SimpleTestCase):
             'stream_sha256': digest.hexdigest(),
             'present_counts': present,
             'absent_counts': {f: count - n for f, n in present.items()},
+            'collection_item_counts': collected,
+            'samples_with_collection': samples_with,
             'quality_flags': dict(sorted(quality_flags.items())),
             'first_captured_at': first_ts.isoformat() if first_ts else None,
             'last_captured_at': last_ts.isoformat() if last_ts else None,

@@ -20,6 +20,22 @@ logger = logging.getLogger(__name__)
 _CHUNK_SIZE = 1000  # measurements per bulk_create batch
 
 
+def _naive(dt):
+    """Strip tzinfo when USE_TZ=False so the DB backend accepts the value.
+
+    Module level rather than a closure because both the ingest loop and
+    _flush_chunk need it — event timestamps come straight from vendor files and
+    are frequently tz-aware.
+    """
+    if dt is None:
+        return None
+    from django.conf import settings
+    if not settings.USE_TZ and dt.tzinfo is not None:
+        from datetime import timezone as _tz
+        return dt.astimezone(_tz.utc).replace(tzinfo=None)
+    return dt
+
+
 @tracked_task('drive_test.process_drive_test_file')
 def _run_process_drive_test_file(drive_file_id: int):
     """
@@ -69,16 +85,6 @@ def _run_process_drive_test_file(drive_file_id: int):
         chunk_service = []
         _test_device = None
         _device_resolved = False
-
-        def _naive(dt):
-            """Strip tzinfo when USE_TZ=False so SQLite accepts the value."""
-            if dt is None:
-                return None
-            from django.conf import settings
-            if not settings.USE_TZ and dt.tzinfo is not None:
-                from datetime import timezone as _tz
-                return dt.astimezone(_tz.utc).replace(tzinfo=None)
-            return dt
 
         for pm in parser.parse(file_path):
             # Resolve TestDevice once on first measurement that carries device info
@@ -145,6 +151,11 @@ def _run_process_drive_test_file(drive_file_id: int):
         from drive_test.services.analysis import AnalysisEngine, QualityAssessor
         engine = AnalysisEngine(drive_file)
         engine.run()
+
+        # ----------------------------------------------------------------
+        # Step 4b: mirror legacy HandoverEvent rows into the event stream
+        # ----------------------------------------------------------------
+        _mirror_handover_events(drive_file)
 
         # ----------------------------------------------------------------
         # Step 5: data quality result
@@ -238,6 +249,70 @@ def _audit_processing_event(drive_file, *, status: str, **extra) -> None:
         logger.exception('Audit log write failed for drive_file #%s', drive_file.pk)
 
 
+#: HandoverEvent.result -> MeasurementEvent.EventType. HandoverEvent is being
+#: superseded by MeasurementEvent; it keeps being written until its readers are
+#: migrated, and this mirrors it so the event stream is complete meanwhile.
+_HO_RESULT_TO_EVENT = {
+    'success': 'HO_SUCCESS',
+    'failure': 'HO_FAILURE',
+    'ping_pong': 'PING_PONG',
+}
+_HO_SEVERITY = {
+    'success': 'INFO',
+    'failure': 'HIGH',
+    'ping_pong': 'MEDIUM',
+}
+
+
+def _mirror_handover_events(drive_file) -> int:
+    """Create MeasurementEvent rows from this file's HandoverEvent rows.
+
+    Idempotent: skips handovers whose timestamp already has a matching mobility
+    event on the session, so reprocessing does not duplicate the timeline.
+    """
+    from drive_test.models import HandoverEvent, MeasurementEvent
+
+    handovers = (
+        HandoverEvent.objects
+        .filter(measurement__drive_file=drive_file)
+        .select_related('measurement')
+    )
+    if not handovers.exists():
+        return 0
+
+    existing = set(
+        MeasurementEvent.objects
+        .filter(session_id=drive_file.session_id,
+                event_type__in=list(_HO_RESULT_TO_EVENT.values()))
+        .values_list('occurred_at', 'event_type')
+    )
+
+    rows = []
+    for ho in handovers:
+        event_type = _HO_RESULT_TO_EVENT.get(ho.result, 'HO_ATTEMPT')
+        occurred = _naive(ho.occurred_at or (ho.measurement.captured_at if ho.measurement else None))
+        if occurred is None or (occurred, event_type) in existing:
+            continue
+        rows.append(MeasurementEvent(
+            session_id=drive_file.session_id,
+            measurement=ho.measurement,
+            occurred_at=occurred,
+            event_type=event_type,
+            severity=_HO_SEVERITY.get(ho.result, 'INFO'),
+            latitude=ho.measurement.latitude if ho.measurement else None,
+            longitude=ho.measurement.longitude if ho.measurement else None,
+            source_cell_id=ho.source_cell_id,
+            target_cell_id=ho.target_cell_id,
+            duration_ms=ho.ho_duration_ms,
+            description=ho.get_ho_type_display() if ho.ho_type else '',
+            payload={'mirrored_from': 'HandoverEvent', 'ho_type': ho.ho_type},
+        ))
+
+    if rows:
+        MeasurementEvent.objects.bulk_create(rows)
+    return len(rows)
+
+
 def _resolve_parser(drive_file):
     """Instantiate the parser named by the file's ParserProfile.
 
@@ -271,14 +346,25 @@ def _resolve_parser(drive_file):
 
 
 def _flush_chunk(chunk: list, chunk_radio: list, chunk_service: list, drive_file) -> int:
-    """bulk_create one chunk of measurements and their radio/service sub-rows."""
-    from drive_test.models import Measurement, RadioMeasurement, ServiceMeasurement
+    """bulk_create one chunk of measurements and every sub-row they carry.
+
+    The neighbour/carrier/beam/event branches are no-ops for parsers that do not
+    produce them, so formats without that data cost nothing here.
+    """
+    from drive_test.models import (
+        BeamMeasurement, CarrierMeasurement, Measurement, MeasurementEvent,
+        NeighbourMeasurement, RadioMeasurement, ServiceMeasurement,
+    )
 
     measurement_objects = [item[0] for item in chunk]
     created = Measurement.objects.bulk_create(measurement_objects)
 
     radio_rows = []
     service_rows = []
+    neighbour_rows = []
+    carrier_rows = []
+    beam_rows = []
+    event_rows = []
 
     for m_obj, pm in zip(created, [item[1] for item in chunk]):
         # `is not None`, not truthiness: SINR 0 dB and CQI 0 are valid readings.
@@ -301,9 +387,74 @@ def _flush_chunk(chunk: list, chunk_radio: list, chunk_service: list, drive_file
                 ss_rsrp=pm.ss_rsrp,
                 ss_rsrq=pm.ss_rsrq,
                 ss_sinr=pm.ss_sinr,
+                rxqual=pm.rxqual,
+                c_over_i=pm.c_over_i,
                 dl_throughput_kbps=pm.dl_throughput_kbps,
                 ul_throughput_kbps=pm.ul_throughput_kbps,
                 raw_data=pm.raw_data,
+            ))
+
+        for nb in pm.neighbours:
+            neighbour_rows.append(NeighbourMeasurement(
+                measurement=m_obj,
+                rank=nb.rank,
+                rat=nb.rat,
+                obs_pci=nb.obs_pci,
+                obs_psc=nb.obs_psc,
+                obs_bsic=nb.obs_bsic,
+                obs_arfcn=nb.obs_arfcn,
+                rssi=nb.rssi,
+                rscp=nb.rscp,
+                ecio=nb.ecio,
+                rsrp=nb.rsrp,
+                rsrq=nb.rsrq,
+                ss_rsrp=nb.ss_rsrp,
+                raw_data=nb.raw_data,
+            ))
+
+        for cc in pm.carriers:
+            carrier_rows.append(CarrierMeasurement(
+                measurement=m_obj,
+                cc_index=cc.cc_index,
+                is_primary=cc.is_primary,
+                arfcn=cc.arfcn,
+                band=cc.band,
+                bandwidth_mhz=cc.bandwidth_mhz,
+                rsrp=cc.rsrp,
+                rsrq=cc.rsrq,
+                sinr=cc.sinr,
+                mimo_layers=cc.mimo_layers,
+                modulation=cc.modulation,
+                dl_throughput_kbps=cc.dl_throughput_kbps,
+                ul_throughput_kbps=cc.ul_throughput_kbps,
+                raw_data=cc.raw_data,
+            ))
+
+        for beam in pm.beams:
+            beam_rows.append(BeamMeasurement(
+                measurement=m_obj,
+                ssb_index=beam.ssb_index,
+                is_serving=beam.is_serving,
+                ss_rsrp=beam.ss_rsrp,
+                ss_rsrq=beam.ss_rsrq,
+                ss_sinr=beam.ss_sinr,
+                raw_data=beam.raw_data,
+            ))
+
+        for ev in pm.events:
+            event_rows.append(MeasurementEvent(
+                session_id=drive_file.session_id,
+                measurement=m_obj,
+                occurred_at=_naive(ev.occurred_at),
+                event_type=ev.event_type,
+                severity=ev.severity or 'INFO',
+                # Fall back to the sample's own position when the event carries none.
+                latitude=ev.latitude if ev.latitude is not None else m_obj.latitude,
+                longitude=ev.longitude if ev.longitude is not None else m_obj.longitude,
+                technology=ev.technology,
+                duration_ms=ev.duration_ms,
+                description=ev.description[:300],
+                payload=ev.payload,
             ))
 
         if pm.service_type:
@@ -323,6 +474,14 @@ def _flush_chunk(chunk: list, chunk_radio: list, chunk_service: list, drive_file
         RadioMeasurement.objects.bulk_create(radio_rows, ignore_conflicts=True)
     if service_rows:
         ServiceMeasurement.objects.bulk_create(service_rows)
+    if neighbour_rows:
+        NeighbourMeasurement.objects.bulk_create(neighbour_rows, ignore_conflicts=True)
+    if carrier_rows:
+        CarrierMeasurement.objects.bulk_create(carrier_rows, ignore_conflicts=True)
+    if beam_rows:
+        BeamMeasurement.objects.bulk_create(beam_rows, ignore_conflicts=True)
+    if event_rows:
+        MeasurementEvent.objects.bulk_create(event_rows)
 
     return len(created)
 

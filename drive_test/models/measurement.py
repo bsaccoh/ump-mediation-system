@@ -103,6 +103,12 @@ class RadioMeasurement(models.Model):
     ss_rsrq = models.FloatField(null=True, blank=True)           # 5G SS-RSRQ
     ss_sinr = models.FloatField(null=True, blank=True)           # 5G SS-SINR
 
+    # 2G quality. Previously there was nowhere to put these, so parsers wrote
+    # 2G C/I into `ecio` — a 3G column that is always negative — which made 2G
+    # quality analysis silently wrong.
+    rxqual = models.IntegerField(null=True, blank=True)          # 2G: 0–7
+    c_over_i = models.FloatField(null=True, blank=True)          # 2G carrier/interference (dB)
+
     # Throughput (kbps)
     dl_throughput_kbps = models.FloatField(null=True, blank=True)
     ul_throughput_kbps = models.FloatField(null=True, blank=True)
@@ -117,6 +123,129 @@ class RadioMeasurement(models.Model):
 
     def __str__(self):
         return f'Radio @ {self.measurement_id}'
+
+
+class NeighbourMeasurement(models.Model):
+    """
+    One detected neighbour cell at a measurement point.
+
+    Ranked 0..N by received level, N typically 6–32 depending on the source.
+    Carries the same A/B/C provenance tiering as Measurement: the observed
+    identifiers are raw and never overwritten; `cell` is the authoritative
+    reference match; `match_confidence`/`match_method` are derived.
+
+    Without this table there is no missing-neighbour detection, no pilot
+    pollution analysis, no overshoot analysis and no handover-candidate
+    reasoning — it is the single highest-leverage addition to the schema.
+    """
+
+    measurement = models.ForeignKey(
+        Measurement, on_delete=models.CASCADE, related_name='neighbours'
+    )
+    rank = models.SmallIntegerField(help_text='0 = strongest detected neighbour')
+    rat = models.CharField(max_length=5, blank=True)             # 2G / 3G / 4G / 5G
+
+    # Observed identifiers (A-tier — from the file, never overwritten)
+    obs_pci = models.IntegerField(null=True, blank=True)         # 4G/5G
+    obs_psc = models.IntegerField(null=True, blank=True)         # 3G
+    obs_bsic = models.IntegerField(null=True, blank=True)        # 2G
+    obs_arfcn = models.IntegerField(null=True, blank=True)       # any RAT
+
+    # Received level / quality, whichever the RAT reports
+    rssi = models.FloatField(null=True, blank=True)
+    rscp = models.FloatField(null=True, blank=True)
+    ecio = models.FloatField(null=True, blank=True)
+    rsrp = models.FloatField(null=True, blank=True)
+    rsrq = models.FloatField(null=True, blank=True)
+    ss_rsrp = models.FloatField(null=True, blank=True)
+
+    # Reference match (B + C tier)
+    cell = models.ForeignKey(
+        Cell, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='neighbour_measurements', db_constraint=False,
+    )
+    match_confidence = models.FloatField(null=True, blank=True)
+    match_method = models.CharField(max_length=30, blank=True)
+
+    raw_data = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['measurement', 'rank']
+        unique_together = [('measurement', 'rank')]
+        indexes = [
+            models.Index(fields=['measurement', 'rank']),
+            models.Index(fields=['cell']),
+        ]
+
+    def __str__(self):
+        return f'N{self.rank} @ {self.measurement_id}'
+
+
+class CarrierMeasurement(models.Model):
+    """
+    Per-component-carrier measurements under carrier aggregation.
+
+    Aggregate throughput is uninterpretable without knowing how many carriers
+    produced it, so each CC is measured independently.
+    """
+
+    measurement = models.ForeignKey(
+        Measurement, on_delete=models.CASCADE, related_name='carriers'
+    )
+    cc_index = models.SmallIntegerField(help_text='0 = PCell')
+    is_primary = models.BooleanField(default=False)
+
+    arfcn = models.IntegerField(null=True, blank=True)
+    band = models.CharField(max_length=20, blank=True)
+    bandwidth_mhz = models.FloatField(null=True, blank=True)
+
+    rsrp = models.FloatField(null=True, blank=True)
+    rsrq = models.FloatField(null=True, blank=True)
+    sinr = models.FloatField(null=True, blank=True)
+
+    mimo_layers = models.SmallIntegerField(null=True, blank=True)
+    modulation = models.CharField(max_length=20, blank=True)
+    dl_throughput_kbps = models.FloatField(null=True, blank=True)
+    ul_throughput_kbps = models.FloatField(null=True, blank=True)
+
+    raw_data = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['measurement', 'cc_index']
+        unique_together = [('measurement', 'cc_index')]
+        indexes = [models.Index(fields=['measurement', 'cc_index'])]
+
+    def __str__(self):
+        return f'CC{self.cc_index} @ {self.measurement_id}'
+
+
+class BeamMeasurement(models.Model):
+    """
+    Per-SSB-beam 5G NR measurements.
+
+    Beam-level analysis is most of what 5G drive testing is for; retrofitting
+    this table later would be expensive, so it lands with the others.
+    """
+
+    measurement = models.ForeignKey(
+        Measurement, on_delete=models.CASCADE, related_name='beams'
+    )
+    ssb_index = models.SmallIntegerField()
+    is_serving = models.BooleanField(default=False)
+
+    ss_rsrp = models.FloatField(null=True, blank=True)
+    ss_rsrq = models.FloatField(null=True, blank=True)
+    ss_sinr = models.FloatField(null=True, blank=True)
+
+    raw_data = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['measurement', 'ssb_index']
+        unique_together = [('measurement', 'ssb_index')]
+        indexes = [models.Index(fields=['measurement', 'ssb_index'])]
+
+    def __str__(self):
+        return f'SSB{self.ssb_index} @ {self.measurement_id}'
 
 
 class ServiceMeasurement(models.Model):

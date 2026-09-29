@@ -18,7 +18,8 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from drive_test.models import (
-    DriveTestFile, DriveTestSession, HandoverEvent, Measurement,
+    BeamMeasurement, CarrierMeasurement, DriveTestFile, DriveTestSession,
+    HandoverEvent, Measurement, MeasurementEvent, NeighbourMeasurement,
     ParserProfile, RadioMeasurement, ServiceMeasurement,
 )
 from reference.models import Operator
@@ -29,7 +30,8 @@ from . import compare_or_write, corpus_files
 #: regenerating snapshots is a deliberate, reviewable diff.
 _RADIO_FIELDS = [
     'technology', 'rssi', 'rscp', 'ecio', 'rsrp', 'rsrq', 'sinr', 'cqi',
-    'ss_rsrp', 'ss_rsrq', 'ss_sinr', 'dl_throughput_kbps', 'ul_throughput_kbps',
+    'ss_rsrp', 'ss_rsrq', 'ss_sinr', 'rxqual', 'c_over_i',
+    'dl_throughput_kbps', 'ul_throughput_kbps',
 ]
 
 #: Numeric columns summarised as min/max/mean.
@@ -112,6 +114,10 @@ class GoldenSummaryTests(TestCase):
         radio = RadioMeasurement.objects.filter(measurement__drive_file=drive_file)
         services = ServiceMeasurement.objects.filter(measurement__drive_file=drive_file)
         handovers = HandoverEvent.objects.filter(measurement__drive_file=drive_file)
+        neighbours = NeighbourMeasurement.objects.filter(measurement__drive_file=drive_file)
+        carriers = CarrierMeasurement.objects.filter(measurement__drive_file=drive_file)
+        beams = BeamMeasurement.objects.filter(measurement__drive_file=drive_file)
+        events = MeasurementEvent.objects.filter(session=session)
 
         total = measurements.count()
 
@@ -163,6 +169,16 @@ class GoldenSummaryTests(TestCase):
             'handover_count': handovers.count(),
             'handover_types': _histogram(handovers, 'ho_type'),
             'handover_results': _histogram(handovers, 'result'),
+
+            # Zero for TRP, which carries none of these. Asserting the zero is
+            # the point: it proves the new tables are wired without changing
+            # existing behaviour, and it will move the day a richer parser lands.
+            'neighbour_count': neighbours.count(),
+            'carrier_count': carriers.count(),
+            'beam_count': beams.count(),
+            'event_count': events.count(),
+            'event_types': _histogram(events, 'event_type'),
+            'event_severities': _histogram(events, 'severity'),
 
             'distinct_gsm_cells': measurements.values('obs_mcc', 'obs_mnc', 'obs_lac', 'obs_ci').distinct().count(),
             'distinct_lte_cells': measurements.values('obs_tac', 'obs_eci').distinct().count(),
