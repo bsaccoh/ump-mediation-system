@@ -1,0 +1,13 @@
+/* Drive Test — Measurement Explorer (list + detail). Reuses .dt-sl-*, .dt-st-* and .dt-fd-* primitives. */
+.dt-ms-match { display: inline-block; padding: 1px 7px; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.04em; border-radius: 3px; border: 1px solid #cbd5e1; background: #f1f5f9; color: #475569; }
+.dt-ms-match-matched { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+.dt-ms-match-unmatched { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
+.dt-ms-match-unknown { background: #fff; color: #6b7280; border-style: dashed; }
+.dt-ms-range span { display: flex; gap: 4px; }
+.dt-ms-range input { min-width: 0; width: 50%; }
+.dt-ms-group { margin: 10px 0 4px; font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #6c757d; }
+.dt-ms-group:first-child { margin-top: 0; }
+.dt-ms-nav { display: flex; gap: 8px; margin: 0 0 12px; font-size: 0.8rem; }
+.dt-ms-note { font-size: 0.78rem; color: #6c757d; margin-top: 8px; }
+.dt-ms-hash { font-family: monospace; font-size: 0.72rem; word-break: break-all; }
+.dt-ms-map { height: 260px; border-radius: 4px; }

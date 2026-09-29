@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+{% load humanize static %}
+
+{% block title %}Data Quality | Drive Test | UMP{% endblock %}
+{% block page_title %}Data Quality{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/site_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/finding_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/measurement_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_detail.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/data_quality.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 dt-sl dt-st dt-fd dt-ms dt-dq" id="dt-dq"
+     data-api-template="{% url 'drive_test:data_quality_session_detail' 'SESSION_REF' %}">
+
+  <div class="dt-sl-header">
+    <div>
+      <h1>Data Quality</h1>
+      <p>Assess the completeness, validity and reliability of drive-test datasets before analysis.</p>
+    </div>
+    <div class="dt-dq-actions">
+      <a href="{{ request.path }}" class="dt-sl-btn"><i class="bi bi-arrow-clockwise"></i> Refresh</a>
+      <a href="{% url 'drive_test:kpi_analysis' %}{% if filters.session %}?session={{ filters.session }}{% endif %}" class="dt-sl-btn"><i class="bi bi-graph-up"></i> KPI Analysis</a>
+      <a href="{% url 'drive_test:session_list' %}" class="dt-sl-btn">View Sessions</a>
+    </div>
+  </div>
+
+  {% if not has_any %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No drive-test sessions available.</div>
+    <p>Upload a drive-test file to begin analysis.</p>
+    <a href="{% url 'drive_test:session_upload' %}" class="dt-sl-btn dt-sl-btn-primary">Upload Drive Test</a>
+  </div>
+  {% else %}
+
+  <form method="get" class="dt-sl-panel dt-sl-filters">
+    <div class="dt-sl-field dt-sl-field-search">
+      <label for="q-q">Search</label>
+      <input id="q-q" type="text" name="q" value="{{ filters.q }}" placeholder="Session, title, file or operator...">
+    </div>
+    <div class="dt-sl-field"><label for="q-op">Operator</label>
+      <select id="q-op" name="operator"><option value="">All Operators</option>
+        {% for op in operators %}<option value="{{ op.code }}" {% if filters.operator == op.code %}selected{% endif %}>{{ op.name }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="q-tech">Technology</label>
+      <select id="q-tech" name="technology"><option value="">All</option>
+        {% for t in technology_choices %}<option value="{{ t }}" {% if filters.technology == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="q-sess">Session</label>
+      <input id="q-sess" type="text" name="session" value="{{ filters.session }}" placeholder="DT-..."></div>
+    <div class="dt-sl-field"><label for="q-status">Quality Status</label>
+      <select id="q-status" name="status"><option value="">All</option>
+        {% for v, l in quality_choices %}<option value="{{ v }}" {% if filters.quality == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="q-from">Test date from</label><input id="q-from" type="date" name="date_from" value="{{ filters.date_from }}"></div>
+    <div class="dt-sl-field"><label for="q-to">To</label><input id="q-to" type="date" name="date_to" value="{{ filters.date_to }}"></div>
+    {% if per_page != page_sizes.0 %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
+    <div class="dt-sl-actions">
+      <button type="submit" class="dt-sl-btn dt-sl-btn-primary">Search</button>
+      <a href="{% url 'drive_test:data_quality' %}" class="dt-sl-btn">Clear</a>
+    </div>
+  </form>
+
+  {% if load_error %}
+  <div class="dt-fd-note">Unable to load data-quality results. Please try again. If the problem persists, contact the system administrator.</div>
+  {% endif %}
+  {% for e in errors %}<div class="dt-fd-note">{{ e }}</div>{% endfor %}
+
+  <div class="dt-sl-summary">
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Sessions Assessed</span>
+      <span class="dt-sl-stat-value">{% if summary.sessions_assessed is not None %}{{ summary.sessions_assessed|intcomma }}{% else %}—{% endif %}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Measurements Assessed</span>
+      <span class="dt-sl-stat-value">{% if summary.measurements_assessed is not None %}{{ summary.measurements_assessed|intcomma }}{% else %}—{% endif %}</span></div>
+    <div class="dt-sl-stat dt-sl-stat-warn"><span class="dt-sl-stat-label">Quality Issues</span>
+      <span class="dt-sl-stat-value">{% if summary.quality_issues is not None %}{{ summary.quality_issues|intcomma }}{% else %}—{% endif %}</span></div>
+    <div class="dt-sl-stat dt-sl-stat-bad"><span class="dt-sl-stat-label">Invalid Records</span>
+      <span class="dt-sl-stat-value">{% if summary.invalid_records is not None %}{{ summary.invalid_records|intcomma }}{% else %}—{% endif %}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Unmatched Measurements</span>
+      <span class="dt-sl-stat-value">{% if summary.unmatched_measurements is not None %}{{ summary.unmatched_measurements|intcomma }}{% else %}—{% endif %}</span></div>
+  </div>
+
+  {% if not rows %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No quality results match your filters.</div>
+    <p>Try changing or clearing the selected filters.</p>
+    <a href="{% url 'drive_test:data_quality' %}" class="dt-sl-btn">Clear Filters</a>
+  </div>
+  {% else %}
+
+  <div class="dt-dq-cols">
+    <div class="dt-sl-panel dt-dq-panel">
+      <div class="dt-sd-sectiontitle">Measurement Quality</div>
+      {{ chart|json_script:"dq-chart-data" }}
+      <div class="dt-dq-chart-wrap"><canvas id="dq-chart" height="160"></canvas></div>
+      <dl class="dt-dq-legend">
+        <div><span class="dt-dq-dot dt-dq-dot-valid"></span>Valid<span class="v">{{ chart.valid|intcomma }}</span></div>
+        <div><span class="dt-dq-dot dt-dq-dot-invalid"></span>Invalid<span class="v">{{ chart.invalid|intcomma }}</span></div>
+        <div><span class="dt-dq-dot dt-dq-dot-nogps"></span>Without GPS<span class="v">{{ chart.without_gps|intcomma }}</span></div>
+        <div><span class="dt-dq-dot dt-dq-dot-unmatched"></span>Unmatched<span class="v">{{ chart.unmatched|intcomma }}</span></div>
+      </dl>
+    </div>
+
+    <div class="dt-sl-panel dt-dq-panel">
+      <div class="dt-sd-sectiontitle">GPS Coverage</div>
+      {% if category %}
+      <dl class="dt-sd-list">
+        <div><dt>With Coordinates</dt><dd>{{ category.location.with_gps|intcomma }}</dd></div>
+        <div><dt>Without Coordinates</dt><dd>{{ category.location.without_gps|intcomma }}</dd></div>
+        <div><dt>Invalid Coordinates</dt><dd>{{ category.location.invalid_coords|intcomma }}</dd></div>
+      </dl>
+      <a href="{% url 'drive_test:gis' %}{% if filters.session %}?session={{ filters.session }}{% endif %}" class="dt-sl-link">View on Map &rarr;</a>
+      {% else %}
+      <div class="dt-sd-empty">—</div>
+      {% endif %}
+    </div>
+
+    <div class="dt-sl-panel dt-dq-panel">
+      <div class="dt-sd-sectiontitle">Cell Reference Quality</div>
+      {% if category %}
+      <dl class="dt-sd-list">
+        <div><dt>Matched</dt><dd>{{ category.reference.matched|intcomma }}</dd></div>
+        <div><dt>Unmatched</dt><dd>{{ category.reference.unmatched|intcomma }}</dd></div>
+        <div><dt>Unknown (pending)</dt><dd>{{ category.reference.unknown|intcomma }}</dd></div>
+      </dl>
+      <a href="{% url 'drive_test:cell_matching' %}{% if filters.session %}?session={{ filters.session }}{% endif %}" class="dt-sl-link">View Cell Matching &rarr;</a>
+      {% else %}
+      <div class="dt-sd-empty">—</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if category %}
+  <div class="dt-sl-panel dt-dq-panel">
+    <div class="dt-sd-sectiontitle">Radio Quality — fields present in valid measurements</div>
+    <div class="dt-dq-radio-grid">
+      {% for label, count in category.radio.signal %}
+      <div class="dt-dq-radio-item"><span class="l">{{ label }}</span><span class="v">{{ count|intcomma }}</span></div>
+      {% endfor %}
+      {% for label, count in category.radio.identifiers %}
+      <div class="dt-dq-radio-item"><span class="l">{{ label }}</span><span class="v">{{ count|intcomma }}</span></div>
+      {% endfor %}
+    </div>
+    <div class="dt-st-muted">Out of {{ category.radio.total_valid|intcomma }} valid measurement{{ category.radio.total_valid|pluralize }} in the current filter.</div>
+  </div>
+  {% endif %}
+
+  <div class="dt-sl-panel dt-dq-panel">
+    <div class="dt-sd-sectiontitle">Quality Issues</div>
+    {% if not issues %}
+    <div class="dt-sd-empty dt-dq-issues-empty">
+      <span class="dt-sd-ok">&#10003; No data-quality issues detected.</span><br>
+      <span class="dt-st-muted">All available quality checks passed for the selected dataset.</span>
+    </div>
+    {% else %}
+    <div class="dt-sl-scroll">
+      <table class="dt-sl-table">
+        <thead><tr><th>Issue</th><th>Category</th><th class="dt-sl-num">Records</th><th class="dt-sl-num">% of Records</th><th class="dt-sl-num">Sessions</th><th>Action</th></tr></thead>
+        <tbody>
+          {% for i in issues %}
+          <tr>
+            <td>{{ i.issue }}</td>
+            <td>{{ i.category }}</td>
+            <td class="dt-sl-num">{{ i.count|intcomma }}</td>
+            <td class="dt-sl-num">{% if i.pct is not None %}{{ i.pct }}%{% else %}—{% endif %}</td>
+            <td class="dt-sl-num">{{ i.sessions|intcomma }}</td>
+            <td>
+              {% if i.issue == 'Unmatched measurements' %}<a class="dt-sl-link" href="{% url 'drive_test:cell_matching' %}?status=unmatched">View</a>
+              {% elif i.issue == 'Missing GPS coordinates' %}<a class="dt-sl-link" href="{% url 'drive_test:gis' %}">View</a>
+              {% else %}<a class="dt-sl-link" href="{% url 'drive_test:measurement_list' %}">View</a>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="dt-ms-note">Counts are the exact fields recorded by data-quality processing (services.analysis.QualityAssessor) for each file, summed across the sessions matching the current filters. There is no severity or resolution workflow on this data — use the links to investigate the underlying records.</p>
+    {% endif %}
+  </div>
+
+  <div class="dt-sl-panel dt-sl-tablepanel">
+    <div class="dt-sl-toolbar">
+      <span class="dt-sl-toolbar-title">Session Quality</span>
+      <span class="dt-sl-toolbar-count">Showing {{ first_item|intcomma }}&ndash;{{ last_item|intcomma }} of {{ page_obj.paginator.count|intcomma }} sessions</span>
+    </div>
+    <div class="dt-sl-scroll">
+      <table class="dt-sl-table">
+        <thead><tr>
+          <th>Session</th><th>Operator</th><th>Test Date</th><th class="dt-sl-num">Measurements</th>
+          <th class="dt-sl-num">Valid</th><th class="dt-sl-num">Invalid</th><th class="dt-sl-num">Matched</th>
+          <th class="dt-sl-num">Unmatched</th><th>Quality</th><th>Action</th>
+        </tr></thead>
+        <tbody>
+          {% for s in rows %}
+          <tr>
+            <td><a href="{% url 'drive_test:session_detail' s.session_ref %}" class="dt-sl-ref">{{ s.session_ref }}</a></td>
+            <td>{{ s.operator.name }}</td>
+            <td class="dt-sl-nowrap">{{ s.test_date|date:"d M Y" }}</td>
+            <td class="dt-sl-num">{{ s.total_measurements|intcomma }}</td>
+            {% if s.qr_has_result %}
+            <td class="dt-sl-num">{{ s.qr_valid|intcomma }}</td>
+            <td class="dt-sl-num">{{ s.qr_invalid|intcomma }}</td>
+            <td class="dt-sl-num">{{ s.qr_matched|intcomma }}</td>
+            <td class="dt-sl-num">{{ s.qr_unmatched|intcomma }}</td>
+            <td>{% if s.qr_score is not None %}<span class="dt-dq-band dt-dq-band-{{ s.qr_band }}">{{ s.qr_band_label }}</span>
+              <div class="dt-st-sub">{{ s.qr_score }}%</div>{% else %}—{% endif %}
+              {% if s.qr_pending_files %}<div class="dt-st-sub">{{ s.qr_pending_files }} file{{ s.qr_pending_files|pluralize }} not yet assessed</div>{% endif %}
+            </td>
+            {% elif s.qr_is_failed %}
+            <td class="dt-sl-num" colspan="4"><span class="dt-dq-band dt-dq-band-failed">FAILED</span></td>
+            <td>—</td>
+            {% elif s.qr_is_processing %}
+            <td class="dt-sl-num" colspan="4"><span class="dt-dq-band dt-dq-band-processing">PROCESSING</span></td>
+            <td>—</td>
+            {% else %}
+            <td class="dt-sl-num" colspan="4">—</td>
+            <td>No quality results are available for this session.</td>
+            {% endif %}
+            <td><button type="button" class="dt-sl-link dt-dq-view" data-session="{{ s.session_ref }}">View</button></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="dt-sl-footer">
+      <form method="get" class="dt-sl-perpage">
+        {% for k, v in request.GET.items %}{% if k != 'per_page' and k != 'page' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+        <label for="q-pp">Rows</label>
+        <select id="q-pp" name="per_page" onchange="this.form.submit()">
+          {% for n in page_sizes %}<option value="{{ n }}" {% if n == per_page %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+      </form>
+      {% if page_obj.has_other_pages %}
+      <nav aria-label="Session pages" class="dt-sl-pager">
+        {% if page_obj.has_previous %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">&lsaquo; Previous</a>
+        {% else %}<span class="disabled">&lsaquo; Previous</span>{% endif %}
+        {% for p in page_obj.paginator.page_range %}
+          {% if p == page_obj.number %}<span class="active">{{ p }}</span>
+          {% elif p >= page_obj.number|add:"-2" and p <= page_obj.number|add:"2" %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ p }}">{{ p }}</a>{% endif %}
+        {% endfor %}
+        {% if page_obj.has_next %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Next &rsaquo;</a>
+        {% else %}<span class="disabled">Next &rsaquo;</span>{% endif %}
+      </nav>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+
+  <!-- Session quality drawer -->
+  <div class="modal fade" id="dq-modal" tabindex="-1" aria-labelledby="dq-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content dt-sd-modal">
+        <div class="modal-header"><h2 class="modal-title" id="dq-modal-title">Data Quality</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+        <div class="modal-body" id="dq-modal-body"><div class="dt-st-muted">Loading…</div></div>
+        <div class="modal-footer">
+          <a href="#" class="dt-sl-btn" id="dq-modal-session" hidden>Open Session</a>
+          <button type="button" class="dt-sl-btn" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script src="{% static 'drive_test/js/data_quality.js' %}"></script>
+{% endblock %}

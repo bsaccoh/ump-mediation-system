@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% load humanize static %}
+
+{% block title %}{{ campaign.name }} | Benchmark | UMP{% endblock %}
+{% block page_title %}{{ campaign.name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/benchmark.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 dt-sl">
+
+  <div class="dt-sl-header">
+    <div>
+      <h1>{{ campaign.name }}</h1>
+      <p>{{ campaign.campaign_ref }} &middot; {{ campaign.date_from|date:"d M Y" }} — {{ campaign.date_to|date:"d M Y" }}
+        {% if campaign.region %} &middot; {{ campaign.region.name }}{% endif %}
+      </p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'drive_test:benchmark_campaign_list' %}" class="dt-sl-btn dt-sl-btn-outline">
+        <i class="bi bi-arrow-left"></i> Campaigns
+      </a>
+      {% if campaign.status != 'ARCHIVED' %}
+      <form method="post" action="{% url 'drive_test:benchmark_campaign_score' ref=campaign.campaign_ref %}">
+        {% csrf_token %}
+        <button type="submit" class="dt-sl-btn dt-sl-btn-primary">
+          <i class="bi bi-calculator"></i> {% if campaign.status == 'COMPLETED' %}Re-score{% else %}Run Scoring{% endif %}
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if messages %}
+  {% for msg in messages %}
+  <div class="alert alert-{{ msg.tags }} alert-dismissible fade show" role="alert">
+    {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  <!-- Campaign info cards -->
+  <div class="bm-info-row">
+    <div class="bm-info-card">
+      <div class="bm-info-label">Status</div>
+      <div class="bm-info-value"><span class="bm-status bm-status-{{ campaign.status|lower }}">{{ campaign.get_status_display }}</span></div>
+    </div>
+    <div class="bm-info-card">
+      <div class="bm-info-label">Sessions</div>
+      <div class="bm-info-value">{{ sessions|length }}</div>
+    </div>
+    <div class="bm-info-card">
+      <div class="bm-info-label">Operators Scored</div>
+      <div class="bm-info-value">{{ scores|length }}</div>
+    </div>
+    <div class="bm-info-card">
+      <div class="bm-info-label">Created By</div>
+      <div class="bm-info-value">{{ campaign.created_by.get_full_name|default:campaign.created_by.username }}</div>
+    </div>
+  </div>
+
+  {% if score_data %}
+  <!-- Operator Score Cards -->
+  <h2 class="bm-section-title">Operator Scores</h2>
+  <div class="bm-score-grid">
+    {% for s in score_data %}
+    <div class="bm-score-card">
+      <div class="bm-score-header">
+        <div class="bm-score-operator">{{ s.operator }}</div>
+        <div class="bm-grade-badge" style="background: {{ s.grade_color }};">{{ s.grade }}</div>
+      </div>
+      <div class="bm-composite-score">{{ s.composite|floatformat:1 }}</div>
+      <div class="bm-composite-label">{{ s.grade_label }}</div>
+      <div class="bm-kpi-bars" id="kpi-bars-{{ forloop.counter }}"></div>
+      <div class="bm-score-meta">
+        {{ s.sessions_count }} sessions &middot; {{ s.measurements_count|intcomma }} measurements
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Composite comparison bar chart -->
+  <div class="dt-sl-panel mt-4">
+    <h3 class="bm-chart-title">Composite Score Comparison</h3>
+    <div style="position: relative; height: 300px;">
+      <canvas id="bm-composite-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- Radar chart -->
+  <div class="dt-sl-panel mt-4">
+    <h3 class="bm-chart-title">KPI Radar</h3>
+    <div style="position: relative; height: 400px;">
+      <canvas id="bm-radar-chart"></canvas>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Sessions table -->
+  <div class="dt-sl-panel mt-4 bm-table-wrap">
+    <h3 class="bm-chart-title">Campaign Sessions ({{ sessions|length }})</h3>
+    {% if sessions %}
+    <div class="dt-sl-scroll">
+    <table class="dt-sl-table">
+      <thead>
+        <tr><th>Session</th><th>Operator</th><th>Date</th><th>Region</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for s in sessions %}
+        <tr>
+          <td><a href="{% url 'drive_test:session_detail' session_ref=s.session_ref %}" class="dt-sl-ref">{{ s.session_ref }}</a></td>
+          <td>{{ s.operator.name }}</td>
+          <td class="dt-sl-nowrap">{{ s.test_date|date:"d M Y" }}</td>
+          <td>{{ s.region.name|default:"—" }}</td>
+          <td>{{ s.get_status_display }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="text-muted py-3 text-center">No sessions assigned to this campaign.</p>
+    {% endif %}
+  </div>
+
+  <!-- KPI Weights -->
+  <div class="dt-sl-panel mt-4">
+    <h3 class="bm-chart-title">Scoring Weights</h3>
+    <div class="bm-weights-grid" id="bm-weights"></div>
+    <script>
+    (function(){
+      const w = {{ weights|safe }};
+      const labels = {coverage:'Coverage',rssi_mean:'RSSI',cssr:'CSSR',dcr:'DCR',mos:'MOS',speed:'Speed'};
+      const el = document.getElementById('bm-weights');
+      for (const [k, v] of Object.entries(w)) {
+        el.innerHTML += '<div class="bm-weight-item"><span class="bm-weight-label">'+(labels[k]||k)+'</span><span class="bm-weight-value">'+v+'%</span></div>';
+      }
+    })();
+    </script>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const scoreData = {{ score_data|safe }};
+  if (!scoreData || scoreData.length === 0) return;
+
+  const kpiLabelMap = {
+    coverage: 'Coverage %', rssi_mean: 'Mean RSSI', cssr: 'CSSR %',
+    dcr: 'DCR %', mos: 'MOS', speed: 'Speed',
+  };
+  scoreData.forEach((s, idx) => {
+    const el = document.getElementById('kpi-bars-' + (idx + 1));
+    if (!el) return;
+    for (const [key, label] of Object.entries(kpiLabelMap)) {
+      const normScore = (s.kpi_scores && s.kpi_scores[key]) || 0;
+      const rawVal = (s.kpi_values && s.kpi_values[key]);
+      const rawStr = rawVal != null ? rawVal.toFixed(1) : '—';
+      el.innerHTML += `<div class="bm-kpi-bar-row">
+        <span class="bm-kpi-bar-label">${label}</span>
+        <div class="bm-kpi-bar-track"><div class="bm-kpi-bar-fill" style="width:${normScore}%"></div></div>
+        <span class="bm-kpi-bar-value">${rawStr}</span>
+      </div>`;
+    }
+  });
+
+  const OP_COLORS = [
+    '#2563eb', '#dc2626', '#059669', '#d97706', '#7c3aed', '#db2777',
+  ];
+
+  // Composite bar chart
+  const compCtx = document.getElementById('bm-composite-chart');
+  if (compCtx) {
+    new Chart(compCtx, {
+      type: 'bar',
+      data: {
+        labels: scoreData.map(s => s.operator),
+        datasets: [{
+          label: 'Composite Score',
+          data: scoreData.map(s => s.composite),
+          backgroundColor: scoreData.map(s => s.grade_color + 'cc'),
+          borderColor: scoreData.map(s => s.grade_color),
+          borderWidth: 1,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              afterLabel: item => scoreData[item.dataIndex].grade + ' — ' + scoreData[item.dataIndex].grade_label,
+            },
+          },
+        },
+        scales: {
+          y: { min: 0, max: 100, title: { display: true, text: 'Score' } },
+        },
+      },
+    });
+  }
+
+  // Radar chart
+  const radarCtx = document.getElementById('bm-radar-chart');
+  if (radarCtx) {
+    const kpiKeys = Object.keys(scoreData[0].kpi_scores || {});
+    const kpiLabels = {
+      coverage: 'Coverage', rssi_mean: 'RSSI', cssr: 'CSSR',
+      dcr: 'DCR', mos: 'MOS', speed: 'Speed',
+    };
+    new Chart(radarCtx, {
+      type: 'radar',
+      data: {
+        labels: kpiKeys.map(k => kpiLabels[k] || k),
+        datasets: scoreData.map((s, i) => ({
+          label: s.operator,
+          data: kpiKeys.map(k => s.kpi_scores[k] || 0),
+          borderColor: OP_COLORS[i % OP_COLORS.length],
+          backgroundColor: OP_COLORS[i % OP_COLORS.length] + '22',
+          pointBackgroundColor: OP_COLORS[i % OP_COLORS.length],
+          borderWidth: 2,
+        })),
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          r: { min: 0, max: 100, ticks: { stepSize: 20 } },
+        },
+      },
+    });
+  }
+});
+</script>
+{% endblock %}

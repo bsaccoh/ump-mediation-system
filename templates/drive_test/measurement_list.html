@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% load humanize static %}
+
+{% block title %}Measurements | Drive Test | UMP{% endblock %}
+{% block page_title %}Measurements{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/site_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/finding_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/measurement_list.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 dt-sl dt-st dt-fd dt-ms">
+
+  <div class="dt-sl-header">
+    <div>
+      <h1>Measurements</h1>
+      <p>Explore individual drive-test measurements, radio conditions, serving cells and source data.</p>
+    </div>
+  </div>
+
+  {% if load_error %}
+  <div class="dt-fd-note">Unable to load measurements. Please try again. If the problem persists, contact the system administrator.</div>
+  {% endif %}
+  {% for e in errors %}<div class="dt-fd-note">{{ e }}</div>{% endfor %}
+
+  {% if not has_any %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No measurements available</div>
+    <p>Upload and process a drive-test file to begin exploring measurements.</p>
+    <a href="{% url 'drive_test:session_upload' %}" class="dt-sl-btn dt-sl-btn-primary">Upload Drive Test</a>
+  </div>
+  {% else %}
+
+  <form method="get" class="dt-sl-panel dt-sl-filters">
+    <div class="dt-sl-field dt-sl-field-search">
+      <label for="m-q">Search</label>
+      <input id="m-q" type="text" name="q" value="{{ filters.q }}" placeholder="Session, file, cell, site, operator or technology...">
+    </div>
+    <div class="dt-sl-field"><label for="m-sess">Session</label>
+      <input id="m-sess" type="text" name="session" value="{{ filters.session }}" placeholder="DT-..."></div>
+    <div class="dt-sl-field"><label for="m-op">Operator</label>
+      <select id="m-op" name="operator"><option value="">All Operators</option>
+        {% for op in operators %}<option value="{{ op.code }}" {% if filters.operator == op.code %}selected{% endif %}>{{ op.name }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="m-tech">Technology</label>
+      <select id="m-tech" name="technology"><option value="">All</option>
+        {% for t in technology_choices %}<option value="{{ t }}" {% if filters.technology == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="m-cell">Cell</label>
+      <input id="m-cell" type="text" name="cell" value="{{ filters.cell }}" placeholder="Cell ID"></div>
+    <div class="dt-sl-field"><label for="m-site">Site</label>
+      <input id="m-site" type="text" name="site" value="{{ filters.site }}" placeholder="Site code or name"></div>
+    <div class="dt-sl-field"><label for="m-reg">Region</label>
+      <select id="m-reg" name="region"><option value="">All</option>
+        {% for r in regions %}<option value="{{ r.pk }}" {% if filters.region == r.pk|stringformat:'d' %}selected{% endif %}>{{ r.name }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="m-dis">District</label>
+      <select id="m-dis" name="district"><option value="">All</option>
+        {% for d in districts %}<option value="{{ d.pk }}" {% if filters.district == d.pk|stringformat:'d' %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="m-from">From</label><input id="m-from" type="datetime-local" name="date_from" value="{{ filters.date_from }}"></div>
+    <div class="dt-sl-field"><label for="m-to">To</label><input id="m-to" type="datetime-local" name="date_to" value="{{ filters.date_to }}"></div>
+    <div class="dt-sl-field"><label for="m-match">Cell matching</label>
+      <select id="m-match" name="match"><option value="">All</option>
+        {% for v, l in match_choices %}<option value="{{ v }}" {% if filters.match == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    {% if metrics %}
+    <div class="dt-sl-field"><label for="m-metric">Signal metric</label>
+      <select id="m-metric" name="metric"><option value="">None</option>
+        {% for k, l in metrics %}<option value="{{ k }}" {% if filters.metric == k %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field dt-ms-range"><label for="m-min">Range</label>
+      <span><input id="m-min" type="number" step="any" name="min" value="{{ filters.min }}" placeholder="min" aria-label="Minimum"><input type="number" step="any" name="max" value="{{ filters.max }}" placeholder="max" aria-label="Maximum"></span></div>
+    {% endif %}
+    {% if per_page != page_sizes.0 %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
+    <div class="dt-sl-actions">
+      <button type="submit" class="dt-sl-btn dt-sl-btn-primary">Search</button>
+      <a href="{% url 'drive_test:measurement_list' %}" class="dt-sl-btn">Clear</a>
+    </div>
+  </form>
+
+  {% if not load_error %}
+  <div class="dt-sl-summary">
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Measurements</span><span class="dt-sl-stat-value">{{ summary.total|intcomma }}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Matched</span><span class="dt-sl-stat-value">{{ summary.matched|intcomma }}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Unmatched</span><span class="dt-sl-stat-value">{{ summary.unmatched|intcomma }}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Unknown</span><span class="dt-sl-stat-value">{{ summary.unknown|intcomma }}</span></div>
+  </div>
+  {% if summary.invalid %}<div class="dt-st-muted" style="margin:-4px 0 10px">{{ summary.invalid|intcomma }} record{{ summary.invalid|pluralize }} flagged invalid by the parser {{ summary.invalid|pluralize:"is,are" }} not listed.</div>{% endif %}
+
+  {% if not rows %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No measurements match your filters.</div>
+    <p>Try changing or clearing the selected filters.</p>
+    <a href="{% url 'drive_test:measurement_list' %}" class="dt-sl-btn">Clear Filters</a>
+  </div>
+  {% else %}
+  <div class="dt-sl-panel dt-sl-tablepanel">
+    <div class="dt-sl-toolbar">
+      <span class="dt-sl-toolbar-title">Drive Test Measurements</span>
+      <span class="dt-sl-toolbar-count">Showing {{ first_item|intcomma }}&ndash;{{ last_item|intcomma }} of {{ page_obj.paginator.count|intcomma }} measurements</span>
+    </div>
+    <div class="dt-sl-scroll">
+      <table class="dt-sl-table dt-fd-table">
+        <thead><tr>
+          <th>Time</th><th>Session</th><th>Operator</th><th>Tech</th><th>Cell</th>
+          {% if has_signal %}<th>Signal</th>{% endif %}{% if has_quality %}<th>Quality</th>{% endif %}
+          {% if has_point %}<th>Location</th>{% endif %}<th>Match</th><th>Action</th>
+        </tr></thead>
+        <tbody>
+          {% for m in rows %}
+          <tr>
+            <td class="dt-sl-nowrap">{{ m.captured_at|date:"d M Y H:i:s" }}</td>
+            <td><a href="{% url 'drive_test:session_detail' m.drive_file.session.session_ref %}" class="dt-sl-ref">{{ m.drive_file.session.session_ref }}</a></td>
+            <td>{{ m.drive_file.session.operator.name }}</td>
+            <td>{% if m.tech %}<span class="dt-sl-tech">{{ m.tech }}</span>{% else %}—{% endif %}</td>
+            <td>{% if m.state == 'matched' %}<a href="{% url 'drive_test:cell_detail' m.matched_cell.pk %}" class="dt-sl-link">{{ m.matched_cell.cell_id }}</a>
+                <div class="dt-st-sub">{{ m.ref_site.name }}</div>
+              {% elif m.observed %}<span class="dt-st-sub" title="Observed in the file; no reference cell linked">Observed: {{ m.observed }}</span>
+              {% else %}—{% endif %}</td>
+            {% if has_signal %}<td class="dt-sl-nowrap">{% if m.signal %}{{ m.signal.1|floatformat:"-1" }} {{ m.signal.2 }}<div class="dt-st-sub">{{ m.signal.0 }}</div>{% else %}—{% endif %}</td>{% endif %}
+            {% if has_quality %}<td class="dt-sl-nowrap">{% if m.quality %}{{ m.quality.1|floatformat:"-1" }} {{ m.quality.2 }}<div class="dt-st-sub">{{ m.quality.0 }}</div>{% else %}—{% endif %}</td>{% endif %}
+            {% if has_point %}<td class="dt-sl-nowrap">{% if m.has_point %}<a href="{% url 'drive_test:measurement_detail' m.pk %}#dt-ms-map" class="dt-sl-link">{{ m.latitude|floatformat:4 }}, {{ m.longitude|floatformat:4 }}</a>{% else %}—{% endif %}</td>{% endif %}
+            <td><span class="dt-ms-match dt-ms-match-{{ m.state }}" title="{% if m.state == 'unmatched' %}The reference database has no cell for this observation. This does not indicate a network problem.{% elif m.state == 'unknown' %}Cell matching has not completed for this file.{% else %}Reference cell linked{% endif %}">{{ m.state_label }}</span></td>
+            <td><a href="{% url 'drive_test:measurement_detail' m.pk %}" class="dt-sl-link">View</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="dt-sl-footer">
+      <form method="get" class="dt-sl-perpage">
+        {% for k, v in request.GET.items %}{% if k != 'per_page' and k != 'page' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+        <label for="m-pp">Rows</label>
+        <select id="m-pp" name="per_page" onchange="this.form.submit()">
+          {% for n in page_sizes %}<option value="{{ n }}" {% if n == per_page %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+      </form>
+      {% if page_obj.has_other_pages %}
+      <nav aria-label="Measurement pages" class="dt-sl-pager">
+        {% if page_obj.has_previous %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">&lsaquo; Previous</a>
+        {% else %}<span class="disabled">&lsaquo; Previous</span>{% endif %}
+        {% for p in page_obj.paginator.page_range %}
+          {% if p == page_obj.number %}<span class="active">{{ p }}</span>
+          {% elif p >= page_obj.number|add:"-2" and p <= page_obj.number|add:"2" %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ p }}">{{ p }}</a>{% endif %}
+        {% endfor %}
+        {% if page_obj.has_next %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Next &rsaquo;</a>
+        {% else %}<span class="disabled">Next &rsaquo;</span>{% endif %}
+      </nav>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

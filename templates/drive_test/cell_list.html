@@ -1,58 +1,173 @@
 {% extends "base.html" %}
-{% load humanize %}
+{% load humanize static %}
 
-{% block title %}Cell Reference | Drive Test | UMP{% endblock %}
+{% block title %}Cells | Drive Test | UMP{% endblock %}
+{% block page_title %}Cells{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.min.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/site_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/cell_list.css' %}">
+{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-  <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="container-fluid py-3 dt-sl dt-st dt-ce" id="dt-ce" data-map-url="{{ map_url }}">
+
+  <div class="dt-sl-header">
     <div>
-      <h1 class="h3 mb-0">Cell Reference</h1>
-      <small class="text-muted">Authoritative cell identifiers used for drive-test matching</small>
+      <h1>Cells</h1>
+      <p>Manage telecom cell reference data used for drive-test matching, analysis and GIS.</p>
     </div>
-    <a href="{% url 'drive_test:reference_import' %}" class="btn btn-outline-primary btn-sm">
-      <i class="bi bi-file-earmark-arrow-up me-1"></i>Import CSV
-    </a>
+    {% if can_edit %}
+    <div class="dt-st-actions">
+      <a href="{% url 'drive_test:reference_import' %}?entity=cells" class="dt-sl-btn"><i class="bi bi-file-earmark-arrow-up"></i>Import Cells</a>
+      <a href="{% url 'drive_test:cell_create' %}" class="dt-sl-btn dt-sl-btn-primary">+ Add Cell</a>
+    </div>
+    {% endif %}
   </div>
 
-  <div class="card">
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
-        <thead>
-          <tr>
-            <th>Cell ID</th><th>Operator</th><th>Tech</th><th>MCC</th><th>MNC</th>
-            <th>LAC/TAC</th><th>CI/ECI</th><th>PCI</th><th>CGI/ECGI</th><th>Active</th>
-          </tr>
-        </thead>
+  {% if not has_any_cells %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No network cells found</div>
+    <p>Add or import network reference data to enable<br>Drive Test cell matching.</p>
+    {% if can_edit %}
+    <a href="{% url 'drive_test:cell_create' %}" class="dt-sl-btn dt-sl-btn-primary">Add Cell</a>
+    <a href="{% url 'drive_test:reference_import' %}?entity=cells" class="dt-sl-btn">Import Cells</a>
+    {% else %}<p class="dt-st-muted">Ask a regulatory administrator to add cell reference data.</p>{% endif %}
+  </div>
+  {% else %}
+
+  <form method="get" class="dt-sl-panel dt-sl-filters">
+    <div class="dt-sl-field dt-sl-field-search">
+      <label for="f-q">Search</label>
+      <input id="f-q" type="text" name="q" value="{{ filters.q }}" placeholder="Cell code, CGI/ECGI, CI, LAC, TAC, ECI, NCI, PCI or site...">
+    </div>
+    <div class="dt-sl-field"><label for="f-op">Operator</label>
+      <select id="f-op" name="operator"><option value="">All Operators</option>
+        {% for op in operators %}<option value="{{ op.code }}" {% if filters.operator == op.code %}selected{% endif %}>{{ op.name }}</option>{% endfor %}
+      </select></div>
+    <div class="dt-sl-field"><label for="f-tech">Technology</label>
+      <select id="f-tech" name="technology"><option value="">All Technologies</option>
+        {% for t in technology_choices %}<option value="{{ t }}" {% if filters.technology == t %}selected{% endif %}>{{ t }}</option>{% endfor %}
+      </select></div>
+    <div class="dt-sl-field"><label for="f-site">Site</label>
+      <input id="f-site" type="text" name="site" value="{{ filters.site }}" placeholder="Site code or name"></div>
+    <div class="dt-sl-field"><label for="f-sector">Sector</label>
+      <input id="f-sector" type="text" name="sector" value="{{ filters.sector }}" placeholder="Sector"></div>
+    {% if bands %}
+    <div class="dt-sl-field"><label for="f-band">Band</label>
+      <select id="f-band" name="band"><option value="">All Bands</option>
+        {% for b in bands %}<option value="{{ b.pk }}" {% if filters.band == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.technology }} Band {{ b.band_number }} ({{ b.frequency_mhz|floatformat:"-1" }} MHz)</option>{% endfor %}
+      </select></div>
+    {% endif %}
+    <div class="dt-sl-field"><label for="f-status">Status</label>
+      <select id="f-status" name="status"><option value="">All</option>
+        <option value="active" {% if filters.status == 'active' %}selected{% endif %}>Active</option>
+        <option value="inactive" {% if filters.status == 'inactive' %}selected{% endif %}>Inactive</option></select></div>
+    <div class="dt-sl-field"><label for="f-match">Matching</label>
+      <select id="f-match" name="matching"><option value="">All</option>
+        {% for k, label in match_states %}<option value="{{ k }}" {% if filters.matching == k %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></div>
+    {% if per_page != page_sizes.0 %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
+    <div class="dt-sl-actions">
+      <button type="submit" class="dt-sl-btn dt-sl-btn-primary">Search</button>
+      <a href="{% url 'drive_test:cell_list' %}" class="dt-sl-btn">Clear</a>
+    </div>
+  </form>
+
+  <div class="dt-sl-summary">
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Cells</span><span class="dt-sl-stat-value">{{ summary.total|intcomma }}</span></div>
+    <div class="dt-sl-stat dt-sl-stat-ok"><span class="dt-sl-stat-label">Active</span><span class="dt-sl-stat-value">{{ summary.active|intcomma }}</span></div>
+    <div class="dt-sl-stat" title="Cells with a CGI or ECGI, so exact identifier matching is possible"><span class="dt-sl-stat-label">Matchable</span><span class="dt-sl-stat-value">{{ summary.matchable|intcomma }}</span></div>
+    <div class="dt-sl-stat" title="Cells with their own valid coordinates (site coordinates are not counted)"><span class="dt-sl-stat-label">With Coordinates</span><span class="dt-sl-stat-value">{{ summary.coords|intcomma }}</span></div>
+  </div>
+
+  {% if not cells %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No cells match your filters.</div>
+    <p>Try changing your search or filters.</p>
+    <a href="{% url 'drive_test:cell_list' %}" class="dt-sl-btn">Clear Filters</a>
+  </div>
+  {% else %}
+
+  <div class="dt-sl-panel dt-sl-tablepanel">
+    <div class="dt-sl-toolbar">
+      <span class="dt-sl-toolbar-title">Network Cells</span>
+      <span class="dt-sl-toolbar-count">Showing {{ first_item }}&ndash;{{ last_item }} of {{ page_obj.paginator.count|intcomma }} cells</span>
+    </div>
+    <div class="dt-sl-scroll">
+      <table class="dt-sl-table dt-ce-table">
+        <thead><tr>
+          <th>Cell</th><th>Operator</th><th>Tech</th><th>Site</th><th>Sector</th><th>Identifier</th>
+          <th>Frequency</th><th class="dt-sl-num">PCI</th><th>Location</th><th>Matching</th><th>Status</th><th>Action</th>
+        </tr></thead>
         <tbody>
-          {% for cell in page_obj %}
+          {% for c in cells %}
           <tr>
-            <td><code>{{ cell.cell_id }}</code></td>
-            <td>{{ cell.operator.name }}</td>
-            <td><span class="badge bg-{% if cell.technology == '4G' %}primary{% elif cell.technology == '5G' %}success{% elif cell.technology == '3G' %}info{% else %}secondary{% endif %}">{{ cell.technology }}</span></td>
-            <td>{{ cell.mcc|default:"—" }}</td>
-            <td>{{ cell.mnc|default:"—" }}</td>
-            <td>{{ cell.lac|default:cell.tac|default:"—" }}</td>
-            <td>{{ cell.ci|default:cell.eci|default:"—" }}</td>
-            <td>{{ cell.pci|default:"—" }}</td>
-            <td><small>{{ cell.cgi|default:cell.ecgi|default:"—" }}</small></td>
-            <td>{% if cell.is_active %}<i class="bi bi-check-circle text-success"></i>{% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %}</td>
+            <td class="dt-sl-nowrap">
+              <a href="{% url 'drive_test:cell_detail' c.pk %}" class="dt-sl-ref">{{ c.cell_id }}</a>
+              {% if c.warnings %}<span class="dt-ce-warn" title="{{ c.warnings|join:'; ' }}" aria-label="{{ c.warnings|join:'; ' }}"><i class="bi bi-exclamation-triangle-fill"></i></span>{% endif %}
+            </td>
+            <td>{{ c.operator.name }}</td>
+            <td><span class="dt-sl-tech">{{ c.technology|default:"—" }}</span></td>
+            <td><a href="{% url 'drive_test:site_detail' c.sector.site_id %}" class="dt-sl-link">{{ c.sector.site.site_id }}</a><div class="dt-st-sub">{{ c.sector.site.name }}</div></td>
+            <td>{{ c.sector.sector_id }}</td>
+            <td class="dt-sl-nowrap">{% if c.identifier %}<span class="dt-st-sub">{{ c.identifier.0 }}</span> {{ c.identifier.1 }}{% if c.lac is not None and c.identifier.0 == 'CI' %}<div class="dt-st-sub">LAC {{ c.lac }}</div>{% endif %}{% else %}—{% endif %}</td>
+            <td>{% if c.band_label or c.channel_label %}{{ c.band_label }}{% if c.channel_label %}<div class="dt-st-sub">{{ c.channel_label }}</div>{% endif %}{% else %}—{% endif %}</td>
+            <td class="dt-sl-num">{{ c.pci|default_if_none:"—" }}</td>
+            <td class="dt-sl-nowrap">
+              {% if c.own_gps %}{{ c.latitude|floatformat:4 }}, {{ c.longitude|floatformat:4 }}
+                <button type="button" class="dt-st-pin" data-cell="{{ c.pk }}" title="Show on map" aria-label="Show {{ c.cell_id }} on map"><i class="bi bi-geo-alt"></i></button>
+              {% elif c.site_gps %}<span class="dt-st-sub">Site location</span>{% else %}—{% endif %}
+            </td>
+            <td><span class="dt-sl-badge dt-ce-match-{{ c.state }}" title="{{ c.state_help }}">{{ c.state_label }}</span></td>
+            <td><span class="dt-sl-badge {% if c.is_active %}dt-sl-badge-active{% else %}dt-sl-badge-inactive{% endif %}">{% if c.is_active %}ACTIVE{% else %}INACTIVE{% endif %}</span></td>
+            <td class="dt-sl-nowrap">
+              <a href="{% url 'drive_test:cell_detail' c.pk %}" class="dt-sl-link">View</a>
+              {% if can_edit %}<span class="dt-sl-sep">|</span><a href="{% url 'drive_test:cell_edit' c.pk %}" class="dt-sl-link">Edit</a>{% endif %}
+            </td>
           </tr>
-          {% empty %}
-          <tr><td colspan="10" class="text-center text-muted py-4">No cells found. <a href="{% url 'drive_test:reference_import' %}">Import from CSV.</a></td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-    {% if page_obj.has_other_pages %}
-    <div class="card-footer d-flex justify-content-between">
-      <small>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</small>
-      <div>
-        {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}" class="btn btn-sm btn-outline-secondary">Previous</a>{% endif %}
-        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}" class="btn btn-sm btn-outline-secondary">Next</a>{% endif %}
-      </div>
+    <div class="dt-sl-footer">
+      <form method="get" class="dt-sl-perpage">
+        {% for k, v in request.GET.items %}{% if k != 'per_page' and k != 'page' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+        <label for="f-pp">Rows</label>
+        <select id="f-pp" name="per_page" onchange="this.form.submit()">
+          {% for n in page_sizes %}<option value="{{ n }}" {% if n == per_page %}selected{% endif %}>{{ n }}</option>{% endfor %}
+        </select>
+      </form>
+      {% if page_obj.has_other_pages %}
+      <nav aria-label="Cell pages" class="dt-sl-pager">
+        {% if page_obj.has_previous %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">&lsaquo; Previous</a>
+        {% else %}<span class="disabled">&lsaquo; Previous</span>{% endif %}
+        {% for p in page_obj.paginator.page_range %}
+          {% if p == page_obj.number %}<span class="active">{{ p }}</span>
+          {% elif p >= page_obj.number|add:"-2" and p <= page_obj.number|add:"2" %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ p }}">{{ p }}</a>{% endif %}
+        {% endfor %}
+        {% if page_obj.has_next %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Next &rsaquo;</a>
+        {% else %}<span class="disabled">Next &rsaquo;</span>{% endif %}
+      </nav>
+      {% endif %}
     </div>
-    {% endif %}
   </div>
+
+  <div class="dt-sl-panel dt-st-mappanel">
+    <div class="dt-sl-toolbar"><span class="dt-sl-toolbar-title">Cell Map</span><span class="dt-sl-toolbar-count" id="dt-ce-map-note"></span></div>
+    <div id="dt-ce-map" class="dt-st-map"></div>
+    <div class="dt-st-mapempty" id="dt-ce-map-empty" hidden>No mapped cells available</div>
+  </div>
+  {% endif %}
+  {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/leaflet/leaflet.min.js' %}"></script>
+<script src="{% static 'drive_test/js/cell_list.js' %}"></script>
 {% endblock %}

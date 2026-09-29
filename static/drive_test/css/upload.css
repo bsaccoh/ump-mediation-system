@@ -1,0 +1,136 @@
+/* Drive Test — Upload page. Builds on session_list.css (.dt-sl-*) shared Drive Test primitives. */
+.dt-upload { max-width: 980px; }
+.dt-upload-panel { padding: 14px 16px; }
+.dt-upload-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #1e2b4a; margin-bottom: 10px; }
+.dt-upload-optional { font-weight: 500; text-transform: none; letter-spacing: 0; color: #9ca3af; margin-left: 6px; }
+
+.dt-upload-zone { border: 1px dashed #b6c0d4; border-radius: 4px; background: #fafbfe; padding: 26px 16px; text-align: center; transition: border-color .12s, background .12s; }
+.dt-upload-zone.is-dragging { border-color: #1a237e; background: #eef2ff; }
+.dt-upload-zone:focus-visible { outline: 2px solid #1a237e; outline-offset: 2px; }
+.dt-upload-icon { font-size: 1.6rem; color: #64748b; }
+.dt-upload-headline { font-size: 0.92rem; font-weight: 600; margin: 6px 0 2px; }
+.dt-upload-or { font-size: 0.78rem; color: #6c757d; margin-bottom: 8px; }
+.dt-upload-formats { font-size: 0.76rem; color: #6c757d; margin-top: 8px; }
+
+.dt-upload-file { display: flex; align-items: center; gap: 12px; text-align: left; }
+.dt-upload-file[hidden], .dt-upload-empty[hidden] { display: none; }
+.dt-upload-file-icon { font-size: 1.5rem; color: #1a237e; }
+.dt-upload-file-meta { flex: 1; min-width: 0; }
+.dt-upload-file-name { font-weight: 600; font-size: 0.88rem; overflow-wrap: anywhere; }
+.dt-upload-file-sub { font-size: 0.76rem; color: #6c757d; }
+.dt-upload-file-warn { font-size: 0.76rem; color: #b91c1c; margin-top: 2px; }
+
+.dt-upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+.dt-upload-span2 { grid-column: 1 / -1; }
+.dt-upload-grid .dt-sl-field { min-width: 0; }
+.dt-upload-hint { font-size: 0.7rem; color: #9ca3af; margin-top: 3px; }
+.dt-upload-hint.is-error { color: #b91c1c; font-weight: 600; }
+.dt-upload-grid select.is-error { border-color: #dc2626; }
+
+.dt-upload-info { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 16px; margin: 0; }
+.dt-upload-info dt { font-size: 0.66rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #6c757d; }
+.dt-upload-info dd { margin: 1px 0 0; font-size: 0.82rem; font-weight: 500; overflow-wrap: anywhere; }
+
+.dt-upload-bar { height: 4px; background: #e2e8f0; border-radius: 2px; margin-bottom: 10px; overflow: hidden; }
+.dt-upload-bar span { display: block; height: 100%; width: 0; background: #1a237e; }
+.dt-upload-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+.dt-upload-step { display: flex; gap: 8px; align-items: baseline; font-size: 0.82rem; color: #9ca3af; }
+.dt-upload-step .mark { width: 14px; text-align: center; }
+.dt-upload-step.is-done { color: #1e2b4a; }
+.dt-upload-step.is-done .mark { color: #16a34a; }
+.dt-upload-step.is-active { color: #1a237e; font-weight: 600; }
+.dt-upload-step.is-fail { color: #b91c1c; font-weight: 600; }
+.dt-upload-step small { color: #6c757d; font-weight: 400; }
+
+.dt-upload-result { margin-top: 12px; padding-top: 12px; border-top: 1px solid #e3e6ea; font-size: 0.84rem; }
+.dt-upload-result h3 { font-size: 0.92rem; font-weight: 700; margin: 0 0 6px; }
+.dt-upload-result dl { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; margin: 0 0 10px; }
+.dt-upload-result dt { color: #6c757d; font-weight: 500; }
+.dt-upload-result dd { margin: 0; font-weight: 600; }
+.dt-upload-result .dt-upload-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.dt-upload-result.is-bad h3 { color: #b91c1c; }
+.dt-upload-result.is-ok h3 { color: #047857; }
+
+.dt-upload-alert { padding: 9px 12px; margin-bottom: 12px; font-size: 0.82rem; border-radius: 4px; border: 1px solid; }
+.dt-upload-alert-bad { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+
+.dt-upload-actions { display: flex; justify-content: space-between; gap: 8px; }
+.dt-upload-actions[hidden] { display: none; }
+.dt-upload button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── auto-detect hint ───────────────────────────────────────────────── */
+.dt-upload-hint.is-detected { color: #047857; font-weight: 600; }
+.dt-upload-info dd.dt-upload-info-detected { color: #047857; }
+
+/* ── step spinner (inside step list item while active) ──────────────── */
+.dt-step-spinner {
+  display: inline-block; width: 10px; height: 10px;
+  border: 1.5px solid #c7d2fe; border-top-color: #1a237e;
+  border-radius: 50%;
+  animation: dt-spin .7s linear infinite;
+  vertical-align: middle;
+}
+
+/* ── live counter cards ─────────────────────────────────────────────── */
+.dt-upload-counters {
+  display: flex; gap: 10px; flex-wrap: wrap;
+  margin: 12px 0 10px;
+}
+.dt-upload-counter-card {
+  flex: 1; min-width: 120px;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 6px;
+  padding: 12px 16px; text-align: center;
+}
+.dt-upload-counter-num {
+  font-size: 1.65rem; font-weight: 700; font-variant-numeric: tabular-nums;
+  color: #1a237e; line-height: 1; margin-bottom: 3px;
+  transition: color .2s;
+}
+.dt-upload-counter-label {
+  font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.07em; color: #374151;
+}
+.dt-upload-counter-sub {
+  font-size: 0.7rem; color: #9ca3af; margin-top: 1px;
+}
+
+/* stage card */
+.dt-upload-counter-stage { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.dt-upload-stage-icon {
+  width: 28px; height: 28px; margin-bottom: 4px;
+  display: flex; align-items: center; justify-content: center;
+}
+.dt-upload-stage-icon.is-done { color: #16a34a; font-size: 1.3rem; }
+.dt-upload-stage-icon.is-fail { color: #b91c1c; font-size: 1.3rem; }
+.dt-upload-stage-spin {
+  display: block; width: 22px; height: 22px;
+  border: 3px solid #c7d2fe; border-top-color: #1a237e;
+  border-radius: 50%;
+  animation: dt-spin .8s linear infinite;
+}
+
+@keyframes dt-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 991px) { .dt-upload-info { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 767px) {
+  .dt-upload-grid { grid-template-columns: 1fr; }
+  .dt-upload-file { flex-wrap: wrap; }
+  .dt-upload-actions { flex-direction: column-reverse; }
+  .dt-upload-actions .dt-sl-btn, .dt-upload-result .dt-sl-btn { width: 100%; justify-content: center; }
+  .dt-upload-zone { padding: 20px 12px; }
+}
+
+/* multi-file / folder queue */
+.dt-upload-zone .dt-sl-btn + .dt-sl-btn { margin-left: 6px; }
+.dt-upload-queue { margin-top: 10px; }
+.dt-upload-group { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 0.82rem; margin-bottom: 6px; }
+.dt-upload-group .dt-upload-hint { margin: 0; }
+.dt-upload-queue-scroll { max-height: 280px; overflow: auto; border: 1px solid #e5e7eb; border-radius: 4px; }
+.dt-upload-q-name { word-break: break-all; }
+.dt-upload-q-status { font-size: 0.78rem; }
+.dt-upload-q-done .dt-upload-q-status strong { color: #047857; }
+.dt-upload-q-failed .dt-upload-q-status strong { color: #b91c1c; }
+.dt-upload-q-rm { border: 0; background: none; color: #9ca3af; cursor: pointer; padding: 0 6px; }
+.dt-upload-q-rm:hover { color: #b91c1c; }

@@ -1,56 +1,184 @@
 {% extends "base.html" %}
-{% load humanize %}
+{% load humanize static %}
 
 {% block title %}Sites | Drive Test | UMP{% endblock %}
+{% block page_title %}Sites{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.min.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/site_list.css' %}">
+{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-  <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="container-fluid py-3 dt-sl dt-st" id="dt-st" data-map-url="{{ map_url }}">
+
+  <div class="dt-sl-header">
     <div>
-      <h1 class="h3 mb-0">Sites</h1>
-      <small class="text-muted">Network base station reference data</small>
+      <h1>Sites</h1>
+      <p>Manage telecom network sites used for drive-test analysis, cell matching and GIS reference.</p>
     </div>
-    <a href="{% url 'drive_test:reference_import' %}" class="btn btn-outline-primary btn-sm">
-      <i class="bi bi-file-earmark-arrow-up me-1"></i>Import CSV
-    </a>
+    {% if can_edit %}
+    <div class="dt-st-actions">
+      <a href="{% url 'drive_test:reference_import' %}?entity=sites" class="dt-sl-btn"><i class="bi bi-file-earmark-arrow-up"></i>Import Sites</a>
+      <a href="{% url 'drive_test:site_create' %}" class="dt-sl-btn dt-sl-btn-primary">+ Add Site</a>
+    </div>
+    {% endif %}
   </div>
 
-  <div class="card">
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
-        <thead>
-          <tr>
-            <th>Site ID</th><th>Operator</th><th>Name</th><th>Type</th>
-            <th>Chiefdom</th><th>Lat</th><th>Lon</th><th>Active</th>
-          </tr>
-        </thead>
+  {% if not has_any_sites %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No network sites found</div>
+    <p>Network site reference data has not been added yet.</p>
+    {% if can_edit %}
+    <a href="{% url 'drive_test:reference_import' %}?entity=sites" class="dt-sl-btn">Import Sites</a>
+    <a href="{% url 'drive_test:site_create' %}" class="dt-sl-btn dt-sl-btn-primary">Add Site</a>
+    {% else %}
+    <p class="dt-st-muted">Ask a regulatory administrator to add site reference data.</p>
+    {% endif %}
+  </div>
+  {% else %}
+
+  <form method="get" class="dt-sl-panel dt-sl-filters" id="dt-st-filters">
+    <div class="dt-sl-field dt-sl-field-search">
+      <label for="f-q">Search</label>
+      <input id="f-q" type="text" name="q" value="{{ filters.q }}" placeholder="Search site name, code, operator or address...">
+    </div>
+    <div class="dt-sl-field">
+      <label for="f-op">Operator</label>
+      <select id="f-op" name="operator"><option value="">All Operators</option>
+        {% for op in operators %}<option value="{{ op.code }}" {% if filters.operator == op.code %}selected{% endif %}>{{ op.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="dt-sl-field">
+      <label for="f-region">Region</label>
+      <select id="f-region" name="region"><option value="">All Regions</option>
+        {% for r in regions %}<option value="{{ r.pk }}" {% if filters.region == r.pk|stringformat:"s" %}selected{% endif %}>{{ r.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="dt-sl-field">
+      <label for="f-district">District</label>
+      <select id="f-district" name="district"><option value="">All Districts</option>
+        {% for d in districts %}<option value="{{ d.pk }}" {% if filters.district == d.pk|stringformat:"s" %}selected{% endif %}>{{ d.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="dt-sl-field">
+      <label for="f-tech">Technology</label>
+      <select id="f-tech" name="technology"><option value="">All Technologies</option>
+        {% for t in technology_choices %}<option value="{{ t }}" {% if filters.technology == t %}selected{% endif %}>{{ t }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="dt-sl-field">
+      <label for="f-status">Status</label>
+      <select id="f-status" name="status">
+        <option value="">All</option>
+        <option value="active" {% if filters.status == 'active' %}selected{% endif %}>Active</option>
+        <option value="inactive" {% if filters.status == 'inactive' %}selected{% endif %}>Inactive</option>
+      </select>
+    </div>
+    {% if per_page != page_sizes.0 %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
+    <div class="dt-sl-actions">
+      <button type="submit" class="dt-sl-btn dt-sl-btn-primary">Search</button>
+      <a href="{% url 'drive_test:site_list' %}" class="dt-sl-btn">Clear</a>
+    </div>
+  </form>
+
+  <div class="dt-sl-summary">
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Total Sites</span><span class="dt-sl-stat-value">{{ summary.total|intcomma }}</span></div>
+    <div class="dt-sl-stat dt-sl-stat-ok"><span class="dt-sl-stat-label">Active</span><span class="dt-sl-stat-value">{{ summary.active|intcomma }}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Operators</span><span class="dt-sl-stat-value">{{ summary.operators|intcomma }}</span></div>
+    <div class="dt-sl-stat {% if missing_gps %}dt-sl-stat-warn{% else %}dt-sl-stat-ok{% endif %}" title="{{ missing_gps }} site{{ missing_gps|pluralize }} without valid coordinates">
+      <span class="dt-sl-stat-label">GPS Located</span><span class="dt-sl-stat-value">{{ summary.gps|intcomma }}</span>
+    </div>
+    {% if missing_gps %}<div class="dt-st-quality">{{ missing_gps|intcomma }} without GPS</div>{% endif %}
+  </div>
+
+  {% if not sites %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No sites match your filters.</div>
+    <p>Try changing your search or filters.</p>
+    <a href="{% url 'drive_test:site_list' %}" class="dt-sl-btn">Clear Filters</a>
+  </div>
+  {% else %}
+
+  <div class="dt-sl-panel dt-sl-tablepanel">
+    <div class="dt-sl-toolbar">
+      <span class="dt-sl-toolbar-title">Network Sites</span>
+      <span class="dt-sl-toolbar-count">Showing {{ first_item }}&ndash;{{ last_item }} of {{ page_obj.paginator.count|intcomma }} sites</span>
+    </div>
+    <div class="dt-sl-scroll">
+      <table class="dt-sl-table">
+        <thead><tr>
+          <th>Site</th><th>Operator</th><th>Location</th><th>Coordinates</th><th>Technology</th>
+          <th class="dt-sl-num">Sectors</th><th class="dt-sl-num">Cells</th><th>Status</th><th>Action</th>
+        </tr></thead>
         <tbody>
-          {% for site in page_obj %}
+          {% for s in sites %}
           <tr>
-            <td><code>{{ site.site_id }}</code></td>
-            <td>{{ site.operator.name }}</td>
-            <td>{{ site.name }}</td>
-            <td>{{ site.site_type }}</td>
-            <td>{{ site.chiefdom.name|default:"—" }}</td>
-            <td>{% if site.latitude %}{{ site.latitude|floatformat:5 }}{% else %}—{% endif %}</td>
-            <td>{% if site.longitude %}{{ site.longitude|floatformat:5 }}{% else %}—{% endif %}</td>
-            <td>{% if site.is_active %}<i class="bi bi-check-circle text-success"></i>{% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %}</td>
+            <td>
+              <a href="{% url 'drive_test:site_detail' s.pk %}" class="dt-sl-ref">{{ s.site_id }}</a>
+              <div class="dt-st-sub">{{ s.name }}</div>
+            </td>
+            <td>{{ s.operator.name }}</td>
+            <td>
+              {% if s.chiefdom %}{{ s.chiefdom.district.region.name }}<div class="dt-st-sub">{{ s.chiefdom.district.name }} &middot; {{ s.chiefdom.name }}</div>
+              {% else %}—{% endif %}
+            </td>
+            <td class="dt-sl-nowrap">
+              {% if s.has_gps %}
+              {{ s.latitude|floatformat:4 }}, {{ s.longitude|floatformat:4 }}
+              <button type="button" class="dt-st-pin" data-site="{{ s.pk }}" title="Show on map" aria-label="Show {{ s.site_id }} on map"><i class="bi bi-geo-alt"></i></button>
+              {% else %}—{% endif %}
+            </td>
+            <td>{% for t in s.technologies %}<span class="dt-sl-tech">{{ t }}</span> {% empty %}—{% endfor %}</td>
+            <td class="dt-sl-num">{{ s.n_sectors }}</td>
+            <td class="dt-sl-num">{{ s.n_cells }}</td>
+            <td><span class="dt-sl-badge {% if s.is_active %}dt-sl-badge-active{% else %}dt-sl-badge-inactive{% endif %}">{% if s.is_active %}ACTIVE{% else %}INACTIVE{% endif %}</span></td>
+            <td class="dt-sl-nowrap">
+              <a href="{% url 'drive_test:site_detail' s.pk %}" class="dt-sl-link">View</a>
+              {% if can_edit %}<span class="dt-sl-sep">|</span><a href="{% url 'drive_test:site_edit' s.pk %}" class="dt-sl-link">Edit</a>{% endif %}
+            </td>
           </tr>
-          {% empty %}
-          <tr><td colspan="8" class="text-center text-muted py-4">No sites found. <a href="{% url 'drive_test:reference_import' %}">Import from CSV.</a></td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-    {% if page_obj.has_other_pages %}
-    <div class="card-footer d-flex justify-content-between">
-      <small>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</small>
-      <div>
-        {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}" class="btn btn-sm btn-outline-secondary">Previous</a>{% endif %}
-        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}" class="btn btn-sm btn-outline-secondary">Next</a>{% endif %}
-      </div>
+    <div class="dt-sl-footer">
+      <form method="get" class="dt-sl-perpage">
+        {% for k, v in request.GET.items %}{% if k != 'per_page' and k != 'page' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+        <label for="f-pp">Rows</label>
+        <select id="f-pp" name="per_page" onchange="this.form.submit()">
+          {% for n in page_sizes %}<option value="{{ n }}" {% if n == per_page %}selected{% endif %}>{{ n }}</option>{% endfor %}
+        </select>
+      </form>
+      {% if page_obj.has_other_pages %}
+      <nav aria-label="Site pages" class="dt-sl-pager">
+        {% if page_obj.has_previous %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">&lsaquo; Previous</a>
+        {% else %}<span class="disabled">&lsaquo; Previous</span>{% endif %}
+        {% for p in page_obj.paginator.page_range %}
+          {% if p == page_obj.number %}<span class="active">{{ p }}</span>
+          {% elif p >= page_obj.number|add:"-2" and p <= page_obj.number|add:"2" %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ p }}">{{ p }}</a>{% endif %}
+        {% endfor %}
+        {% if page_obj.has_next %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Next &rsaquo;</a>
+        {% else %}<span class="disabled">Next &rsaquo;</span>{% endif %}
+      </nav>
+      {% endif %}
     </div>
-    {% endif %}
   </div>
+
+  <div class="dt-sl-panel dt-st-mappanel">
+    <div class="dt-sl-toolbar"><span class="dt-sl-toolbar-title">Site Map</span><span class="dt-sl-toolbar-count" id="dt-st-map-note"></span></div>
+    <div id="dt-st-map" class="dt-st-map"></div>
+    <div class="dt-st-mapempty" id="dt-st-map-empty" hidden>No mapped sites available</div>
+  </div>
+  {% endif %}
+  {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/leaflet/leaflet.min.js' %}"></script>
+<script src="{% static 'drive_test/js/site_list.js' %}"></script>
 {% endblock %}

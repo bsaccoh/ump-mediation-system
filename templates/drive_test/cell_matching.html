@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% load humanize static %}
+
+{% block title %}Cell Matching | Drive Test | UMP{% endblock %}
+{% block page_title %}Cell Matching{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/site_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/finding_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/measurement_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/cell_matching.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 dt-sl dt-st dt-fd dt-ms dt-cm">
+
+  <div class="dt-sl-header">
+    <div>
+      <h1>Cell Matching</h1>
+      <p>Review how drive-test measurements are associated with the network reference cells.</p>
+    </div>
+  </div>
+
+  {% if load_error %}
+  <div class="dt-fd-note">Unable to load cell-matching results. Please try again. If the problem persists, contact the system administrator.</div>
+  {% endif %}
+  {% for e in errors %}<div class="dt-fd-note">{{ e }}</div>{% endfor %}
+
+  {% if not has_any %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No measurement records are available for cell matching.</div>
+    <p>Upload and process a drive-test file first.</p>
+    <a href="{% url 'drive_test:session_upload' %}" class="dt-sl-btn dt-sl-btn-primary">Upload Drive Test</a>
+  </div>
+  {% else %}
+
+  <form method="get" class="dt-sl-panel dt-sl-filters">
+    <div class="dt-sl-field dt-sl-field-search">
+      <label for="c-q">Search</label>
+      <input id="c-q" type="text" name="q" value="{{ filters.q }}" placeholder="Session, file, cell, site, operator, technology or method...">
+    </div>
+    <div class="dt-sl-field"><label for="c-sess">Session</label>
+      <select id="c-sess" name="session"><option value="">All sessions</option>
+        {% for s in sessions %}<option value="{{ s.session_ref }}" {% if filters.session == s.session_ref %}selected{% endif %}>{{ s.session_ref }} · {{ s.operator.name }} · {{ s.test_date|date:"Y-m-d" }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="c-op">Operator</label>
+      <select id="c-op" name="operator"><option value="">All Operators</option>
+        {% for op in operators %}<option value="{{ op.code }}" {% if filters.operator == op.code %}selected{% endif %}>{{ op.name }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="c-tech">Technology</label>
+      <select id="c-tech" name="technology"><option value="">All</option>
+        {% for t in technology_choices %}<option value="{{ t }}" {% if filters.technology == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="c-status">Match status</label>
+      <select id="c-status" name="status"><option value="">All</option>
+        {% for v, l in status_choices %}<option value="{{ v }}" {% if filters.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="c-ident">Cell identifiers</label>
+      <select id="c-ident" name="ident"><option value="">Any</option>
+        <option value="yes" {% if filters.ident == 'yes' %}selected{% endif %}>Matchable identifiers present</option>
+        <option value="no" {% if filters.ident == 'no' %}selected{% endif %}>No matchable identifiers</option></select></div>
+    <div class="dt-sl-field"><label for="c-cell">Reference cell</label>
+      <input id="c-cell" type="text" name="cell" value="{{ filters.cell }}" placeholder="Cell ID"></div>
+    <div class="dt-sl-field"><label for="c-site">Site</label>
+      <input id="c-site" type="text" name="site" value="{{ filters.site }}" placeholder="Site code or name"></div>
+    <div class="dt-sl-field"><label for="c-reg">Region</label>
+      <select id="c-reg" name="region"><option value="">All</option>
+        {% for r in regions %}<option value="{{ r.pk }}" {% if filters.region == r.pk|stringformat:'d' %}selected{% endif %}>{{ r.name }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="c-dis">District</label>
+      <select id="c-dis" name="district"><option value="">All</option>
+        {% for d in districts %}<option value="{{ d.pk }}" {% if filters.district == d.pk|stringformat:'d' %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="c-from">From (UTC)</label><input id="c-from" type="datetime-local" name="date_from" value="{{ filters.date_from }}"></div>
+    <div class="dt-sl-field"><label for="c-to">To (UTC)</label><input id="c-to" type="datetime-local" name="date_to" value="{{ filters.date_to }}"></div>
+    {% if per_page != page_sizes.0 %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
+    <div class="dt-sl-actions">
+      <button type="submit" class="dt-sl-btn dt-sl-btn-primary">Apply</button>
+      <a href="{% url 'drive_test:cell_matching' %}" class="dt-sl-btn">Clear</a>
+    </div>
+  </form>
+  {% if filters.region or filters.district or filters.site or filters.cell %}<div class="dt-st-muted" style="margin:-4px 0 8px">Cell, Site, Region and District follow the matched reference cell and its site, so unmatched measurements are not included when any of them is selected.</div>{% endif %}
+
+  {% if not load_error %}
+  <div class="dt-sl-summary">
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Total measurements</span><span class="dt-sl-stat-value">{{ summary.total|intcomma }}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Matched</span><span class="dt-sl-stat-value">{{ summary.matched|intcomma }}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Unmatched</span><span class="dt-sl-stat-value">{{ summary.unmatched|intcomma }}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Unknown</span><span class="dt-sl-stat-value">{{ summary.unknown|intcomma }}</span></div>
+    {% if match_rate is not None %}<div class="dt-sl-stat"><span class="dt-sl-stat-label">Match rate</span><span class="dt-sl-stat-value">{{ match_rate }}%</span></div>{% endif %}
+  </div>
+  <div class="dt-cm-facts">
+    {% if match_rate is not None %}<span>Match rate = matched &divide; (matched + unmatched) = {{ summary.matched|intcomma }} &divide; {{ eligible|intcomma }}. Unknown records (matching not yet run for their file) and invalid records are not in the denominator.</span>{% endif %}
+    <span>Invalid records excluded: {{ summary.invalid|intcomma }}. These are a parser/data-quality condition, not unmatched measurements.</span>
+    {% if methods %}<span>Matched by method: {% for m in methods %}{{ m.match_method|default:"(none recorded)" }} {{ m.n|intcomma }}{% if not forloop.last %}; {% endif %}{% endfor %}.</span>{% endif %}
+  </div>
+
+  {% if not rows %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No measurements match the selected matching filters.</div>
+    <p>Try changing or clearing the selected filters.</p>
+    <a href="{% url 'drive_test:cell_matching' %}" class="dt-sl-btn">Clear Filters</a>
+  </div>
+  {% else %}
+  <div class="dt-sl-panel dt-sl-tablepanel">
+    <div class="dt-sl-toolbar">
+      <span class="dt-sl-toolbar-title">Matching Results</span>
+      <span class="dt-sl-toolbar-count">Showing {{ first_item|intcomma }}&ndash;{{ last_item|intcomma }} of {{ page_obj.paginator.count|intcomma }} measurements</span>
+    </div>
+    <div class="dt-sl-scroll">
+      <table class="dt-sl-table dt-fd-table">
+        <thead><tr>
+          <th>Time (UTC)</th><th>Session</th><th>Operator</th><th>Tech</th><th>Observed identifier</th><th>Location</th>
+          <th>Status</th><th>Method</th><th class="dt-sl-num">Confidence</th><th>Reference cell</th><th>Site</th><th>Action</th>
+        </tr></thead>
+        <tbody>
+          {% for m in rows %}
+          <tr>
+            <td class="dt-sl-nowrap">{{ m.captured_at|date:"Y-m-d H:i:s" }}</td>
+            <td><a href="{% url 'drive_test:session_detail' m.drive_file.session.session_ref %}" class="dt-sl-ref">{{ m.drive_file.session.session_ref }}</a>
+              <div class="dt-st-sub" title="{{ m.drive_file.original_filename }}">{{ m.drive_file.original_filename|truncatechars:26 }}</div></td>
+            <td>{{ m.drive_file.session.operator.name }}</td>
+            <td>{% if m.radio.technology %}<span class="dt-sl-tech">{{ m.radio.technology }}</span>{% else %}—{% endif %}</td>
+            <td>{% if m.identifiers %}<span class="dt-cm-ids">{{ m.identifiers|join:" · " }}</span>
+              {% else %}<span class="dt-st-sub">No cell identifier reported</span>{% endif %}</td>
+            <td class="dt-sl-nowrap">{% if m.has_point %}{{ m.latitude|floatformat:4 }}, {{ m.longitude|floatformat:4 }}{% else %}—{% endif %}</td>
+            <td><span class="dt-ms-match dt-ms-match-{{ m.state }}" title="{% if m.state == 'unmatched' %}Matching ran and did not associate this measurement with a reference cell. This is not a network finding.{% elif m.state == 'unknown' %}Matching has not completed for this file.{% else %}A reference cell is linked.{% endif %}">{{ m.state_label }}</span></td>
+            <td>{{ m.match_method|default:"—" }}</td>
+            <td class="dt-sl-num">{% if m.match_confidence is not None %}{{ m.match_confidence|floatformat:2 }}{% else %}—{% endif %}</td>
+            <td>{% if m.ref_cell %}<a href="{% url 'drive_test:cell_detail' m.ref_cell.pk %}" class="dt-sl-link">{{ m.ref_cell.cell_id }}</a>
+                <div class="dt-st-sub">{{ m.ref_cell.technology }} &middot; Sector {{ m.ref_sector.sector_id }} &middot; {{ m.ref_cell.operator.name }}</div>
+              {% elif m.state == 'unmatched' %}<span class="dt-st-sub">{% if m.has_idents %}No reference cell matched.{% else %}No matchable cell identifier is available for this measurement.{% endif %}</span>
+              {% else %}<span class="dt-st-sub">Not yet matched</span>{% endif %}</td>
+            <td>{% if m.ref_site %}<a href="{% url 'drive_test:site_detail' m.ref_site.pk %}" class="dt-sl-link">{{ m.ref_site.name }}</a>
+                <div class="dt-st-sub">{{ m.ref_site.site_id }}{% if m.ref_area %} &middot; {{ m.ref_area }}{% endif %}</div>{% else %}—{% endif %}</td>
+            <td><a href="{% url 'drive_test:measurement_detail' m.pk %}" class="dt-sl-link">View Measurement</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="dt-sl-footer">
+      <form method="get" class="dt-sl-perpage">
+        {% for k, v in request.GET.items %}{% if k != 'per_page' and k != 'page' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+        <label for="c-pp">Rows</label>
+        <select id="c-pp" name="per_page" onchange="this.form.submit()">
+          {% for n in page_sizes %}<option value="{{ n }}" {% if n == per_page %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+      </form>
+      {% if page_obj.has_other_pages %}
+      <nav aria-label="Result pages" class="dt-sl-pager">
+        {% if page_obj.has_previous %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">&lsaquo; Previous</a>
+        {% else %}<span class="disabled">&lsaquo; Previous</span>{% endif %}
+        {% for p in page_obj.paginator.page_range %}
+          {% if p == page_obj.number %}<span class="active">{{ p }}</span>
+          {% elif p >= page_obj.number|add:"-2" and p <= page_obj.number|add:"2" %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ p }}">{{ p }}</a>{% endif %}
+        {% endfor %}
+        {% if page_obj.has_next %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Next &rsaquo;</a>
+        {% else %}<span class="disabled">Next &rsaquo;</span>{% endif %}
+      </nav>
+      {% endif %}
+    </div>
+  </div>
+  <p class="dt-ms-note">Matching evidence is represented by the recorded matching method and confidence. Per-criterion evidence is not currently stored. Cell matching is a reference association and is separate from data quality and from network findings.</p>
+  {% endif %}
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

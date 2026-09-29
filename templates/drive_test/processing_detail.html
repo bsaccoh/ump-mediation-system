@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% load humanize static %}
+
+{% block title %}Processing — {{ file.original_filename }} | Drive Test | UMP{% endblock %}
+{% block page_title %}Processing Detail{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_detail.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/processing.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 dt-sl dt-sd dt-pm" {% if is_processing %}data-poll="1"{% endif %}>
+
+  <a href="{% url 'drive_test:processing_monitor' %}" class="dt-sd-back">&larr; Back to Processing Monitor</a>
+
+  <div class="dt-sd-header">
+    <div>
+      <h1 class="dt-sd-ref">{{ file.original_filename }}</h1>
+      <div class="dt-sd-sub">Session <a href="{% url 'drive_test:session_detail' session.session_ref %}">{{ session.session_ref }}</a> &middot; {{ session.operator.name }}</div>
+    </div>
+    <div>
+      <span class="dt-sl-badge {{ badge_class }}">{{ file.get_status_display }}</span>
+    </div>
+  </div>
+
+  {% if is_processing %}
+  <div class="dt-sl-panel dt-sd-banner is-processing">
+    <div class="dt-sd-banner-title">PROCESSING</div>
+    <p class="dt-sd-muted">Current stage: <strong>{{ stage_label }}</strong>. This page can be refreshed to see the latest status.</p>
+  </div>
+  {% endif %}
+
+  {% if is_failed %}
+  <div class="dt-sl-panel dt-sd-banner is-failed">
+    <div class="dt-sd-banner-title">PROCESSING FAILED</div>
+    {% if safe_error %}<p class="dt-sd-muted">Reason: {{ safe_error }}</p>{% endif %}
+    <p class="dt-sd-muted">Processing failed. Please review the session and upload/process again using the existing workflow.</p>
+    <a href="{% url 'drive_test:session_detail' session.session_ref %}" class="dt-sl-btn">View Session</a>
+  </div>
+  {% endif %}
+
+  <div class="dt-sl-panel dt-sd-panel">
+    <div class="dt-sd-sectiontitle">Processing Detail</div>
+    <dl class="dt-sd-list">
+      <div><dt>Session</dt><dd>{{ session.session_ref }}</dd></div>
+      <div><dt>File</dt><dd>{{ file.original_filename }}</dd></div>
+      <div><dt>Operator</dt><dd>{{ session.operator.name }}</dd></div>
+      <div><dt>Device</dt><dd>{{ device|default:"—" }}</dd></div>
+      <div><dt>Parser / Format</dt><dd>{{ file.parser_profile.name|default:file.detected_format|default:"—" }}</dd></div>
+      <div><dt>Uploaded</dt><dd>{{ file.uploaded_at|date:"d M Y H:i" }}</dd></div>
+      <div><dt>Started</dt><dd>{% if file.processing_started_at %}{{ file.processing_started_at|date:"d M Y H:i" }}{% else %}—{% endif %}</dd></div>
+      <div><dt>Duration</dt><dd>{{ duration_label|default:"—" }}</dd></div>
+      <div><dt>Status</dt><dd>{{ file.get_status_display }}</dd></div>
+    </dl>
+  </div>
+
+  <div class="dt-sl-panel dt-sd-panel">
+    <div class="dt-sd-sectiontitle">Processing Timeline</div>
+    <div class="dt-pipeline">
+      {% for stage in timeline %}
+      <div class="dt-pipeline-step {% if stage.state == 'done' %}is-done{% elif stage.state == 'current' %}is-current{% elif stage.state == 'failed' %}is-failed{% endif %}">
+        <span class="dt-pipeline-dot">
+          {% if stage.state == 'done' %}&#10003;{% elif stage.state == 'current' %}&#9679;{% elif stage.state == 'failed' %}&#10007;{% else %}&#9675;{% endif %}
+        </span>
+        <span class="dt-pipeline-label">{{ stage.label }}</span>
+      </div>
+      {% if not forloop.last %}<div class="dt-pipeline-connector"></div>{% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="dt-sl-panel dt-sd-panel">
+    <div class="dt-sd-sectiontitle">Processing Statistics</div>
+    <div class="dt-sd-kpis">
+      <div class="dt-sd-kpi"><span class="l">Records Parsed</span><span class="v">{{ stats.records_parsed|intcomma }}</span></div>
+      <div class="dt-sd-kpi"><span class="l">Valid Measurements</span><span class="v">{{ stats.valid_measurements|intcomma }}</span></div>
+      <div class="dt-sd-kpi"><span class="l">Invalid Measurements</span><span class="v">{{ stats.invalid_measurements|intcomma }}</span></div>
+      <div class="dt-sd-kpi"><span class="l">Cell Matched</span><span class="v">{{ stats.cell_matched|intcomma }}</span></div>
+      <div class="dt-sd-kpi"><span class="l">Cell Unmatched</span><span class="v">{{ stats.cell_unmatched|intcomma }}</span></div>
+      <div class="dt-sd-kpi"><span class="l">Findings Generated</span><span class="v">{{ stats.session_findings|intcomma }}</span><span class="s">session total</span></div>
+    </div>
+  </div>
+
+  <div class="dt-sl-panel dt-sd-panel">
+    <div class="dt-sd-sectiontitle">Navigation</div>
+    <div class="dt-pm-nav">
+      <a href="{% url 'drive_test:session_detail' session.session_ref %}" class="dt-sl-btn">View Session</a>
+      {% if can_view_measurements %}
+      <a href="{% url 'drive_test:measurement_list' %}?session={{ session.session_ref }}" class="dt-sl-btn">View Measurements</a>
+      {% endif %}
+      {% if can_view_quality %}
+      <a href="{% url 'drive_test:data_quality' %}?session={{ session.session_ref }}" class="dt-sl-btn">View Data Quality</a>
+      {% endif %}
+      {% if can_view_kpis %}
+      <a href="{% url 'drive_test:kpi_analysis' %}?session={{ session.session_ref }}" class="dt-sl-btn">View KPIs</a>
+      {% endif %}
+      <a href="{% url 'drive_test:finding_list' %}?session={{ session.session_ref }}" class="dt-sl-btn">View Findings</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

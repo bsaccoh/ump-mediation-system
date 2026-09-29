@@ -30,11 +30,11 @@
         <div class="mb-3">
           <label class="form-label fw-semibold">Entity Type <span class="text-danger">*</span></label>
           <select name="entity" class="form-select" required>
-            <option value="cells">Cells</option>
-            <option value="sites">Sites</option>
-            <option value="regions">Regions</option>
-            <option value="districts">Districts</option>
-            <option value="chiefdoms">Chiefdoms</option>
+            <option value="cells" {% if entity == 'cells' %}selected{% endif %}>Cells</option>
+            <option value="sites" {% if entity == 'sites' %}selected{% endif %}>Sites</option>
+            <option value="regions" {% if entity == 'regions' %}selected{% endif %}>Regions</option>
+            <option value="districts" {% if entity == 'districts' %}selected{% endif %}>Districts</option>
+            <option value="chiefdoms" {% if entity == 'chiefdoms' %}selected{% endif %}>Chiefdoms</option>
           </select>
         </div>
         <div class="mb-3">

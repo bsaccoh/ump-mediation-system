@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Audit Event | Drive Test | UMP{% endblock %}
+{% block page_title %}Audit Event{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/site_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/audit.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 dt-sl dt-st dt-ad">
+  <a href="{% url 'drive_test:audit_trail' %}" class="dt-st-back">&larr; Back to Audit Trail</a>
+
+  <div class="dt-sl-header">
+    <div>
+      <h1>{{ entry.description }}</h1>
+      <p><span class="dt-sl-badge">{{ entry.action_label }}</span>
+        {% if entry.status %}<span class="dt-sl-badge {% if entry.status == 'FAILED' %}dt-sl-badge-failed{% elif entry.status == 'SUCCESS' %}dt-sl-badge-completed{% endif %}">{{ entry.status }}</span>{% endif %}</p>
+    </div>
+  </div>
+
+  <div class="dt-sl-panel dt-st-panel">
+    <div class="dt-st-title">Audit Event</div>
+    <dl class="dt-st-list">
+      <div><dt>Timestamp</dt><dd>{{ entry.timestamp|date:"d M Y H:i:s" }}</dd></div>
+      <div><dt>User</dt><dd>{{ entry.user.username|default:"System" }}</dd></div>
+      <div><dt>Action</dt><dd>{{ entry.action_label }}</dd></div>
+      <div><dt>Module</dt><dd>{{ entry.module }}</dd></div>
+      <div><dt>Object Type</dt><dd>{{ entry.entity_type }}</dd></div>
+      <div><dt>Object ID</dt><dd>{{ entry.entity_id|default:"—" }}</dd></div>
+      {% if entry.source == 'log' and entry.raw.ip_address %}
+      <div><dt>IP Address</dt><dd>{{ entry.raw.ip_address }}</dd></div>
+      {% endif %}
+    </dl>
+  </div>
+
+  <div class="dt-sl-panel dt-st-panel">
+    <div class="dt-st-title">Change Details</div>
+    {% if entry.changes %}
+    <table class="dt-ad-changes">
+      <thead><tr><th>Field</th><th>Previous</th><th>New</th></tr></thead>
+      <tbody>
+        {% for field, pair in entry.changes.items %}
+        <tr><td>{{ field }}</td><td>{{ pair.from|default:"—" }}</td><td>{{ pair.to|default:"—" }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% elif entry.fields %}
+    <p class="dt-st-muted" style="margin-bottom:8px">New configuration:</p>
+    <table class="dt-ad-changes">
+      <thead><tr><th>Field</th><th>Value</th></tr></thead>
+      <tbody>
+        {% for field, value in entry.fields.items %}
+        <tr><td>{{ field }}</td><td>{{ value|default:"—" }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% elif entry.extra_data %}
+    <details>
+      <summary class="dt-st-muted">Raw event data</summary>
+      <pre class="dt-ad-raw">{{ entry.extra_data }}</pre>
+    </details>
+    {% else %}
+    <div class="dt-sl-empty" style="padding:16px">No change details recorded for this event.</div>
+    {% endif %}
+  </div>
+
+  {% if link %}
+  <div class="dt-sl-panel dt-st-panel">
+    <div class="dt-st-title">Related Object</div>
+    <p><a href="{{ link }}" class="dt-sl-btn">{{ entry.entity_type }} &rarr; View</a></p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

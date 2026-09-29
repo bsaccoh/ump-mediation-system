@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% load humanize static %}
+
+{% block title %}Technology Analysis &amp; Operator Comparison | Drive Test | UMP{% endblock %}
+{% block page_title %}Technology Analysis &amp; Operator Comparison{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/site_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/finding_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_detail.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/data_quality.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/operator_analysis.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 dt-sl dt-sd dt-dq dt-oa" id="dt-oa">
+
+  <div class="dt-sl-header">
+    <div>
+      <h1>Technology Analysis &amp; Operator Comparison</h1>
+      <p>Compare measured drive-test performance across operators and radio technologies.</p>
+    </div>
+    <div class="dt-dq-actions">
+      <a href="{{ request.path }}" class="dt-sl-btn"><i class="bi bi-arrow-clockwise"></i> Refresh</a>
+      <a href="{% url 'drive_test:session_list' %}" class="dt-sl-btn">View Sessions</a>
+    </div>
+  </div>
+
+  {% if not has_any_sessions %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No drive-test sessions available.</div>
+    <p>Upload a drive-test file to begin analysis.</p>
+    <a href="{% url 'drive_test:session_upload' %}" class="dt-sl-btn dt-sl-btn-primary">Upload Drive Test</a>
+  </div>
+  {% else %}
+
+  <form method="get" class="dt-sl-panel dt-sl-filters" id="oa-filters">
+    <div class="dt-sl-field"><label for="oa-op">Operator</label>
+      <select id="oa-op" name="operator"><option value="">All Operators</option>
+        {% for op in operators %}<option value="{{ op.code }}" {% if filters.operator == op.code %}selected{% endif %}>{{ op.name }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="oa-tech">Technology</label>
+      <select id="oa-tech" name="technology"><option value="">All</option>
+        {% for t in technology_choices %}<option value="{{ t }}" {% if filters.technology == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="oa-sess">Session</label>
+      <input id="oa-sess" type="text" name="session" value="{{ filters.session }}" placeholder="DT-..."></div>
+    <div class="dt-sl-field"><label for="oa-reg">Region</label>
+      <select id="oa-reg" name="region"><option value="">All</option>
+        {% for r in regions %}<option value="{{ r.pk }}" {% if filters.region == r.pk|stringformat:'d' %}selected{% endif %}>{{ r.name }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="oa-dis">District</label>
+      <select id="oa-dis" name="district"><option value="">All</option>
+        {% for d in districts %}<option value="{{ d.pk }}" {% if filters.district == d.pk|stringformat:'d' %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="oa-from">Test date from</label><input id="oa-from" type="date" name="date_from" value="{{ filters.date_from }}"></div>
+    <div class="dt-sl-field"><label for="oa-to">To</label><input id="oa-to" type="date" name="date_to" value="{{ filters.date_to }}"></div>
+    <input type="hidden" name="metric" value="{{ metric }}">
+    <input type="hidden" id="oa-tab-input" name="tab" value="{{ active_tab }}">
+    <div class="dt-sl-actions">
+      <button type="submit" class="dt-sl-btn dt-sl-btn-primary">Search</button>
+      <a href="{% url 'drive_test:operator_analysis' %}" class="dt-sl-btn">Clear</a>
+    </div>
+  </form>
+
+  {% if load_error %}
+  <div class="dt-fd-note">Unable to load analysis. Please try again. If the problem persists, contact the system administrator.</div>
+  {% endif %}
+  {% for e in errors %}<div class="dt-fd-note">{{ e }}</div>{% endfor %}
+
+  {% if not has_any %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No comparison data available.</div>
+    <p>There are no completed drive-test measurements matching the selected filters.</p>
+    <a href="{% url 'drive_test:operator_analysis' %}" class="dt-sl-btn">Clear Filters</a>
+  </div>
+  {% else %}
+
+  <div class="dt-sl-summary">
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Sessions</span><span class="dt-sl-stat-value">{{ scope.sessions|intcomma }}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Measurements</span><span class="dt-sl-stat-value">{{ scope.measurements|intcomma }}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Operators</span><span class="dt-sl-stat-value">{{ scope.operators|intcomma }}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Technologies</span><span class="dt-sl-stat-value">{{ scope.technologies|intcomma }}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Period</span>
+      <span class="dt-sl-stat-value dt-oa-period">{% if scope.first_date %}{{ scope.first_date|date:"d M Y" }} &ndash; {{ scope.last_date|date:"d M Y" }}{% else %}—{% endif %}</span></div>
+  </div>
+
+  {% if quality_context %}
+  <div class="dt-fd-note">
+    Data quality context: {{ quality_context.unmatched_measurements|default:0|intcomma }} unmatched measurement{{ quality_context.unmatched_measurements|default:0|pluralize }},
+    {{ quality_context.invalid_records|default:0|intcomma }} invalid record{{ quality_context.invalid_records|default:0|pluralize }} across
+    {{ quality_context.sessions_assessed|intcomma }} assessed session{{ quality_context.sessions_assessed|pluralize }}.
+    <a href="{% url 'drive_test:data_quality' %}" class="dt-sl-link">Review Data Quality &rarr;</a>
+  </div>
+  {% endif %}
+
+  <ul class="dt-sd-tabs" role="tablist" id="oa-tabs">
+    <li><button class="{% if active_tab == 'technology' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#pane-tech" data-tab="technology" type="button" role="tab">Technology Analysis</button></li>
+    <li><button class="{% if active_tab == 'operator' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#pane-op" data-tab="operator" type="button" role="tab">Operator Comparison</button></li>
+  </ul>
+
+  <div class="tab-content">
+
+    <!-- ── Technology Analysis ──────────────────────────────────── -->
+    <div class="tab-pane fade {% if active_tab == 'technology' %}show active{% endif %}" id="pane-tech" role="tabpanel">
+
+      <div class="dt-sd-cols">
+        <div class="dt-sl-panel dt-sd-panel">
+          <div class="dt-sd-sectiontitle">Technology Overview</div>
+          {% if technology_summary %}
+          {{ technology_summary|json_script:"oa-tech-dist-data" }}
+          <div class="dt-dq-chart-wrap"><canvas id="oa-tech-dist-chart" height="180"></canvas></div>
+          <dl class="dt-dq-legend">
+            {% for row in technology_summary %}
+            <div><span class="dt-sl-tech">{{ row.technology }}</span><span class="v">{{ row.measurements|intcomma }} measurements</span></div>
+            {% endfor %}
+          </dl>
+          {% else %}
+          <div class="dt-sd-empty">No technology data available.</div>
+          {% endif %}
+        </div>
+
+        <div class="dt-sl-panel dt-sd-panel">
+          <div class="dt-sd-sectiontitle">Geographic Analysis</div>
+          <div class="dt-st-muted" style="margin:-4px 0 8px">By region, via matched reference cells only. Unmatched measurements are excluded, not guessed.</div>
+          {% if geographic %}
+          <dl class="dt-sd-list">
+            {% for row in geographic %}
+            <div><dt>{{ row.region.name }}</dt><dd>{{ row.measurements|intcomma }} meas. &middot;
+              {% if row.signal.coverage.coverage_percent is not None %}{{ row.signal.coverage.coverage_percent }}% coverage{% else %}—{% endif %}</dd></div>
+            {% endfor %}
+          </dl>
+          {% else %}
+          <div class="dt-sd-empty">No matched-cell geographic data available for the current filters.</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="dt-sl-panel dt-sl-tablepanel">
+        <div class="dt-sl-toolbar"><span class="dt-sl-toolbar-title">Technology KPI Comparison</span></div>
+        {% if technology_kpis %}
+        <div class="dt-sl-scroll">
+          <table class="dt-sl-table">
+            <thead><tr>
+              <th>Technology</th><th class="dt-sl-num">Measurements</th><th class="dt-sl-num">Coverage</th>
+              <th class="dt-sl-num">CSSR</th><th class="dt-sl-num">DCR</th><th class="dt-sl-num">MOS</th><th class="dt-sl-num">Avg Speed</th><th>Action</th>
+            </tr></thead>
+            <tbody>
+              {% for row in technology_kpis %}
+              <tr>
+                <td><span class="dt-sl-tech">{{ row.technology }}</span></td>
+                <td class="dt-sl-num">{{ row.measurements|intcomma }}</td>
+                <td class="dt-sl-num">{% if row.signal.coverage.coverage_percent is not None %}{{ row.signal.coverage.coverage_percent }}%{% else %}—{% endif %}</td>
+                <td class="dt-sl-num">{% if row.voice.cssr_percent is not None %}{{ row.voice.cssr_percent }}%{% else %}—{% endif %}</td>
+                <td class="dt-sl-num">{% if row.voice.dcr_percent is not None %}{{ row.voice.dcr_percent }}%{% else %}—{% endif %}</td>
+                <td class="dt-sl-num">{{ row.voice.mean_mos|default:"—" }}</td>
+                <td class="dt-sl-num">{% if row.mobility.mean_speed_kmh is not None %}{{ row.mobility.mean_speed_kmh }} km/h{% else %}—{% endif %}</td>
+                <td><a class="dt-sl-link" href="{% url 'drive_test:measurement_list' %}?technology={{ row.technology }}">View Measurements</a></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <p class="dt-ms-note">Technologies are listed in generation order (2G/3G/4G/5G) — this table is not ranked or sorted by performance.</p>
+        {% else %}
+        <div class="dt-sd-empty">No technology data available.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- ── Operator Comparison ──────────────────────────────────── -->
+    <div class="tab-pane fade {% if active_tab == 'operator' %}show active{% endif %}" id="pane-op" role="tabpanel">
+
+      <div class="dt-sl-panel dt-sl-tablepanel">
+        <div class="dt-sl-toolbar"><span class="dt-sl-toolbar-title">Operator Overview</span></div>
+        {% if operator_summary %}
+        <div class="dt-sl-scroll">
+          <table class="dt-sl-table">
+            <thead><tr><th>Operator</th><th class="dt-sl-num">Sessions</th><th class="dt-sl-num">Measurements</th>
+              <th class="dt-sl-num">Technologies</th><th class="dt-sl-num">Calls</th><th>Action</th></tr></thead>
+            <tbody>
+              {% for row in operator_summary %}
+              <tr>
+                <td>{{ row.name }}</td>
+                <td class="dt-sl-num">{{ row.sessions|intcomma }}</td>
+                <td class="dt-sl-num">{{ row.measurements|intcomma }}</td>
+                <td class="dt-sl-num">{{ row.technologies|intcomma }}</td>
+                <td class="dt-sl-num">{{ row.calls|intcomma }}</td>
+                <td><a class="dt-sl-link" href="{% url 'drive_test:session_list' %}?operator={{ row.code }}">View Sessions</a></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="dt-sd-empty">No operator data available.</div>
+        {% endif %}
+      </div>
+
+      <div class="dt-sl-panel dt-sl-tablepanel">
+        <div class="dt-sl-toolbar"><span class="dt-sl-toolbar-title">Operator KPI Comparison</span></div>
+        {% if operator_kpis %}
+        <div class="dt-sl-scroll">
+          <table class="dt-sl-table">
+            <thead><tr><th>Operator</th><th class="dt-sl-num">Measurements</th><th class="dt-sl-num">Coverage</th>
+              <th class="dt-sl-num">CSSR</th><th class="dt-sl-num">DCR</th><th class="dt-sl-num">MOS</th><th class="dt-sl-num">Avg Speed</th></tr></thead>
+            <tbody>
+              {% for row in operator_kpis %}
+              <tr>
+                <td>{{ row.operator.name }}</td>
+                <td class="dt-sl-num">{{ row.measurements|intcomma }}</td>
+                <td class="dt-sl-num">{% if row.signal.coverage.coverage_percent is not None %}{{ row.signal.coverage.coverage_percent }}%{% else %}—{% endif %}</td>
+                <td class="dt-sl-num">{% if row.voice.cssr_percent is not None %}{{ row.voice.cssr_percent }}%{% else %}—{% endif %}</td>
+                <td class="dt-sl-num">{% if row.voice.dcr_percent is not None %}{{ row.voice.dcr_percent }}%{% else %}—{% endif %}</td>
+                <td class="dt-sl-num">{{ row.voice.mean_mos|default:"—" }}</td>
+                <td class="dt-sl-num">{% if row.mobility.mean_speed_kmh is not None %}{{ row.mobility.mean_speed_kmh }} km/h{% else %}—{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <p class="dt-ms-note">Operators are listed alphabetically — this table is not ranked or sorted by performance.</p>
+        {% else %}
+        <div class="dt-sd-empty">No operator data available.</div>
+        {% endif %}
+      </div>
+
+      <div class="dt-sd-cols">
+        <div class="dt-sl-panel dt-sd-panel">
+          <div class="dt-sd-sectiontitle">Measurements by Operator</div>
+          {% if operator_summary %}
+          {{ operator_summary|json_script:"oa-op-dist-data" }}
+          <div class="dt-dq-chart-wrap"><canvas id="oa-op-dist-chart" height="180"></canvas></div>
+          {% else %}
+          <div class="dt-sd-empty">No operator data available.</div>
+          {% endif %}
+        </div>
+
+        <div class="dt-sl-panel dt-sd-panel">
+          <div class="dt-sd-sectiontitle dt-oa-metric-title">
+            <form method="get" id="oa-metric-form" class="dt-oa-metric-form">
+              {% for k, v in request.GET.items %}{% if k != 'metric' and k != 'tab' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+              <input type="hidden" name="tab" value="operator">
+              <span>{{ metric_label }} by Operator</span>
+              <select id="oa-metric" name="metric">
+                {% for k, l in metrics %}<option value="{{ k }}" {% if metric == k %}selected{% endif %}>{{ l }}</option>{% endfor %}
+              </select>
+            </form>
+          </div>
+          {% if operator_kpis %}
+          {{ operator_kpis_chart|json_script:"oa-op-metric-data" }}
+          <div class="dt-dq-chart-wrap"><canvas id="oa-op-metric-chart" height="180"></canvas></div>
+          {% else %}
+          <div class="dt-sd-empty">No operator data available.</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="dt-sl-panel dt-sl-tablepanel">
+        <div class="dt-sl-toolbar"><span class="dt-sl-toolbar-title">Operator &times; Technology Matrix</span>
+          <span class="dt-sl-toolbar-count">Metric: {{ metric_label }}</span></div>
+        {% if matrix.rows %}
+        <div class="dt-sl-scroll">
+          <table class="dt-sl-table">
+            <thead><tr><th>Operator</th>{% for t in matrix.technologies %}<th class="dt-sl-num">{{ t }}</th>{% endfor %}</tr></thead>
+            <tbody>
+              {% for row in matrix.rows %}
+              <tr>
+                <td>{{ row.operator.name }}</td>
+                {% for cell in row.cells %}
+                <td class="dt-sl-num">
+                  {% if cell.value is None %}—
+                  {% elif matrix.metric == 'measurements' %}{{ cell.value|intcomma }}
+                  {% elif matrix.metric == 'mos' %}{{ cell.value }}
+                  {% elif matrix.metric == 'speed' %}{{ cell.value }} km/h
+                  {% else %}{{ cell.value }}%{% endif %}
+                </td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <p class="dt-ms-note">A dash means this operator has no drive-test data for that technology — not a measured zero.</p>
+        {% else %}
+        <div class="dt-sd-empty">No technology data available to build the matrix.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script src="{% static 'drive_test/js/charts.js' %}"></script>
+<script src="{% static 'drive_test/js/operator_analysis.js' %}"></script>
+{% endblock %}

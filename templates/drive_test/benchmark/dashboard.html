@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% load humanize static %}
+
+{% block title %}Benchmark Dashboard | UMP{% endblock %}
+{% block page_title %}Benchmark Dashboard{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/benchmark.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 dt-sl">
+
+  <div class="dt-sl-header">
+    <div>
+      <h1>Benchmark Dashboard</h1>
+      <p>Operator performance comparison and trend analysis</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'drive_test:benchmark_campaign_list' %}" class="dt-sl-btn dt-sl-btn-outline">
+        <i class="bi bi-list-ul"></i> All Campaigns
+      </a>
+      <a href="{% url 'drive_test:benchmark_campaign_create' %}" class="dt-sl-btn dt-sl-btn-primary">
+        <i class="bi bi-plus-lg"></i> New Campaign
+      </a>
+    </div>
+  </div>
+
+  {% if not latest_campaign %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No completed benchmarks yet</div>
+    <p>Create a campaign and run scoring to see operator performance comparisons.</p>
+    <a href="{% url 'drive_test:benchmark_campaign_create' %}" class="dt-sl-btn dt-sl-btn-primary">Create Campaign</a>
+  </div>
+  {% else %}
+
+  <!-- Latest Campaign Summary -->
+  <div class="bm-dash-latest">
+    <h2 class="bm-section-title">
+      Latest: {{ latest_campaign.name }}
+      <span class="bm-dash-period">{{ latest_campaign.date_from|date:"d M Y" }} — {{ latest_campaign.date_to|date:"d M Y" }}</span>
+    </h2>
+
+    <div class="bm-score-grid">
+      {% for s in latest_scores %}
+      <div class="bm-score-card bm-score-card-dash">
+        <div class="bm-score-header">
+          <div class="bm-score-operator">{{ s.operator }}</div>
+          <div class="bm-grade-badge bm-grade-badge-lg" style="background: {{ s.grade_color }};">{{ s.grade }}</div>
+        </div>
+        <div class="bm-composite-score bm-composite-score-lg">{{ s.composite|floatformat:1 }}</div>
+        <div class="bm-composite-label">{{ s.grade_label }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Charts row -->
+  <div class="row mt-4">
+    <!-- Composite comparison -->
+    <div class="col-lg-6 mb-4">
+      <div class="dt-sl-panel">
+        <h3 class="bm-chart-title">Composite Score Comparison</h3>
+        <div style="position: relative; height: 300px;">
+          <canvas id="bm-dash-composite"></canvas>
+        </div>
+      </div>
+    </div>
+    <!-- Radar -->
+    <div class="col-lg-6 mb-4">
+      <div class="dt-sl-panel">
+        <h3 class="bm-chart-title">KPI Radar</h3>
+        <div style="position: relative; height: 300px;">
+          <canvas id="bm-dash-radar"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trend chart -->
+  {% if trend_data %}
+  <div class="dt-sl-panel mt-2">
+    <h3 class="bm-chart-title">Performance Trend</h3>
+    <div style="position: relative; height: 320px;">
+      <canvas id="bm-dash-trend"></canvas>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Recent campaigns -->
+  <div class="dt-sl-panel mt-4 bm-table-wrap">
+    <h3 class="bm-chart-title">Recent Campaigns</h3>
+    <div class="dt-sl-scroll">
+    <table class="dt-sl-table">
+      <thead>
+        <tr><th>Reference</th><th>Name</th><th>Period</th><th>Status</th><th>Scored</th></tr>
+      </thead>
+      <tbody>
+        {% for c in campaigns %}
+        <tr>
+          <td><a href="{% url 'drive_test:benchmark_campaign_detail' ref=c.campaign_ref %}" class="dt-sl-ref">{{ c.campaign_ref }}</a></td>
+          <td><strong>{{ c.name }}</strong></td>
+          <td class="dt-sl-nowrap">{{ c.date_from|date:"d M Y" }} — {{ c.date_to|date:"d M Y" }}</td>
+          <td><span class="bm-status bm-status-{{ c.status|lower }}">{{ c.get_status_display }}</span></td>
+          <td class="dt-sl-nowrap">{{ c.scored_at|date:"d M Y H:i"|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const scores = {{ latest_scores|safe }};
+  const radarData = {{ radar_data|safe }};
+  const trendData = {{ trend_data|safe }};
+  const kpiLabels = {{ kpi_labels|safe }};
+
+  if (!scores || scores.length === 0) return;
+
+  const OP_COLORS = [
+    '#2563eb', '#dc2626', '#059669', '#d97706', '#7c3aed', '#db2777',
+  ];
+
+  // Composite bar
+  const compCtx = document.getElementById('bm-dash-composite');
+  if (compCtx) {
+    new Chart(compCtx, {
+      type: 'bar',
+      data: {
+        labels: scores.map(s => s.operator),
+        datasets: [{
+          label: 'Composite Score',
+          data: scores.map(s => s.composite),
+          backgroundColor: scores.map(s => s.grade_color + 'cc'),
+          borderColor: scores.map(s => s.grade_color),
+          borderWidth: 1,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { min: 0, max: 100, title: { display: true, text: 'Score' } } },
+      },
+    });
+  }
+
+  // Radar
+  const radarCtx = document.getElementById('bm-dash-radar');
+  if (radarCtx) {
+    const kpiKeys = Object.keys(kpiLabels);
+    const datasets = [];
+    let i = 0;
+    for (const [op, vals] of Object.entries(radarData)) {
+      datasets.push({
+        label: op,
+        data: vals,
+        borderColor: OP_COLORS[i % OP_COLORS.length],
+        backgroundColor: OP_COLORS[i % OP_COLORS.length] + '22',
+        pointBackgroundColor: OP_COLORS[i % OP_COLORS.length],
+        borderWidth: 2,
+      });
+      i++;
+    }
+    new Chart(radarCtx, {
+      type: 'radar',
+      data: {
+        labels: kpiKeys.map(k => kpiLabels[k]),
+        datasets,
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: { r: { min: 0, max: 100, ticks: { stepSize: 20 } } },
+      },
+    });
+  }
+
+  // Trend line
+  const trendCtx = document.getElementById('bm-dash-trend');
+  if (trendCtx && Object.keys(trendData).length > 0) {
+    const datasets = [];
+    let i = 0;
+    for (const [op, points] of Object.entries(trendData)) {
+      datasets.push({
+        label: op,
+        data: points.map(p => ({ x: p.date, y: p.score })),
+        borderColor: OP_COLORS[i % OP_COLORS.length],
+        backgroundColor: OP_COLORS[i % OP_COLORS.length] + '22',
+        tension: 0.3,
+        fill: false,
+      });
+      i++;
+    }
+    new Chart(trendCtx, {
+      type: 'line',
+      data: { datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { type: 'category', labels: [...new Set(Object.values(trendData).flat().map(p => p.date))].sort() },
+          y: { min: 0, max: 100, title: { display: true, text: 'Composite Score' } },
+        },
+      },
+    });
+  }
+});
+</script>
+{% endblock %}

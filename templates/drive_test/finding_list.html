@@ -1,51 +1,161 @@
 {% extends "base.html" %}
-{% load humanize %}
+{% load humanize static %}
 
 {% block title %}Findings | Drive Test | UMP{% endblock %}
+{% block page_title %}Findings{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.min.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/site_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/finding_list.css' %}">
+{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-  <h1 class="h3 mb-4">Findings</h1>
+<div class="container-fluid py-3 dt-sl dt-st dt-fd" id="dt-fd" data-map-url="{{ map_url }}">
 
-  <div class="card">
-    <div class="table-responsive">
-      <table class="table table-hover mb-0">
-        <thead>
-          <tr>
-            <th>Session</th><th>Type</th><th>Severity</th><th>Description</th>
-            <th>Cell</th><th>Resolved</th><th>Date</th>
-          </tr>
-        </thead>
+  <div class="dt-sl-header">
+    <div>
+      <h1>Findings</h1>
+      <p>Review drive-test findings, investigate evidence and track network issues.</p>
+    </div>
+    {% if has_any_findings %}
+    <div><a href="{{ export_url }}{% if export_qs %}?{{ export_qs }}{% endif %}" class="dt-sl-btn"><i class="bi bi-download"></i>Export</a></div>
+    {% endif %}
+  </div>
+
+  {% if pending_sessions %}
+  <div class="dt-fd-note">Analysis results may be incomplete: {{ pending_sessions }} session{{ pending_sessions|pluralize }} still processing.</div>
+  {% endif %}
+  {% if not active_rules %}
+  <div class="dt-fd-note">No active regulatory rules are configured, so threshold analysis has not evaluated any measurements. An empty list here does not mean the network passed.</div>
+  {% endif %}
+
+  {% if not has_any_findings %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No findings available</div>
+    <p>Drive-test analysis has not generated any findings yet.</p>
+  </div>
+  {% else %}
+
+  <form method="get" class="dt-sl-panel dt-sl-filters">
+    <div class="dt-sl-field dt-sl-field-search">
+      <label for="f-q">Search</label>
+      <input id="f-q" type="text" name="q" value="{{ filters.q }}" placeholder="Description, category, session, file, cell, site or sector...">
+    </div>
+    <div class="dt-sl-field"><label for="f-op">Operator</label>
+      <select id="f-op" name="operator"><option value="">All Operators</option>
+        {% for op in operators %}<option value="{{ op.code }}" {% if filters.operator == op.code %}selected{% endif %}>{{ op.name }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="f-tech">Technology</label>
+      <select id="f-tech" name="technology"><option value="">All</option>
+        {% for t in technology_choices %}<option value="{{ t }}" {% if filters.technology == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="f-sev">Severity</label>
+      <select id="f-sev" name="severity"><option value="">All</option>
+        {% for v, l in severities %}<option value="{{ v }}" {% if filters.severity == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="f-cat">Category</label>
+      <select id="f-cat" name="category"><option value="">All</option>
+        {% for v, l in categories %}<option value="{{ v }}" {% if filters.category == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="f-status">Status</label>
+      <select id="f-status" name="status"><option value="">All</option>
+        <option value="open" {% if filters.status == 'open' %}selected{% endif %}>Open</option>
+        <option value="resolved" {% if filters.status == 'resolved' %}selected{% endif %}>Resolved</option></select></div>
+    <div class="dt-sl-field"><label for="f-sess">Session</label>
+      <input id="f-sess" type="text" name="session" value="{{ filters.session }}" placeholder="DT-..."></div>
+    <div class="dt-sl-field"><label for="f-from">Test date from</label><input id="f-from" type="date" name="date_from" value="{{ filters.date_from }}"></div>
+    <div class="dt-sl-field"><label for="f-to">To</label><input id="f-to" type="date" name="date_to" value="{{ filters.date_to }}"></div>
+    {% if per_page != page_sizes.0 %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
+    <div class="dt-sl-actions">
+      <button type="submit" class="dt-sl-btn dt-sl-btn-primary">Search</button>
+      <a href="{% url 'drive_test:finding_list' %}" class="dt-sl-btn">Clear</a>
+    </div>
+  </form>
+
+  <div class="dt-sl-summary">
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Findings</span><span class="dt-sl-stat-value">{{ summary.total|intcomma }}</span></div>
+    <div class="dt-sl-stat dt-sl-stat-bad"><span class="dt-sl-stat-label">Critical</span><span class="dt-sl-stat-value">{{ summary.critical|intcomma }}</span></div>
+    <div class="dt-sl-stat dt-sl-stat-warn"><span class="dt-sl-stat-label">High</span><span class="dt-sl-stat-value">{{ summary.high|intcomma }}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Open</span><span class="dt-sl-stat-value">{{ summary.open|intcomma }}</span></div>
+  </div>
+
+  {% if not findings %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No findings match your filters.</div>
+    <p>Try changing your search or filters.</p>
+    <a href="{% url 'drive_test:finding_list' %}" class="dt-sl-btn">Clear Filters</a>
+  </div>
+  {% else %}
+
+  <div class="dt-sl-panel dt-sl-tablepanel">
+    <div class="dt-sl-toolbar">
+      <span class="dt-sl-toolbar-title">Drive Test Findings</span>
+      <span class="dt-sl-toolbar-count">Showing {{ first_item }}&ndash;{{ last_item }} of {{ page_obj.paginator.count|intcomma }} findings</span>
+    </div>
+    <div class="dt-sl-scroll">
+      <table class="dt-sl-table dt-fd-table">
+        <thead><tr>
+          <th>Finding</th><th>Operator</th><th>Tech</th><th>Severity</th><th>Location</th>
+          <th>Cell / Site</th><th>Session</th><th>Status</th><th>Created</th><th>Action</th>
+        </tr></thead>
         <tbody>
-          {% for f in page_obj %}
+          {% for f in findings %}
           <tr>
-            <td><a href="{% url 'drive_test:session_detail' f.session.session_ref %}">{{ f.session.session_ref }}</a></td>
-            <td>{{ f.get_finding_type_display }}</td>
-            <td>
-              <span class="badge bg-{% if f.severity == 'CRITICAL' %}danger{% elif f.severity == 'HIGH' %}warning text-dark{% elif f.severity == 'MEDIUM' %}info{% else %}secondary{% endif %}">
-                {{ f.severity }}
-              </span>
+            <td class="dt-fd-title">
+              <a href="{% url 'drive_test:finding_detail' f.pk %}" class="dt-sl-link">{{ f.get_finding_type_display }}</a>
+              {% if f.is_quality %}<span class="dt-fd-kind">Data quality</span>{% endif %}
+              <div class="dt-st-sub" title="{{ f.description }}">{{ f.description|truncatechars:70 }}</div>
             </td>
-            <td>{{ f.description|truncatechars:80 }}</td>
-            <td>{{ f.cell.cell_id|default:"—" }}</td>
-            <td>{% if f.is_resolved %}<span class="text-success"><i class="bi bi-check-circle"></i> Yes</span>{% else %}—{% endif %}</td>
-            <td>{{ f.created_at|date:"Y-m-d" }}</td>
+            <td>{{ f.session.operator.name }}</td>
+            <td>{% if f.tech %}<span class="dt-sl-tech">{{ f.tech }}</span>{% else %}—{% endif %}</td>
+            <td><span class="dt-fd-sev dt-fd-sev-{{ f.severity|lower }}">{{ f.severity }}</span></td>
+            <td class="dt-sl-nowrap">{% if f.point.0 is not None %}{{ f.point.0|floatformat:4 }}, {{ f.point.1|floatformat:4 }}
+              <button type="button" class="dt-st-pin" data-finding="{{ f.pk }}" title="Show on map" aria-label="Show finding {{ f.pk }} on map"><i class="bi bi-geo-alt"></i></button>{% else %}—{% endif %}</td>
+            <td>{% if f.eff_cell %}<a href="{% url 'drive_test:cell_detail' f.eff_cell.pk %}" class="dt-sl-link">{{ f.eff_cell.cell_id }}</a>
+                <div class="dt-st-sub">{{ f.site.name }} &middot; {{ f.eff_cell.sector.sector_id }}</div>
+              {% elif f.measurement %}<span class="dt-st-sub">Unmatched</span>{% else %}—{% endif %}</td>
+            <td><a href="{% url 'drive_test:session_detail' f.session.session_ref %}" class="dt-sl-ref">{{ f.session.session_ref }}</a></td>
+            <td>{% if f.is_resolved %}<span class="dt-sl-badge dt-sl-badge-active">RESOLVED</span>{% else %}<span class="dt-sl-badge dt-fd-open">OPEN</span>{% endif %}</td>
+            <td class="dt-sl-nowrap">{{ f.created_at|date:"d M Y" }}</td>
+            <td><a href="{% url 'drive_test:finding_detail' f.pk %}" class="dt-sl-link">View</a></td>
           </tr>
-          {% empty %}
-          <tr><td colspan="7" class="text-center text-muted py-4">No findings.</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-    {% if page_obj.has_other_pages %}
-    <div class="card-footer d-flex justify-content-between">
-      <small>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</small>
-      <div>
-        {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}" class="btn btn-sm btn-outline-secondary">Previous</a>{% endif %}
-        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}" class="btn btn-sm btn-outline-secondary">Next</a>{% endif %}
-      </div>
+    <div class="dt-sl-footer">
+      <form method="get" class="dt-sl-perpage">
+        {% for k, v in request.GET.items %}{% if k != 'per_page' and k != 'page' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+        <label for="f-pp">Rows</label>
+        <select id="f-pp" name="per_page" onchange="this.form.submit()">
+          {% for n in page_sizes %}<option value="{{ n }}" {% if n == per_page %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+      </form>
+      {% if page_obj.has_other_pages %}
+      <nav aria-label="Finding pages" class="dt-sl-pager">
+        {% if page_obj.has_previous %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">&lsaquo; Previous</a>
+        {% else %}<span class="disabled">&lsaquo; Previous</span>{% endif %}
+        {% for p in page_obj.paginator.page_range %}
+          {% if p == page_obj.number %}<span class="active">{{ p }}</span>
+          {% elif p >= page_obj.number|add:"-2" and p <= page_obj.number|add:"2" %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ p }}">{{ p }}</a>{% endif %}
+        {% endfor %}
+        {% if page_obj.has_next %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Next &rsaquo;</a>
+        {% else %}<span class="disabled">Next &rsaquo;</span>{% endif %}
+      </nav>
+      {% endif %}
     </div>
-    {% endif %}
   </div>
+
+  <div class="dt-sl-panel dt-st-mappanel">
+    <div class="dt-sl-toolbar"><span class="dt-sl-toolbar-title">Finding Locations</span><span class="dt-sl-toolbar-count" id="dt-fd-map-note"></span></div>
+    <div id="dt-fd-map" class="dt-st-map"></div>
+    <div class="dt-st-mapempty" id="dt-fd-map-empty" hidden>No mapped findings available</div>
+  </div>
+  {% endif %}
+  {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/leaflet/leaflet.min.js' %}"></script>
+<script src="{% static 'drive_test/js/finding_list.js' %}"></script>
 {% endblock %}

@@ -1,0 +1,44 @@
+/* Drive Test — GIS / Coverage. Reuses .dt-sl-* / .dt-st-* primitives. */
+.dt-gis-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 12px; align-items: start; }
+.dt-gis-panel { padding: 12px 14px; }
+.dt-gis-toggle { display: none; width: 100%; padding: 6px 10px; font-size: 0.82rem; font-weight: 600; text-align: left; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; }
+.dt-gis-layer { display: flex; align-items: center; gap: 7px; padding: 4px 0; font-size: 0.84rem; cursor: pointer; }
+.dt-gis-layer small { margin-left: auto; color: #6b7280; font-variant-numeric: tabular-nums; }
+.dt-gis-note { margin-top: 6px; font-size: 0.74rem; color: #6b7280; }
+.dt-gis-layer .sw { flex: none; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #cbd5e1; }
+.sw-route { background: #1d4ed8; border-radius: 2px !important; height: 4px !important; }
+.sw-meas { background: #2563eb; }
+.sw-site { background: #0f766e; border-radius: 2px !important; }
+.sw-cell { background: #7c3aed; }
+.sw-sector { background: #b45309; border-radius: 2px !important; height: 4px !important; }
+.sw-finding { background: #c2410c; }
+.sw-unm { background: #fff; box-shadow: 0 0 0 2px #475569 !important; }
+
+.dt-gis-mapwrap { position: relative; padding: 0; overflow: hidden; }
+.dt-gis-map { height: max(650px, calc(100vh - 330px)); width: 100%; background: #e5e7eb; }
+.dt-gis-msg { position: absolute; z-index: 500; top: 12px; left: 50%; transform: translateX(-50%); max-width: 80%; padding: 7px 14px; font-size: 0.82rem; color: #334155; background: rgba(255,255,255,0.95); border: 1px solid #cbd5e1; border-radius: 4px; }
+.dt-gis-msg[hidden] { display: none; }
+
+.dt-gis-legend-row { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; padding: 1px 0; }
+.dt-gis-legend-row i { flex: none; width: 16px; height: 10px; border-radius: 2px; border: 1px solid rgba(0,0,0,0.15); }
+.dt-gis-legend-cap { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin: 4px 0 2px; }
+.dt-gis-legend-note { margin-top: 6px; font-size: 0.7rem; color: #6b7280; }
+.dt-gis-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px 18px; }
+
+.dt-gis-pop { font-size: 0.8rem; min-width: 190px; }
+.dt-gis-pop .h { font-weight: 700; margin-bottom: 3px; }
+.dt-gis-pop table { border-collapse: collapse; }
+.dt-gis-pop td { padding: 1px 8px 1px 0; vertical-align: top; }
+.dt-gis-pop td:first-child { color: #6b7280; white-space: nowrap; }
+.dt-gis-pop .act { margin-top: 5px; }
+
+@media (max-width: 991px) {
+  .dt-gis-layout { grid-template-columns: 1fr; }
+  .dt-gis-toggle { display: block; }
+  .dt-gis-panel.is-collapsed .dt-gis-panel-body { display: none; }
+  .dt-gis-panel-body > .dt-st-title:first-child { display: none; }
+  .dt-gis-map { height: max(450px, calc(100vh - 300px)); }
+}
+
+/* Leaflet's canvas renderer sits in a zero-width pane; a global "canvas { max-width: 100% }" would collapse it. */
+.dt-gis-map .leaflet-overlay-pane canvas { max-width: none !important; max-height: none !important; }

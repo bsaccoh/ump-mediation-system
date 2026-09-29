@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% load humanize static %}
+
+{% block title %}{{ site.site_id }} / {{ sector.sector_id }} | Sectors | UMP{% endblock %}
+{% block page_title %}Sector Detail{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.min.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/site_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/cell_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/sector_list.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 dt-sl dt-st dt-ce">
+  <a href="{% url 'drive_test:sector_list' %}" class="dt-st-back">&larr; Back to Sectors</a>
+
+  <div class="dt-sl-header">
+    <div>
+      <h1>{{ sector.sector_id }}</h1>
+      <div class="dt-sc-hierarchy">
+        <span>{{ site.operator.name }}</span><i>&rarr;</i>
+        <span><a class="dt-sl-link" href="{% url 'drive_test:site_detail' site.pk %}">{{ site.site_id }} {{ site.name }}</a></span><i>&rarr;</i>
+        <span class="here">Sector {{ sector.sector_id }}</span><i>&rarr;</i>
+        <span>{{ cells|length }} cell{{ cells|length|pluralize }}</span>
+        <span class="dt-sl-badge {% if sector.is_active %}dt-sl-badge-active{% else %}dt-sl-badge-inactive{% endif %}">{% if sector.is_active %}ACTIVE{% else %}INACTIVE{% endif %}</span>
+      </div>
+    </div>
+    {% if can_edit %}<div><a href="{% url 'drive_test:sector_edit' sector.pk %}" class="dt-sl-btn dt-sl-btn-primary">Edit Sector</a></div>{% endif %}
+  </div>
+
+  {% if warnings %}
+  <div class="dt-ce-warnlist"><strong>Reference issues</strong><ul>{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul></div>
+  {% else %}<div class="dt-ce-ok">&#10003; No reference issues found.</div>{% endif %}
+
+  <div class="dt-st-cols">
+    <div class="dt-sl-panel dt-st-panel">
+      <div class="dt-st-title">Sector Overview</div>
+      <dl class="dt-st-list">
+        <div><dt>Sector</dt><dd>{{ sector.sector_id }}</dd></div>
+        <div><dt>Operator</dt><dd>{{ site.operator.name }}</dd></div>
+        <div><dt>Site</dt><dd>{{ site.site_id }} — {{ site.name }}</dd></div>
+        <div><dt>Technology</dt><dd>{% for t in technologies %}<span class="dt-sl-tech">{{ t }}</span> {% empty %}—{% endfor %}</dd></div>
+        <div><dt>Region</dt><dd>{{ site.chiefdom.district.region.name|default:"—" }}</dd></div>
+        <div><dt>District</dt><dd>{{ site.chiefdom.district.name|default:"—" }}</dd></div>
+        <div><dt>Azimuth</dt><dd>{% if sector.azimuth_deg is not None %}{{ sector.azimuth_deg|floatformat:"-1" }}&deg;{% else %}—{% endif %}</dd></div>
+        <div><dt>Antenna Height</dt><dd>{% if sector.height_m is not None %}{{ sector.height_m|floatformat:"-1" }} m{% else %}—{% endif %}</dd></div>
+        <div><dt>Mechanical Tilt</dt><dd>{% if sector.tilt_deg is not None %}{{ sector.tilt_deg|floatformat:"-1" }}&deg;{% else %}—{% endif %}</dd></div>
+        <div><dt>Electrical Tilt</dt><dd>{% if sector.electrical_tilt_deg is not None %}{{ sector.electrical_tilt_deg|floatformat:"-1" }}&deg;{% else %}—{% endif %}</dd></div>
+      </dl>
+    </div>
+    <div class="dt-sl-panel dt-st-panel">
+      <div class="dt-st-title">Location <span class="dt-st-muted" style="text-transform:none;letter-spacing:0">(site location)</span></div>
+      {% if site_gps %}
+      <div id="dt-sc-detail-map" class="dt-st-detail-map" data-lat="{{ site.latitude|stringformat:'f' }}" data-lon="{{ site.longitude|stringformat:'f' }}" data-label="{{ site.site_id }}"></div>
+      <div class="dt-st-help" style="margin-top:6px">Site location: {{ site.latitude|floatformat:5 }}, {{ site.longitude|floatformat:5 }}. Sectors have no coordinates of their own.</div>
+      {% else %}<div class="dt-sl-empty" style="padding:30px 8px">The parent site has no coordinates.</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="dt-sl-summary" style="margin-top:12px">
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Cells</span><span class="dt-sl-stat-value">{{ cells|length }}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Matched Measurements</span><span class="dt-sl-stat-value">{{ matched_count|intcomma }}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Last Observed</span><span class="dt-sl-stat-value" style="font-size:0.8rem">{% if last_observed %}{{ last_observed|date:"d M Y H:i" }}{% else %}—{% endif %}</span></div>
+    <div class="dt-sl-stat {% if finding_count %}dt-sl-stat-warn{% endif %}"><span class="dt-sl-stat-label">Findings</span><span class="dt-sl-stat-value">{{ finding_count|intcomma }}</span></div>
+  </div>
+
+  <div class="dt-sl-panel dt-sl-tablepanel">
+    <div class="dt-sl-toolbar"><span class="dt-sl-toolbar-title">Cells</span>
+      {% if cells %}<span class="dt-sl-toolbar-count"><a class="dt-sl-link" href="{% url 'drive_test:cell_list' %}?sector_pk={{ sector.pk }}">Open in Cells</a></span>{% endif %}</div>
+    {% if cells %}
+    <div class="dt-sl-scroll"><table class="dt-sl-table">
+      <thead><tr><th>Cell</th><th>Technology</th><th>Identifier</th><th>Band</th><th>Matching</th><th>Status</th></tr></thead>
+      <tbody>{% for c in cells %}<tr>
+        <td><a class="dt-sl-ref" href="{% url 'drive_test:cell_detail' c.pk %}">{{ c.cell_id }}</a></td>
+        <td><span class="dt-sl-tech">{{ c.technology|default:"—" }}</span></td>
+        <td>{% if c.identifier %}<span class="dt-st-sub">{{ c.identifier.0 }}</span> {{ c.identifier.1 }}{% else %}—{% endif %}</td>
+        <td>{% if c.band_label or c.channel_label %}{{ c.band_label }} {{ c.channel_label }}{% else %}—{% endif %}</td>
+        <td><span class="dt-sl-badge dt-ce-match-{{ c.state }}">{{ c.state_label }}</span></td>
+        <td><span class="dt-sl-badge {% if c.is_active %}dt-sl-badge-active{% else %}dt-sl-badge-inactive{% endif %}">{% if c.is_active %}ACTIVE{% else %}INACTIVE{% endif %}</span></td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}<div class="dt-sl-empty" style="padding:24px">No cells are defined for this sector.</div>{% endif %}
+  </div>
+
+  <div class="dt-sl-panel dt-sl-tablepanel">
+    <div class="dt-sl-toolbar"><span class="dt-sl-toolbar-title">Recent Drive Test Activity</span></div>
+    {% if recent_sessions %}
+    <div class="dt-sl-scroll"><table class="dt-sl-table">
+      <thead><tr><th>Session</th><th>Test Date</th><th class="dt-sl-num">Matched Measurements</th></tr></thead>
+      <tbody>{% for r in recent_sessions %}<tr><td><a class="dt-sl-ref" href="{% url 'drive_test:session_detail' r.drive_file__session__session_ref %}">{{ r.drive_file__session__session_ref }}</a></td>
+        <td>{{ r.drive_file__session__test_date|date:"d M Y" }}</td><td class="dt-sl-num">{{ r.n|intcomma }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}<div class="dt-sl-empty" style="padding:24px">No drive-test measurements have been matched to this sector.</div>{% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/leaflet/leaflet.min.js' %}"></script>
+<script src="{% static 'drive_test/js/sector_list.js' %}"></script>
+{% endblock %}

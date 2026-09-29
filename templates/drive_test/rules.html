@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% load humanize static %}
+
+{% block title %}Rules & Thresholds | Drive Test | UMP{% endblock %}
+{% block page_title %}Rules & Thresholds{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/site_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_detail.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/rules.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 dt-sl dt-sd dt-st dt-rl" id="dt-rl">
+
+  <div class="dt-sl-header">
+    <div>
+      <h1>Rules &amp; Thresholds</h1>
+      <p>Configure regulatory rules and KPI thresholds used by drive-test analysis.</p>
+    </div>
+    {% if can_edit %}
+    <div class="dt-rl-actions">
+      <a href="{% url 'drive_test:rule_create' %}" class="dt-sl-btn"><i class="bi bi-plus-lg"></i> Add Rule</a>
+      <a href="{% url 'drive_test:threshold_create' %}" class="dt-sl-btn dt-sl-btn-primary"><i class="bi bi-plus-lg"></i> Add Threshold</a>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="dt-sl-panel dt-rl-flow">
+    Drive Test Measurement <span>&rarr;</span> KPI / Metric <span>&rarr;</span> Regulatory Rule
+    <span>&rarr;</span> Regulatory Threshold <span>&rarr;</span> Finding
+  </div>
+
+  {% if load_error %}
+  <div class="dt-fd-note">Unable to load rules and thresholds. Please try again. If the problem persists, contact the system administrator.</div>
+  {% elif not has_any_config %}
+  <div class="dt-fd-note dt-rl-note">
+    Regulatory analysis configuration is not currently available. Drive-test measurements can
+    still be processed and analyzed, but threshold-based regulatory findings require configured
+    rules.
+  </div>
+  {% endif %}
+
+  <ul class="dt-sd-tabs" role="tablist" id="dt-rl-tabs">
+    <li><button class="{% if active_tab == 'rules' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#pane-rules" data-tab="rules" type="button" role="tab">Rules</button></li>
+    <li><button class="{% if active_tab == 'thresholds' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#pane-thresholds" data-tab="thresholds" type="button" role="tab">Thresholds</button></li>
+  </ul>
+
+  <div class="tab-content">
+
+    <!-- ── RULES ─────────────────────────────────────────────────────────── -->
+    <div class="tab-pane fade {% if active_tab == 'rules' %}show active{% endif %}" id="pane-rules" role="tabpanel">
+
+      <form method="get" class="dt-sl-panel dt-sl-filters">
+        <div class="dt-sl-field dt-sl-field-search">
+          <label for="r-q">Search</label>
+          <input id="r-q" type="text" name="q" value="{{ rule_filters.q }}" placeholder="Rule name, code or description...">
+        </div>
+        <div class="dt-sl-field"><label for="r-tech">Technology</label>
+          <select id="r-tech" name="technology"><option value="">All</option>
+            {% for t in technology_choices %}<option value="{{ t }}" {% if rule_filters.technology == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+        <div class="dt-sl-field"><label for="r-metric">Metric</label>
+          <select id="r-metric" name="metric"><option value="">All</option>
+            {% for m in metric_choices %}<option value="{{ m }}" {% if rule_filters.metric == m %}selected{% endif %}>{{ m|upper }}</option>{% endfor %}</select></div>
+        <div class="dt-sl-field"><label for="r-status">Status</label>
+          <select id="r-status" name="status"><option value="">All</option>
+            {% for v, l in status_choices %}<option value="{{ v }}" {% if rule_filters.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+        <input type="hidden" id="rl-tab-input-r" name="tab" value="rules">
+        {% if rule_per_page != rule_page_sizes.0 %}<input type="hidden" name="rule_per_page" value="{{ rule_per_page }}">{% endif %}
+        <div class="dt-sl-actions">
+          <button type="submit" class="dt-sl-btn dt-sl-btn-primary">Search</button>
+          <a href="{% url 'drive_test:rules_thresholds' %}" class="dt-sl-btn">Clear</a>
+        </div>
+      </form>
+      {% for e in rule_errors %}<div class="dt-fd-note">{{ e }}</div>{% endfor %}
+
+      {% if not rules %}
+      <div class="dt-sl-panel dt-sl-empty">
+        {% if rule_filters_active %}
+        <div class="dt-sl-empty-title">No regulatory rules match your filters.</div>
+        <a href="{% url 'drive_test:rules_thresholds' %}" class="dt-sl-btn">Clear Filters</a>
+        {% else %}
+        <div class="dt-sl-empty-title">No regulatory rules configured</div>
+        <p>Create a rule to begin applying regulatory conditions to drive-test analysis.</p>
+        {% if can_edit %}<a href="{% url 'drive_test:rule_create' %}" class="dt-sl-btn dt-sl-btn-primary">Add Rule</a>{% endif %}
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="dt-sl-panel dt-sl-tablepanel">
+        <div class="dt-sl-toolbar">
+          <span class="dt-sl-toolbar-title">Regulatory Rules</span>
+          <span class="dt-sl-toolbar-count">Showing {{ rule_page.start_index }}&ndash;{{ rule_page.end_index }} of {{ rule_page.paginator.count|intcomma }}</span>
+        </div>
+        <div class="dt-sl-scroll">
+          <table class="dt-sl-table">
+            <thead><tr>
+              <th>Rule</th><th>Metric / KPI</th><th>Technology</th><th>Condition</th>
+              <th>Status</th><th>Effective From</th><th>Effective To</th>
+              <th class="dt-sl-num">Thresholds</th><th class="dt-sl-num">Findings</th><th>Action</th>
+            </tr></thead>
+            <tbody>
+              {% for r in rules %}
+              <tr>
+                <td><a href="{% url 'drive_test:rule_detail' r.pk %}" class="dt-sl-ref">{{ r.name }}</a><div class="dt-pm-format">{{ r.rule_code }}</div></td>
+                <td>{{ r.metric|upper }}</td>
+                <td>{{ r.technology|default:"All" }}</td>
+                <td>{{ r.condition_label }}</td>
+                <td><span class="dt-sl-badge dt-rl-badge-{{ r.status }}">{{ r.status_label }}</span></td>
+                <td class="dt-sl-nowrap">{{ r.effective_from|date:"d M Y" }}</td>
+                <td class="dt-sl-nowrap">{{ r.effective_to|date:"d M Y"|default:"—" }}</td>
+                <td class="dt-sl-num">{{ r.threshold_count|intcomma }}</td>
+                <td class="dt-sl-num">{{ r.findings_count|intcomma }}</td>
+                <td><a href="{% url 'drive_test:rule_detail' r.pk %}" class="dt-sl-link">View</a>{% if can_edit %}<span class="dt-sl-sep">|</span><a href="{% url 'drive_test:rule_edit' r.pk %}" class="dt-sl-link">Edit</a>{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="dt-sl-footer">
+          <form method="get" class="dt-sl-perpage">
+            {% for k, v in request.GET.items %}{% if k != 'rule_per_page' and k != 'rule_page' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+            <input type="hidden" name="tab" value="rules">
+            <label for="r-pp">Rows</label>
+            <select id="r-pp" name="rule_per_page" onchange="this.form.submit()">
+              {% for n in rule_page_sizes %}<option value="{{ n }}" {% if n == rule_per_page %}selected{% endif %}>{{ n }}</option>{% endfor %}
+            </select>
+          </form>
+          {% if rule_page.has_other_pages %}
+          <nav aria-label="Rule pages" class="dt-sl-pager">
+            {% if rule_page.has_previous %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}tab=rules&amp;rule_page={{ rule_page.previous_page_number }}">&lsaquo; Previous</a>{% else %}<span class="disabled">&lsaquo; Previous</span>{% endif %}
+            {% for p in rule_page.paginator.page_range %}
+              {% if p == rule_page.number %}<span class="active">{{ p }}</span>
+              {% elif p >= rule_page.number|add:"-2" and p <= rule_page.number|add:"2" %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}tab=rules&amp;rule_page={{ p }}">{{ p }}</a>{% endif %}
+            {% endfor %}
+            {% if rule_page.has_next %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}tab=rules&amp;rule_page={{ rule_page.next_page_number }}">Next &rsaquo;</a>{% else %}<span class="disabled">Next &rsaquo;</span>{% endif %}
+          </nav>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- ── THRESHOLDS ────────────────────────────────────────────────────── -->
+    <div class="tab-pane fade {% if active_tab == 'thresholds' %}show active{% endif %}" id="pane-thresholds" role="tabpanel">
+
+      <form method="get" class="dt-sl-panel dt-sl-filters">
+        <div class="dt-sl-field dt-sl-field-search">
+          <label for="t-q">Search</label>
+          <input id="t-q" type="text" name="q" value="{{ thr_filters.q }}" placeholder="Rule name, code or unit...">
+        </div>
+        <div class="dt-sl-field"><label for="t-op">Operator</label>
+          <select id="t-op" name="operator"><option value="">All Operators</option>
+            {% for op in operators %}<option value="{{ op.code }}" {% if thr_filters.operator == op.code %}selected{% endif %}>{{ op.name }}</option>{% endfor %}</select></div>
+        <div class="dt-sl-field"><label for="t-tech">Technology</label>
+          <select id="t-tech" name="technology"><option value="">All</option>
+            {% for t in technology_choices %}<option value="{{ t }}" {% if thr_filters.technology == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+        <div class="dt-sl-field"><label for="t-metric">Metric</label>
+          <select id="t-metric" name="metric"><option value="">All</option>
+            {% for m in metric_choices %}<option value="{{ m }}" {% if thr_filters.metric == m %}selected{% endif %}>{{ m|upper }}</option>{% endfor %}</select></div>
+        <div class="dt-sl-field"><label for="t-status">Status</label>
+          <select id="t-status" name="status"><option value="">All</option>
+            {% for v, l in threshold_status_choices %}<option value="{{ v }}" {% if thr_filters.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+        <input type="hidden" id="rl-tab-input-t" name="tab" value="thresholds">
+        {% if thr_per_page != thr_page_sizes.0 %}<input type="hidden" name="thr_per_page" value="{{ thr_per_page }}">{% endif %}
+        <div class="dt-sl-actions">
+          <button type="submit" class="dt-sl-btn dt-sl-btn-primary">Search</button>
+          <a href="{% url 'drive_test:rules_thresholds' %}?tab=thresholds" class="dt-sl-btn">Clear</a>
+        </div>
+      </form>
+      {% for e in thr_errors %}<div class="dt-fd-note">{{ e }}</div>{% endfor %}
+
+      {% if not thresholds %}
+      <div class="dt-sl-panel dt-sl-empty">
+        {% if thr_filters_active %}
+        <div class="dt-sl-empty-title">No regulatory thresholds match your filters.</div>
+        <a href="{% url 'drive_test:rules_thresholds' %}?tab=thresholds" class="dt-sl-btn">Clear Filters</a>
+        {% else %}
+        <div class="dt-sl-empty-title">No regulatory thresholds configured</div>
+        <p>Configure KPI thresholds before applying regulatory threshold-based analysis.</p>
+        {% if can_edit %}<a href="{% url 'drive_test:threshold_create' %}" class="dt-sl-btn dt-sl-btn-primary">Add Threshold</a>{% endif %}
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="dt-sl-panel dt-sl-tablepanel">
+        <div class="dt-sl-toolbar">
+          <span class="dt-sl-toolbar-title">Regulatory Thresholds</span>
+          <span class="dt-sl-toolbar-count">Showing {{ thr_page.start_index }}&ndash;{{ thr_page.end_index }} of {{ thr_page.paginator.count|intcomma }}</span>
+        </div>
+        <div class="dt-sl-scroll">
+          <table class="dt-sl-table">
+            <thead><tr>
+              <th>Rule</th><th>Operator</th><th class="dt-sl-num">Warning</th><th class="dt-sl-num">Critical</th>
+              <th>Unit</th><th>Status</th><th>Effective From</th><th>Effective To</th>
+              <th class="dt-sl-num">Findings</th><th>Action</th>
+            </tr></thead>
+            <tbody>
+              {% for t in thresholds %}
+              <tr>
+                <td><a href="{% url 'drive_test:threshold_detail' t.pk %}" class="dt-sl-ref">{{ t.rule.name }}</a><div class="dt-pm-format">{{ t.rule.rule_code }} &middot; {{ t.rule_status_label }}</div></td>
+                <td>{{ t.operator.name|default:"All Operators" }}</td>
+                <td class="dt-sl-num">{% if t.warning_value is not None %}{{ t.warning_value }}{% else %}—{% endif %}</td>
+                <td class="dt-sl-num">{{ t.critical_value }}</td>
+                <td>{{ t.unit|default:"—" }}</td>
+                <td><span class="dt-sl-badge dt-rl-badge-{{ t.status }}">{{ t.status_label }}</span></td>
+                <td class="dt-sl-nowrap">{{ t.effective_from|date:"d M Y" }}</td>
+                <td class="dt-sl-nowrap">{{ t.effective_to|date:"d M Y"|default:"—" }}</td>
+                <td class="dt-sl-num">{{ t.findings_count|intcomma }}</td>
+                <td><a href="{% url 'drive_test:threshold_detail' t.pk %}" class="dt-sl-link">View</a>{% if can_edit %}<span class="dt-sl-sep">|</span><a href="{% url 'drive_test:threshold_edit' t.pk %}" class="dt-sl-link">Edit</a>{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="dt-sl-footer">
+          <form method="get" class="dt-sl-perpage">
+            {% for k, v in request.GET.items %}{% if k != 'thr_per_page' and k != 'thr_page' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+            <input type="hidden" name="tab" value="thresholds">
+            <label for="t-pp">Rows</label>
+            <select id="t-pp" name="thr_per_page" onchange="this.form.submit()">
+              {% for n in thr_page_sizes %}<option value="{{ n }}" {% if n == thr_per_page %}selected{% endif %}>{{ n }}</option>{% endfor %}
+            </select>
+          </form>
+          {% if thr_page.has_other_pages %}
+          <nav aria-label="Threshold pages" class="dt-sl-pager">
+            {% if thr_page.has_previous %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}tab=thresholds&amp;thr_page={{ thr_page.previous_page_number }}">&lsaquo; Previous</a>{% else %}<span class="disabled">&lsaquo; Previous</span>{% endif %}
+            {% for p in thr_page.paginator.page_range %}
+              {% if p == thr_page.number %}<span class="active">{{ p }}</span>
+              {% elif p >= thr_page.number|add:"-2" and p <= thr_page.number|add:"2" %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}tab=thresholds&amp;thr_page={{ p }}">{{ p }}</a>{% endif %}
+            {% endfor %}
+            {% if thr_page.has_next %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}tab=thresholds&amp;thr_page={{ thr_page.next_page_number }}">Next &rsaquo;</a>{% else %}<span class="disabled">Next &rsaquo;</span>{% endif %}
+          </nav>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'drive_test/js/rules.js' %}"></script>
+{% endblock %}

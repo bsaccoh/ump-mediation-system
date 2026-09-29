@@ -1,0 +1,5 @@
+/* Drive Test — Sectors. Reuses .dt-sl-*, .dt-st-* and .dt-ce-* primitives; only sector-specific rules live here. */
+.dt-sc-hierarchy { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 4px 0 12px; font-size: 0.78rem; }
+.dt-sc-hierarchy span { padding: 2px 8px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 3px; }
+.dt-sc-hierarchy i { color: #9ca3af; font-style: normal; }
+.dt-sc-hierarchy .here { background: #eef2ff; border-color: #c7d2fe; font-weight: 600; color: #1a237e; }

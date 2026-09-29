@@ -1,0 +1,183 @@
+/*
+ * Drive Test Design System — Phase 1 of the professional UI/UX redesign.
+ *
+ * Loaded FIRST on every Drive Test page (before drive_test.css / page-scoped CSS),
+ * so it can be the single place that controls color, radius, shadow and spacing —
+ * and, by re-styling the shared component classes every page already uses
+ * (.dt-sl-panel, .dt-sl-badge*, .dt-kpi-card, .dt-sl-table, .dt-sl-btn, .dt-sd-tabs...),
+ * the refreshed look propagates to all ~30 Drive Test pages immediately, without
+ * rewriting their markup. No page's HTML structure, JS behaviour or backend data
+ * changes because of this file — only appearance.
+ *
+ * Visual direction: a modern analytical console (soft-shadowed white panels,
+ * pill status badges, icon-chip KPI tiles with real trend indicators, a
+ * consistent technology palette) rather than a flat-bordered admin/CRUD look.
+ */
+
+:root {
+  /* ── Color semantics — reuse everywhere; never assign color to data randomly ── */
+  --dt-primary:        #1a237e;
+  --dt-primary-dark:   #0d1b4c;
+  --dt-primary-soft:   #eef0fb;
+  --dt-success:        #16a34a;
+  --dt-success-soft:   #e8f8ee;
+  --dt-warning:        #d97706;
+  --dt-warning-soft:   #fef3e2;
+  --dt-danger:         #dc2626;
+  --dt-danger-soft:    #fdeaea;
+  --dt-info:           #2563eb;
+  --dt-info-soft:      #eaf1fd;
+  --dt-neutral:        #64748b;
+  --dt-neutral-soft:   #f1f5f9;
+
+  /* ── Technology palette — the one mapping used on every chart/badge/legend ── */
+  --dt-tech-2g: #7c3aed;
+  --dt-tech-3g: #0891b2;
+  --dt-tech-4g: #16a34a;
+  --dt-tech-5g: #d97706;
+
+  /* ── Surfaces / borders / elevation ── */
+  --dt-surface:       #ffffff;
+  --dt-canvas:        #f4f6fb;
+  --dt-border:        #e5e8f0;
+  --dt-radius-sm:     6px;
+  --dt-radius-md:     10px;
+  --dt-radius-lg:     14px;
+  --dt-shadow-sm:     0 1px 2px rgba(15, 23, 42, 0.06);
+  --dt-shadow-md:     0 2px 10px rgba(15, 23, 42, 0.07);
+  --dt-shadow-lg:     0 8px 24px rgba(15, 23, 42, 0.10);
+
+  /* ── Typography scale ── */
+  --dt-font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --dt-text-page-title: 1.3rem;
+  --dt-text-section:    0.98rem;
+  --dt-text-body:       0.85rem;
+  --dt-text-meta:       0.74rem;
+  --dt-text-label:      0.66rem;
+
+  /* ── Spacing scale ── */
+  --dt-space-1: 4px;
+  --dt-space-2: 8px;
+  --dt-space-3: 12px;
+  --dt-space-4: 16px;
+  --dt-space-5: 24px;
+}
+
+/* ── Elevate the shared panel/table/badge/button vocabulary everywhere ──────── */
+.dt-sl-panel, .dt-st-panel, .dt-sl-tablepanel, .dt-sd-panel {
+  border: 1px solid var(--dt-border) !important;
+  border-radius: var(--dt-radius-md) !important;
+  box-shadow: var(--dt-shadow-sm);
+}
+
+.dt-sl-badge, .dt-badge {
+  border-radius: 999px !important;
+  padding: 2px 10px !important;
+  font-weight: 700 !important;
+}
+
+.dt-sl-btn {
+  border-radius: var(--dt-radius-sm) !important;
+  transition: box-shadow 0.15s ease, transform 0.05s ease;
+}
+.dt-sl-btn:active { transform: translateY(1px); }
+.dt-sl-btn-primary {
+  background: var(--dt-primary) !important;
+  border-color: var(--dt-primary) !important;
+  box-shadow: 0 1px 3px rgba(26, 35, 126, 0.25);
+}
+
+.dt-sl-table thead th { background: var(--dt-canvas) !important; }
+.dt-sl-table tbody tr:hover td { background: var(--dt-canvas); }
+
+.dt-sd-tabs .nav-link.active,
+.dt-tabs .nav-link.active { border-bottom-width: 3px !important; }
+
+/* ── KPI tile — icon chip, big value, real trend indicator, sample count ────── */
+/* Usage:
+   <div class="dt-kpi-tile">
+     <div class="dt-kpi-tile-top">
+       <span class="dt-kpi-tile-label">MEASUREMENTS</span>
+       <span class="dt-kpi-tile-icon dt-icon-primary"><i class="bi bi-graph-up"></i></span>
+     </div>
+     <div class="dt-kpi-tile-value">1,466</div>
+     <div class="dt-kpi-tile-meta">
+       <span class="dt-kpi-trend dt-kpi-trend-up">▲ 2.1%</span>   (only when a real comparison exists)
+       <span>4 sessions</span>
+     </div>
+   </div>
+*/
+.dt-kpi-tile {
+  background: var(--dt-surface);
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius-md);
+  box-shadow: var(--dt-shadow-sm);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.dt-kpi-tile-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.dt-kpi-tile-label {
+  font-size: var(--dt-text-label); font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--dt-neutral);
+}
+.dt-kpi-tile-icon {
+  width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem;
+}
+.dt-icon-primary { background: var(--dt-primary-soft); color: var(--dt-primary); }
+.dt-icon-success { background: var(--dt-success-soft); color: var(--dt-success); }
+.dt-icon-warning { background: var(--dt-warning-soft); color: var(--dt-warning); }
+.dt-icon-danger  { background: var(--dt-danger-soft);  color: var(--dt-danger); }
+.dt-icon-info    { background: var(--dt-info-soft);    color: var(--dt-info); }
+.dt-icon-neutral { background: var(--dt-neutral-soft); color: var(--dt-neutral); }
+
+.dt-kpi-tile-value { font-size: 1.65rem; font-weight: 700; color: #0f172a; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.dt-kpi-tile-meta { display: flex; align-items: center; gap: 8px; font-size: var(--dt-text-meta); color: var(--dt-neutral); }
+.dt-kpi-trend { font-weight: 700; }
+.dt-kpi-trend-up   { color: var(--dt-success); }
+.dt-kpi-trend-down { color: var(--dt-danger); }
+
+.dt-kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+
+/* ── Technology badge — the one consistent chip used everywhere a technology
+   is shown (chart legends, tables, filters) ── */
+.dt-tech-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: var(--dt-text-meta); font-weight: 700;
+  padding: 1px 8px; border-radius: 999px;
+}
+.dt-tech-chip::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+/* Plain fallback background first; color-mix() overrides it where supported. */
+.dt-tech-chip-2G { color: var(--dt-tech-2g); background: #f3ecfd; background: color-mix(in srgb, var(--dt-tech-2g) 12%, white); }
+.dt-tech-chip-3G { color: var(--dt-tech-3g); background: #e6f6fa; background: color-mix(in srgb, var(--dt-tech-3g) 12%, white); }
+.dt-tech-chip-4G { color: var(--dt-tech-4g); background: #e8f8ee; background: color-mix(in srgb, var(--dt-tech-4g) 12%, white); }
+.dt-tech-chip-5G { color: var(--dt-tech-5g); background: #fdf1e0; background: color-mix(in srgb, var(--dt-tech-5g) 12%, white); }
+
+/* ── Pipeline stepper — reused by Processing Monitor's detail timeline ──────── */
+.dt-pipeline { display: flex; flex-wrap: wrap; align-items: center; gap: 0; }
+.dt-pipeline-step { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.dt-pipeline-dot {
+  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.75rem; font-weight: 700; border: 2px solid var(--dt-border); color: var(--dt-neutral); background: var(--dt-surface);
+}
+.dt-pipeline-label { font-size: var(--dt-text-meta); font-weight: 600; color: var(--dt-neutral); white-space: nowrap; }
+.dt-pipeline-connector { width: 22px; height: 2px; background: var(--dt-border); margin: 0 4px; flex-shrink: 0; }
+.dt-pipeline-step.is-done .dt-pipeline-dot { background: var(--dt-success-soft); border-color: var(--dt-success); color: var(--dt-success); }
+.dt-pipeline-step.is-done .dt-pipeline-label { color: #0f172a; }
+.dt-pipeline-step.is-done + .dt-pipeline-connector { background: var(--dt-success); opacity: 0.4; }
+.dt-pipeline-step.is-current .dt-pipeline-dot { background: var(--dt-warning-soft); border-color: var(--dt-warning); color: var(--dt-warning); }
+.dt-pipeline-step.is-current .dt-pipeline-label { color: #0f172a; font-weight: 700; }
+.dt-pipeline-step.is-failed .dt-pipeline-dot { background: var(--dt-danger-soft); border-color: var(--dt-danger); color: var(--dt-danger); }
+.dt-pipeline-step.is-failed .dt-pipeline-label { color: var(--dt-danger); font-weight: 700; }
+
+/* ── Chart panel wrapper ── */
+.dt-chart-panel { background: var(--dt-surface); border: 1px solid var(--dt-border); border-radius: var(--dt-radius-md); box-shadow: var(--dt-shadow-sm); padding: 14px 16px; }
+.dt-chart-title { font-size: var(--dt-text-label); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dt-neutral); margin-bottom: 10px; }
+.dt-chart-empty { text-align: center; padding: 30px 10px; color: var(--dt-neutral); font-size: var(--dt-text-body); }
+.dt-chart-empty .bi { font-size: 1.4rem; opacity: 0.4; display: block; margin-bottom: 6px; }
+
+body { font-family: var(--dt-font); }

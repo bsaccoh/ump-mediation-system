@@ -67,13 +67,32 @@ def _run_process_drive_test_file(drive_file_id: int):
         chunk_measurements = []
         chunk_radio = []
         chunk_service = []
+        _test_device = None
+        _device_resolved = False
+
+        def _naive(dt):
+            """Strip tzinfo when USE_TZ=False so SQLite accepts the value."""
+            if dt is None:
+                return None
+            from django.conf import settings
+            if not settings.USE_TZ and dt.tzinfo is not None:
+                from datetime import timezone as _tz
+                return dt.astimezone(_tz.utc).replace(tzinfo=None)
+            return dt
 
         for pm in parser.parse(file_path):
+            # Resolve TestDevice once on first measurement that carries device info
+            if not _device_resolved:
+                device_info = pm.raw_data.get('__device__')
+                if device_info:
+                    _test_device = _resolve_test_device(device_info)
+                    _device_resolved = True
+
             m = Measurement(
                 drive_file=drive_file,
                 sequence_num=pm.sequence_num,
-                captured_at=pm.captured_at,
-                local_timestamp=pm.local_timestamp,
+                captured_at=_naive(pm.captured_at),
+                local_timestamp=_naive(pm.local_timestamp),
                 latitude=pm.latitude,
                 longitude=pm.longitude,
                 altitude_m=pm.altitude_m,
@@ -92,6 +111,7 @@ def _run_process_drive_test_file(drive_file_id: int):
                 obs_nrarfcn=pm.obs_nrarfcn,
                 is_valid=pm.is_valid,
                 quality_flags=pm.quality_flags,
+                test_device=_test_device,
             )
             chunk_measurements.append((m, pm))
 
@@ -144,6 +164,7 @@ def _run_process_drive_test_file(drive_file_id: int):
             'Drive test file #%d processed: %d measurements, session=%s',
             drive_file_id, total_inserted, session.session_ref,
         )
+        _audit_processing_event(drive_file, status='SUCCESS', measurements=total_inserted)
         return {
             'file_id': drive_file_id,
             'session_ref': session.session_ref,
@@ -160,6 +181,7 @@ def _run_process_drive_test_file(drive_file_id: int):
         drive_file.processing_completed_at = timezone.now()
         drive_file.save(update_fields=['status', 'error_message', 'processing_completed_at'])
         _update_session_aggregates(drive_file.session)
+        _audit_processing_event(drive_file, status='FAILED', error=f'{type(exc).__name__}: {exc}')
         raise
 
 
@@ -196,6 +218,25 @@ def process_drive_test_file(drive_file_id: int) -> None:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _audit_processing_event(drive_file, *, status: str, **extra) -> None:
+    """One real audit record per finished processing attempt (success or failure).
+    Uses the existing core.AuditLog via services.audit.log — never a second audit
+    system — and never raises: a logging failure must not fail the real pipeline."""
+    try:
+        from drive_test.services import audit as al
+
+        if 'error' in extra:
+            extra['error'] = al.sanitize_error(extra['error'])
+        description = (
+            f'File processed: {drive_file.original_filename} ({drive_file.session.session_ref})'
+            if status == 'SUCCESS' else
+            f'File processing failed: {drive_file.original_filename} ({drive_file.session.session_ref})'
+        )
+        al.log(action='PROCESS', obj=drive_file, description=description, status=status, **extra)
+    except Exception:
+        logger.exception('Audit log write failed for drive_file #%s', drive_file.pk)
+
 
 def _resolve_parser(drive_file):
     """Instantiate the correct parser. Falls back to CsvDriveTestParser."""
@@ -263,6 +304,71 @@ def _flush_chunk(chunk: list, chunk_radio: list, chunk_service: list, drive_file
         ServiceMeasurement.objects.bulk_create(service_rows)
 
     return len(created)
+
+
+def _resolve_test_device(device_info: dict):
+    """
+    Get or create TestDevice / DeviceModel / DeviceManufacturer from parsed device_info dict.
+    Returns a TestDevice instance, or None when there is insufficient data.
+    """
+    from drive_test.models import TestDevice, DeviceModel, DeviceManufacturer
+
+    model_name = (device_info.get('model_name') or '').strip()
+    manufacturer_name = (device_info.get('manufacturer') or '').strip()
+    imei = (device_info.get('imei') or '').strip()
+    label = (device_info.get('label') or '').strip()
+    imsi = (device_info.get('imsi') or '').strip()
+    sim_msisdn = (device_info.get('sim_msisdn') or '').strip()
+
+    # Need at least one identifier
+    serial = imei or model_name
+    if not serial:
+        return None
+
+    try:
+        # DeviceManufacturer
+        if manufacturer_name:
+            manufacturer, _ = DeviceManufacturer.objects.get_or_create(
+                name=manufacturer_name,
+                defaults={'name': manufacturer_name},
+            )
+        else:
+            manufacturer, _ = DeviceManufacturer.objects.get_or_create(name='Unknown')
+
+        # DeviceModel
+        model_name_key = model_name or 'Unknown'
+        device_model, _ = DeviceModel.objects.get_or_create(
+            manufacturer=manufacturer,
+            model_name=model_name_key,
+        )
+
+        # TestDevice (keyed by serial_number = IMEI when available, else model name)
+        test_device, created = TestDevice.objects.get_or_create(
+            serial_number=serial,
+            defaults={
+                'device_model': device_model,
+                'imei': imei,
+                'label': label or model_name_key,
+                'sim_imsi': imsi,
+                'sim_msisdn': sim_msisdn,
+            },
+        )
+        if not created:
+            # Keep device_model, imei, label current if they were empty
+            updated_fields = []
+            if not test_device.imei and imei:
+                test_device.imei = imei
+                updated_fields.append('imei')
+            if not test_device.label and (label or model_name_key):
+                test_device.label = label or model_name_key
+                updated_fields.append('label')
+            if updated_fields:
+                test_device.save(update_fields=updated_fields)
+
+        return test_device
+    except Exception:
+        logger.exception('Failed to resolve TestDevice from device_info=%s', device_info)
+        return None
 
 
 def _update_session_aggregates(session) -> None:

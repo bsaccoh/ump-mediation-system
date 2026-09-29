@@ -1,150 +1,344 @@
 {% extends "base.html" %}
-{% load humanize %}
+{% load humanize static %}
 
 {% block title %}Drive Test Dashboard | UMP{% endblock %}
+{% block page_title %}Drive Test{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.min.css' %}">
+{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
+<div class="dt-dashboard">
 
-  <div class="d-flex justify-content-between align-items-center mb-4">
+  <!-- ── PAGE HEADER ──────────────────────────────────────────────────────── -->
+  <div class="dt-page-header">
     <div>
-      <h1 class="h3 mb-1">Drive Test Dashboard</h1>
-      <p class="text-muted mb-0">Network quality surveys, cell matching, and regulatory findings</p>
+      <h1 class="dt-page-title">Drive Test</h1>
+      <p class="dt-page-subtitle">Network performance monitoring and field-test analysis</p>
     </div>
-    <a href="{% url 'drive_test:session_upload' %}" class="btn btn-primary">
-      <i class="bi bi-upload me-2"></i>Upload Drive Test
-    </a>
-  </div>
-
-  <!-- KPI Cards -->
-  <div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
-      <div class="card h-100">
-        <div class="card-body">
-          <div class="text-muted small">Total Sessions</div>
-          <div class="h2 fw-bold">{{ stats.total|default:"0"|intcomma }}</div>
-          <div class="small text-success">{{ stats.completed|default:"0" }} completed</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="card h-100">
-        <div class="card-body">
-          <div class="text-muted small">Processing</div>
-          <div class="h2 fw-bold">{{ stats.pending|default:"0"|intcomma }}</div>
-          <div class="small text-warning">pending / in progress</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="card h-100">
-        <div class="card-body">
-          <div class="text-muted small">Open Findings</div>
-          <div class="h2 fw-bold">{{ open_findings|intcomma }}</div>
-          <div class="small text-danger">{{ critical_findings }} critical</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="card h-100">
-        <div class="card-body">
-          <div class="text-muted small">Failed Sessions</div>
-          <div class="h2 fw-bold text-danger">{{ stats.failed|default:"0"|intcomma }}</div>
-          <div class="small text-muted">require attention</div>
-        </div>
-      </div>
+    <div class="dt-page-actions">
+      <a href="{% url 'drive_test:report_list' %}" class="dt-outline-button">
+        <i class="bi bi-file-earmark-text"></i> Regulatory Reports
+      </a>
+      <a href="{% url 'drive_test:audit_trail' %}" class="dt-outline-button">
+        <i class="bi bi-journal-check"></i> Audit Trail
+      </a>
+      <a href="{% url 'drive_test:rules_thresholds' %}" class="dt-outline-button">
+        <i class="bi bi-sliders"></i> Rules &amp; Thresholds
+      </a>
+      <a href="{% url 'drive_test:processing_monitor' %}" class="dt-outline-button">
+        <i class="bi bi-activity"></i> Processing Monitor
+      </a>
+      <a href="{% url 'drive_test:operator_analysis' %}" class="dt-outline-button">
+        <i class="bi bi-bar-chart-line"></i> Technology &amp; Operator Analysis
+      </a>
+      <a href="{% url 'drive_test:kpi_analysis' %}" class="dt-outline-button">
+        <i class="bi bi-graph-up"></i> KPI Analysis
+      </a>
+      <a href="{% url 'drive_test:data_quality' %}" class="dt-outline-button">
+        <i class="bi bi-clipboard2-check"></i> Data Quality
+      </a>
+      <a href="{% url 'drive_test:session_upload' %}" class="dt-primary-button">
+        <i class="bi bi-upload dt-button-icon"></i>Upload Drive Test
+      </a>
     </div>
   </div>
 
-  <!-- Recent Sessions -->
-  <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <strong>Recent Sessions</strong>
-      <a href="{% url 'drive_test:session_list' %}" class="btn btn-sm btn-outline-primary">
-        View all <i class="bi bi-arrow-right ms-1"></i>
-      </a>
+  <!-- ── KPI SUMMARY ──────────────────────────────────────────────────────── -->
+  <section class="dt-kpi-grid">
+    <div class="dt-kpi-card">
+      <div class="dt-kpi-top">
+        <span class="dt-kpi-label">TOTAL SESSIONS</span>
+        <div class="dt-kpi-icon dt-icon-blue"><i class="bi bi-collection"></i></div>
+      </div>
+      <div class="dt-kpi-value">{{ total_sessions|intcomma }}</div>
+      <div class="dt-kpi-meta">{{ completed_sessions|intcomma }} completed</div>
     </div>
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
-        <thead>
-          <tr>
-            <th>Reference</th>
-            <th>Operator</th>
-            <th>Test Date</th>
-            <th>Type</th>
-            <th>Measurements</th>
-            <th>Findings</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for s in recent_sessions %}
-          <tr>
-            <td>
-              <a href="{% url 'drive_test:session_detail' s.session_ref %}">{{ s.session_ref }}</a>
-            </td>
-            <td>{{ s.operator.name }}</td>
-            <td>{{ s.test_date }}</td>
-            <td>{{ s.get_test_type_display }}</td>
-            <td>{{ s.total_measurements|intcomma }}</td>
-            <td>{{ s.finding_count }}</td>
-            <td>
-              <span class="badge bg-{% if s.status == 'COMPLETED' %}success{% elif s.status == 'FAILED' %}danger{% elif s.status == 'PROCESSING' %}warning{% else %}secondary{% endif %}">
-                {{ s.status }}
-              </span>
-            </td>
-          </tr>
-          {% empty %}
-          <tr>
-            <td colspan="7" class="text-center text-muted py-4">
-              No sessions yet. <a href="{% url 'drive_test:session_upload' %}">Upload the first one.</a>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="dt-kpi-card">
+      <div class="dt-kpi-top">
+        <span class="dt-kpi-label">COMPLETED</span>
+        <div class="dt-kpi-icon dt-icon-green"><i class="bi bi-check-circle"></i></div>
+      </div>
+      <div class="dt-kpi-value dt-value-green">{{ completed_sessions|intcomma }}</div>
+      <div class="dt-kpi-meta">{{ completion_rate }}% completion rate</div>
     </div>
-  </div>
+    <div class="dt-kpi-card">
+      <div class="dt-kpi-top">
+        <span class="dt-kpi-label">PROCESSING</span>
+        <div class="dt-kpi-icon dt-icon-orange"><i class="bi bi-hourglass-split"></i></div>
+      </div>
+      <div class="dt-kpi-value dt-value-orange">{{ processing_sessions|intcomma }}</div>
+      <div class="dt-kpi-meta">pending / in progress</div>
+    </div>
+    <div class="dt-kpi-card">
+      <div class="dt-kpi-top">
+        <span class="dt-kpi-label">OPEN FINDINGS</span>
+        <div class="dt-kpi-icon dt-icon-red"><i class="bi bi-exclamation-triangle"></i></div>
+      </div>
+      <div class="dt-kpi-value{% if open_findings %} dt-value-red{% endif %}">{{ open_findings|intcomma }}</div>
+      <div class="dt-kpi-meta">{{ critical_findings }} critical</div>
+    </div>
+    <div class="dt-kpi-card">
+      <div class="dt-kpi-top">
+        <span class="dt-kpi-label">MEASUREMENTS</span>
+        <div class="dt-kpi-icon dt-icon-purple"><i class="bi bi-reception-4"></i></div>
+      </div>
+      <div class="dt-kpi-value">{{ total_measurements|intcomma }}</div>
+      <div class="dt-kpi-meta">processed records</div>
+    </div>
+    <div class="dt-kpi-card">
+      <div class="dt-kpi-top">
+        <span class="dt-kpi-label">OPERATORS</span>
+        <div class="dt-kpi-icon dt-icon-blue"><i class="bi bi-building"></i></div>
+      </div>
+      <div class="dt-kpi-value">{{ operator_count }}</div>
+      <div class="dt-kpi-meta">with drive-test data</div>
+    </div>
+  </section>
 
-  <!-- Quick Links -->
-  <div class="row g-3 mt-2">
-    <div class="col-md-3">
-      <a href="{% url 'drive_test:site_list' %}" class="card text-decoration-none h-100">
-        <div class="card-body text-center py-3">
-          <i class="bi bi-broadcast-pin fs-3 text-primary"></i>
-          <div class="mt-2 fw-semibold">Sites</div>
-          <div class="small text-muted">Base station reference</div>
+  <!-- ── ANALYTICS ROW ────────────────────────────────────────────────────── -->
+  <section class="dt-analytics-grid">
+
+    <!-- Measurement Activity -->
+    <div class="dt-panel">
+      <div class="dt-panel-header">
+        <div>
+          <h2>Measurement Activity</h2>
+          <span>Drive-test measurements over the selected period</span>
         </div>
-      </a>
-    </div>
-    <div class="col-md-3">
-      <a href="{% url 'drive_test:cell_list' %}" class="card text-decoration-none h-100">
-        <div class="card-body text-center py-3">
-          <i class="bi bi-reception-4 fs-3 text-primary"></i>
-          <div class="mt-2 fw-semibold">Cells</div>
-          <div class="small text-muted">Cell reference data</div>
+        <div class="dt-panel-filter">
+          <select id="measurementPeriod">
+            <option value="30" selected>Last 30 days</option>
+            <option value="7">Last 7 days</option>
+            <option value="90">Last 90 days</option>
+          </select>
         </div>
-      </a>
+      </div>
+      <div class="dt-chart-container" id="trend-container">
+        <!-- Populated by JS from json_script data below -->
+      </div>
     </div>
-    <div class="col-md-3">
-      <a href="{% url 'drive_test:finding_list' %}" class="card text-decoration-none h-100">
-        <div class="card-body text-center py-3">
-          <i class="bi bi-exclamation-triangle fs-3 text-warning"></i>
-          <div class="mt-2 fw-semibold">Findings</div>
-          <div class="small text-muted">Quality & compliance issues</div>
+
+    <!-- Technology Distribution -->
+    <div class="dt-panel">
+      <div class="dt-panel-header">
+        <div>
+          <h2>Technology Distribution</h2>
+          <span>Measurements by radio technology</span>
         </div>
-      </a>
-    </div>
-    <div class="col-md-3">
-      <a href="{% url 'drive_test:reference_import' %}" class="card text-decoration-none h-100">
-        <div class="card-body text-center py-3">
-          <i class="bi bi-file-earmark-arrow-up fs-3 text-secondary"></i>
-          <div class="mt-2 fw-semibold">Import Reference</div>
-          <div class="small text-muted">Sites, cells CSV import</div>
+      </div>
+      {% if technology_summary %}
+      <div class="dt-technology-chart">
+        <canvas id="technologyChart"></canvas>
+      </div>
+      <div class="dt-tech-legend">
+        {% for item in technology_summary %}
+        <div class="dt-tech-row">
+          <div class="dt-tech-name">
+            <span class="dt-tech-dot" data-tech="{{ item.technology }}"></span>
+            {{ item.technology|default:"Unknown" }}
+          </div>
+          <div class="dt-tech-value">{{ item.measurements|intcomma }}</div>
         </div>
-      </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="dt-empty-panel">
+        <i class="bi bi-broadcast dt-empty-panel-icon"></i>
+        <div class="dt-empty-panel-title">No technology data</div>
+        <div class="dt-empty-panel-sub">Technology information is not available for the current measurement set.</div>
+      </div>
+      {% endif %}
     </div>
-  </div>
+
+  </section>
+
+  <!-- ── RECENT SESSIONS + OPERATOR SUMMARY ───────────────────────────────── -->
+  <section class="dt-main-grid">
+
+    <!-- Recent Drive Tests -->
+    <div class="dt-panel">
+      <div class="dt-panel-header">
+        <div>
+          <h2>Recent Drive Tests</h2>
+          <span>Latest field-test sessions</span>
+        </div>
+        <a href="{% url 'drive_test:session_list' %}" class="dt-outline-button">View all</a>
+      </div>
+      <div class="dt-table-wrapper">
+        <table class="dt-table">
+          <thead>
+            <tr>
+              <th>SESSION</th>
+              <th>OPERATOR</th>
+              <th>TEST DATE</th>
+              <th>TYPE</th>
+              <th class="dt-number">MEASUREMENTS</th>
+              <th class="dt-number">FINDINGS</th>
+              <th>STATUS</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in recent_sessions %}
+            <tr>
+              <td>
+                <a href="{% url 'drive_test:session_detail' s.session_ref %}" class="dt-session-id">
+                  {{ s.session_ref }}
+                </a>
+              </td>
+              <td><div class="dt-operator-cell">{{ s.operator.name }}</div></td>
+              <td><span class="dt-date">{{ s.test_date|date:"d M Y" }}</span></td>
+              <td>{{ s.get_test_type_display }}</td>
+              <td class="dt-number">{{ s.total_measurements|intcomma }}</td>
+              <td class="dt-number">
+                {% if s.finding_count %}<span style="color:#b42318;font-weight:600">{{ s.finding_count }}</span>
+                {% else %}0{% endif %}
+              </td>
+              <td>
+                {% if s.status == "COMPLETED" %}<span class="dt-status dt-status-success">COMPLETED</span>
+                {% elif s.status == "PROCESSING" %}<span class="dt-status dt-status-processing">PROCESSING</span>
+                {% elif s.status == "FAILED" %}<span class="dt-status dt-status-failed">FAILED</span>
+                {% elif s.status == "PARTIAL" %}<span class="dt-status dt-status-partial">PARTIAL</span>
+                {% else %}<span class="dt-status dt-status-pending">{{ s.status }}</span>{% endif %}
+              </td>
+              <td>
+                <a href="{% url 'drive_test:session_detail' s.session_ref %}" class="dt-view-button">View</a>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="8">
+                <div class="dt-empty-state">
+                  <div class="dt-empty-icon"><i class="bi bi-collection" style="font-size:26px"></i></div>
+                  <strong>No drive-test sessions</strong>
+                  <span>Upload a drive-test file to begin analysis.</span>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Operator Activity -->
+    <div class="dt-panel">
+      <div class="dt-panel-header">
+        <div>
+          <h2>Operator Activity</h2>
+          <span>Drive-test coverage by operator</span>
+        </div>
+      </div>
+      {% if operator_summary %}
+      <div class="dt-operator-list">
+        {% for op in operator_summary %}
+        <div class="dt-operator-item">
+          <div class="dt-operator-main">
+            <div class="dt-operator-avatar">{% if op.code %}{{ op.code|slice:":2" }}{% else %}{{ op.name|slice:":1"|upper }}{% endif %}</div>
+            <div>
+              <div class="dt-operator-name">{{ op.name }}</div>
+              <div class="dt-operator-meta">{{ op.sessions }} session{{ op.sessions|pluralize }}</div>
+            </div>
+          </div>
+          <div class="dt-operator-measurements">
+            {{ op.measurements|intcomma }}
+            <span>measurements</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="dt-empty-panel">
+        <i class="bi bi-building dt-empty-panel-icon"></i>
+        <div class="dt-empty-panel-title">No operator data</div>
+        <div class="dt-empty-panel-sub">Upload a drive-test session to see operator activity.</div>
+      </div>
+      {% endif %}
+    </div>
+
+  </section>
+
+  <!-- ── FINDINGS + MAP ───────────────────────────────────────────────────── -->
+  <section class="dt-bottom-grid">
+
+    <!-- Open Findings -->
+    <div class="dt-panel">
+      <div class="dt-panel-header">
+        <div>
+          <h2>Open Findings</h2>
+          <span>Issues identified during drive testing</span>
+        </div>
+        {% if open_findings %}
+        <a href="{% url 'drive_test:finding_list' %}" class="dt-outline-button">View all</a>
+        {% endif %}
+      </div>
+      <div class="dt-findings-list">
+        {% for finding in open_findings_list %}
+        <div class="dt-finding-item">
+          <div class="dt-finding-severity dt-severity-{{ finding.severity|lower }}"></div>
+          <div class="dt-finding-content">
+            <div class="dt-finding-title">{{ finding.get_finding_type_display }}</div>
+            <div class="dt-finding-meta">
+              {{ finding.session.operator.name }}{% if finding.cell %} &middot; {{ finding.cell.technology }}{% endif %} &middot; {{ finding.created_at|date:"d M Y" }}
+            </div>
+          </div>
+          <a href="{% url 'drive_test:session_detail' finding.session.session_ref %}" class="dt-finding-arrow">→</a>
+        </div>
+        {% empty %}
+        <div class="dt-no-findings">
+          <div class="dt-no-findings-icon"><i class="bi bi-check-circle"></i></div>
+          <div>
+            <strong>No open findings</strong>
+            <span>Current drive-test results have no unresolved findings.</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Drive Test Coverage Map -->
+    <div class="dt-panel dt-map-panel">
+      <div class="dt-panel-header">
+        <div>
+          <h2>Drive Test Coverage</h2>
+          <span>Geographic distribution of measurements — 5 most recent sessions</span>
+        </div>
+        <a href="{% url 'drive_test:session_list' %}" class="dt-outline-button">Explore</a>
+      </div>
+      <div id="driveTestMap" class="dt-dashboard-map">
+        <!-- Fallback shown while map loads -->
+        <div class="dt-map-loading" id="map-loading">
+          <div class="spinner-border spinner-border-sm text-muted me-2"></div>
+          Loading map…
+        </div>
+      </div>
+    </div>
+
+  </section>
 
 </div>
+
+{# Safe JSON data blocks — read by JS with JSON.parse(el.textContent) #}
+{{ measurement_trend_json|json_script:"dt-trend-data" }}
+{{ technology_chart_json|json_script:"dt-tech-data" }}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/leaflet/leaflet.min.js' %}"></script>
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script src="{% static 'drive_test/js/charts.js' %}"></script>
+<script>
+window.DRIVE_TEST_MAP_CONFIG = {
+    tileUrl: "{{ drive_test_map_tile_url|escapejs }}",
+    attribution: "{{ drive_test_map_attribution|escapejs }}",
+    dataUrl: "{% url 'drive_test:map_data' %}",
+    trendUrl: "{% url 'drive_test:dashboard_trend' %}"
+};
+</script>
+<script src="{% static 'drive_test/js/dashboard.js' %}"></script>
 {% endblock %}

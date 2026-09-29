@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% load humanize static %}
+
+{% block title %}{{ rule.name }} | Rules & Thresholds | UMP{% endblock %}
+{% block page_title %}Rule Detail{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/site_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/rules.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 dt-sl dt-st dt-rl">
+  <a href="{% url 'drive_test:rules_thresholds' %}?tab=rules" class="dt-st-back">&larr; Back to Rules &amp; Thresholds</a>
+
+  <div class="dt-sl-header">
+    <div>
+      <h1>{{ rule.name }}</h1>
+      <p>{{ rule.rule_code }} <span class="dt-sl-badge dt-rl-badge-{{ status }}">{{ status_label }}</span></p>
+    </div>
+    {% if can_edit %}
+    <div class="dt-rl-actions">
+      <form method="post" action="{% url 'drive_test:rule_toggle_active' rule.pk %}" style="display:inline">
+        {% csrf_token %}
+        <button type="submit" class="dt-sl-btn" onclick="return confirm('{% if rule.is_active %}Disable{% else %}Enable{% endif %} this rule? {% if rule.is_active %}It will stop being evaluated for new findings; historical findings are kept.{% endif %}');">
+          {% if rule.is_active %}Disable{% else %}Enable{% endif %}
+        </button>
+      </form>
+      <a href="{% url 'drive_test:rule_edit' rule.pk %}" class="dt-sl-btn dt-sl-btn-primary">Edit Rule</a>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="dt-st-cols">
+    <div class="dt-sl-panel dt-st-panel">
+      <div class="dt-st-title">Basic Information</div>
+      <dl class="dt-st-list">
+        <div><dt>Rule Code</dt><dd>{{ rule.rule_code }}</dd></div>
+        <div><dt>Rule Name</dt><dd>{{ rule.name }}</dd></div>
+        <div class="full"><dt>Description</dt><dd>{{ rule.description|default:"—" }}</dd></div>
+        <div><dt>Authority</dt><dd>{{ rule.authority|default:"—" }}</dd></div>
+        <div><dt>Regulatory Reference</dt><dd>{{ rule.regulatory_reference|default:"—" }}</dd></div>
+      </dl>
+    </div>
+    <div class="dt-sl-panel dt-st-panel">
+      <div class="dt-st-title">Applicability &amp; Evaluation</div>
+      <dl class="dt-st-list">
+        <div><dt>Technology</dt><dd>{{ rule.technology|default:"All" }}</dd></div>
+        <div><dt>Service Type</dt><dd>{{ rule.service_type|default:"All" }}</dd></div>
+        <div><dt>Metric / KPI</dt><dd>{{ rule.metric|upper }}</dd></div>
+        <div><dt>Condition</dt><dd>{{ condition_label }}</dd></div>
+        <div><dt>Effective From</dt><dd>{{ rule.effective_from|date:"d M Y" }}</dd></div>
+        <div><dt>Effective To</dt><dd>{{ rule.effective_to|date:"d M Y"|default:"Present" }}</dd></div>
+      </dl>
+    </div>
+  </div>
+
+  <div class="dt-sl-panel dt-st-panel">
+    <div class="dt-st-title">Rule Summary</div>
+    <p class="dt-rl-summary">
+      When a measurement's {% if rule.technology %}<strong>{{ rule.technology }}</strong>{% else %}<strong>any technology</strong>{% endif %}
+      <strong>{{ rule.metric|upper }}</strong> reading <strong>{{ condition_label }}</strong> a threshold's configured value,
+      create a <strong>{{ finding_type_label|default:"Threshold Breach" }}</strong> finding
+      (severity depends on how far the reading breaches the threshold — see the thresholds below).
+    </p>
+  </div>
+
+  <div class="dt-sl-panel dt-sl-tablepanel">
+    <div class="dt-sl-toolbar"><span class="dt-sl-toolbar-title">Thresholds Using This Rule</span></div>
+    {% if thresholds %}
+    <div class="dt-sl-scroll">
+      <table class="dt-sl-table">
+        <thead><tr><th>Operator</th><th class="dt-sl-num">Warning</th><th class="dt-sl-num">Critical</th><th>Unit</th><th>Status</th><th>Effective From</th><th>Effective To</th><th>Action</th></tr></thead>
+        <tbody>
+          {% for t in thresholds %}
+          <tr>
+            <td>{{ t.operator.name|default:"All Operators" }}</td>
+            <td class="dt-sl-num">{% if t.warning_value is not None %}{{ t.warning_value }}{% else %}—{% endif %}</td>
+            <td class="dt-sl-num">{{ t.critical_value }}</td>
+            <td>{{ t.unit|default:"—" }}</td>
+            <td><span class="dt-sl-badge dt-rl-badge-{{ t.status }}">{{ t.status_label }}</span></td>
+            <td class="dt-sl-nowrap">{{ t.effective_from|date:"d M Y" }}</td>
+            <td class="dt-sl-nowrap">{{ t.effective_to|date:"d M Y"|default:"—" }}</td>
+            <td><a href="{% url 'drive_test:threshold_detail' t.pk %}" class="dt-sl-link">View</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="dt-sl-empty" style="padding:24px">No thresholds are configured for this rule yet.{% if can_edit %} <a href="{% url 'drive_test:threshold_create' %}">Add one</a>.{% endif %}</div>
+    {% endif %}
+  </div>
+
+  <div class="dt-sl-panel dt-sl-tablepanel">
+    <div class="dt-sl-toolbar">
+      <span class="dt-sl-toolbar-title">Recent Findings</span>
+      <span class="dt-sl-toolbar-count">{{ findings_count|intcomma }} finding{{ findings_count|pluralize }} &middot; {{ sessions_evaluated|intcomma }} session{{ sessions_evaluated|pluralize }} evaluated</span>
+    </div>
+    {% if findings %}
+    <div class="dt-sl-scroll">
+      <table class="dt-sl-table">
+        <thead><tr><th>Session</th><th>Severity</th><th>Description</th><th>Created</th><th>Action</th></tr></thead>
+        <tbody>
+          {% for fnd in findings %}
+          <tr>
+            <td><a href="{% url 'drive_test:session_detail' fnd.session.session_ref %}" class="dt-sl-ref">{{ fnd.session.session_ref }}</a></td>
+            <td><span class="dt-sl-badge">{{ fnd.get_severity_display }}</span></td>
+            <td>{{ fnd.description }}</td>
+            <td class="dt-sl-nowrap">{{ fnd.created_at|date:"d M Y H:i" }}</td>
+            <td><a href="{% url 'drive_test:finding_detail' fnd.pk %}" class="dt-sl-link">View</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="dt-sl-empty" style="padding:24px">No findings generated from this configuration.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

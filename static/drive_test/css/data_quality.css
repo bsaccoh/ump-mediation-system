@@ -1,0 +1,39 @@
+/* Data Quality workspace — page-specific styles only.
+   Structural classes (dt-sl-*, dt-sd-*, dt-ms-*, dt-fd-*) come from the stylesheets
+   already shared across the other Drive Test pages; nothing here duplicates them. */
+
+.dt-dq-actions { display: flex; gap: 8px; }
+
+.dt-dq-cols { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+@media (max-width: 992px) { .dt-dq-cols { grid-template-columns: 1fr; } }
+
+.dt-dq-panel { min-height: 0; }
+
+.dt-dq-chart-wrap { max-width: 260px; margin: 0 auto 8px; }
+
+.dt-dq-legend { display: flex; flex-direction: column; gap: 4px; margin: 0; font-size: 0.8rem; }
+.dt-dq-legend > div { display: flex; align-items: center; gap: 6px; }
+.dt-dq-legend .v { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+.dt-dq-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.dt-dq-dot-valid { background: #10b981; }
+.dt-dq-dot-invalid { background: #dc2626; }
+.dt-dq-dot-nogps { background: #94a3b8; }
+.dt-dq-dot-unmatched { background: #d97706; }
+
+.dt-dq-radio-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px 12px; margin-bottom: 6px; }
+.dt-dq-radio-item { display: flex; flex-direction: column; gap: 2px; border-left: 2px solid #e2e8f0; padding-left: 8px; }
+.dt-dq-radio-item .l { font-size: 0.66rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #6c757d; }
+.dt-dq-radio-item .v { font-size: 0.9rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.dt-dq-issues-empty { padding: 20px 12px; }
+
+.dt-dq-band { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 0.7rem;
+              font-weight: 700; letter-spacing: 0.04em; border: 1px solid transparent; }
+.dt-dq-band-good { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+.dt-dq-band-warning { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+.dt-dq-band-poor { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+.dt-dq-band-pending { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
+.dt-dq-band-processing { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+.dt-dq-band-failed { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+
+button.dt-dq-view { background: none; border: none; padding: 0; font: inherit; cursor: pointer; }

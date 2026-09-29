@@ -1,0 +1,14 @@
+/* Audit Trail — page-scoped additions on top of session_list.css / site_list.css
+   shared classes. Read-only page: no forms beyond filters, no edit controls. */
+
+.dt-ad-desc { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.dt-ad-changes { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.dt-ad-changes th {
+  text-align: left; padding: 6px 10px; font-size: 0.66rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: #6c757d; border-bottom: 1px solid #e3e6ea;
+}
+.dt-ad-changes td { padding: 6px 10px; border-bottom: 1px solid #f1f5f9; overflow-wrap: anywhere; }
+.dt-ad-changes tr:last-child td { border-bottom: none; }
+
+.dt-ad-raw { font-size: 0.78rem; white-space: pre-wrap; word-break: break-word; color: #475569; margin-top: 8px; }

@@ -395,6 +395,10 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024
 DATA_UPLOAD_MAX_NUMBER_FILES = 1000  # Support bulk drive test folder uploads (up to 1000 files)
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000  # 1000 files × 2 fields (file + relative_path) + form fields
 
+# Drive Test: single-file upload size limit, enforced in drive_test.views._handle_upload.
+# Above DATA_UPLOAD_MAX_MEMORY_SIZE since a single TEMS/NEMO log can exceed 100MB.
+DRIVE_TEST_MAX_UPLOAD_BYTES = int(os.environ.get('DRIVE_TEST_MAX_UPLOAD_BYTES', 250 * 1024 * 1024))  # 250MB
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # =============================================================================

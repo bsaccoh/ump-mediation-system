@@ -7,6 +7,8 @@ from .parsers import ParserProfile
 from .session import DriveTestSession, DriveTestFile
 from .measurement import Measurement, RadioMeasurement, ServiceMeasurement, HandoverEvent
 from .findings import RegulatoryRule, RegulatoryThreshold, Finding, DataQualityResult
+from .reports import RegulatoryReport
+from .benchmark import BenchmarkCampaign, BenchmarkScore
 
 __all__ = [
     'Region', 'District', 'Chiefdom',
@@ -18,4 +20,6 @@ __all__ = [
     'DriveTestSession', 'DriveTestFile',
     'Measurement', 'RadioMeasurement', 'ServiceMeasurement', 'HandoverEvent',
     'RegulatoryRule', 'RegulatoryThreshold', 'Finding', 'DataQualityResult',
+    'RegulatoryReport',
+    'BenchmarkCampaign', 'BenchmarkScore',
 ]

@@ -1,0 +1,17 @@
+/* Technology Analysis & Operator Comparison — page-specific styles only.
+   Structural classes (dt-sl-*, dt-sd-*, dt-dq-*) come from the stylesheets already
+   shared across the other Drive Test pages; nothing here duplicates them. */
+
+.dt-oa-period { font-size: 0.95rem; white-space: nowrap; }
+
+.dt-oa-metric-title { display: flex; align-items: center; justify-content: space-between;
+                       flex-wrap: wrap; gap: 6px; text-transform: none; }
+.dt-oa-metric-form { display: flex; align-items: center; gap: 8px; width: 100%; }
+.dt-oa-metric-form span { font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+                           letter-spacing: 0.08em; color: #1e2b4a; }
+.dt-oa-metric-form select { margin-left: auto; padding: 3px 6px; font-size: 0.8rem;
+                             border: 1px solid #cbd3df; border-radius: 4px; }
+
+@media (max-width: 767px) {
+  .dt-oa-metric-form select { margin-left: 0; }
+}

@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+{% load humanize static %}
+
+{% block title %}KPI Analysis | Drive Test | UMP{% endblock %}
+{% block page_title %}KPI Analysis{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/site_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_detail.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/data_quality.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/kpi_analysis.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 dt-sl dt-sd dt-dq dt-ka" id="dt-ka">
+
+  <div class="dt-sl-header">
+    <div>
+      <h1>KPI Analysis</h1>
+      <p>Analyze drive-test network performance using measured radio, service and route data.</p>
+    </div>
+    <div class="dt-dq-actions">
+      <a href="{{ request.path }}{% if session_ref %}?session={{ session_ref }}{% endif %}" class="dt-sl-btn"><i class="bi bi-arrow-clockwise"></i> Refresh</a>
+      <a href="{% url 'drive_test:operator_analysis' %}" class="dt-sl-btn"><i class="bi bi-bar-chart-line"></i> Technology &amp; Operator Analysis</a>
+      <a href="{% url 'drive_test:session_list' %}" class="dt-sl-btn">Back to Sessions</a>
+    </div>
+  </div>
+
+  {% if not has_any_sessions %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No drive-test sessions available.</div>
+    <p>Upload a drive-test file to begin analysis.</p>
+    <a href="{% url 'drive_test:session_upload' %}" class="dt-sl-btn dt-sl-btn-primary">Upload Drive Test</a>
+  </div>
+  {% else %}
+
+  <form method="get" class="dt-sl-panel dt-sl-filters">
+    <div class="dt-sl-field"><label for="k-op">Operator</label>
+      <select id="k-op" name="operator"><option value="">All Operators</option>
+        {% for op in operators %}<option value="{{ op.code }}" {% if filters.operator == op.code %}selected{% endif %}>{{ op.name }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="k-tech">Technology</label>
+      <select id="k-tech" name="technology"><option value="">All</option>
+        {% for t in technology_choices %}<option value="{{ t }}" {% if filters.technology == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field dt-sl-field-search"><label for="k-sess">Drive Test Session</label>
+      <select id="k-sess" name="session">
+        <option value="">Select a session…</option>
+        {% for s in sessions %}
+        <option value="{{ s.session_ref }}" {% if s.session_ref == session_ref %}selected{% endif %}>
+          {{ s.session_ref }} — {{ s.operator.name }} — {{ s.test_date|date:"d M Y" }} — {{ s.status }}
+        </option>
+        {% endfor %}
+      </select></div>
+    <div class="dt-sl-actions">
+      <button type="submit" class="dt-sl-btn dt-sl-btn-primary">View</button>
+      <a href="{% url 'drive_test:kpi_analysis' %}" class="dt-sl-btn">Clear</a>
+    </div>
+  </form>
+
+  {% if not session %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">Select a drive-test session to analyze.</div>
+    <p>Choose a session above to see its KPI analysis.</p>
+  </div>
+
+  {% elif is_processing %}
+  <div class="dt-sl-panel dt-sd-banner is-processing">
+    <div class="dt-sd-banner-title">PROCESSING</div>
+    <p>KPI analysis is not yet available for {{ session.session_ref }} — this session is still processing.</p>
+    <a href="{% url 'drive_test:session_detail' session.session_ref %}" class="dt-sl-btn">View Session</a>
+  </div>
+
+  {% elif is_failed and not has_data %}
+  <div class="dt-sl-panel dt-sd-banner is-failed">
+    <div class="dt-sd-banner-title">PROCESSING FAILED</div>
+    <p>{{ session.session_ref }} could not be processed, so no KPI analysis is available.</p>
+    <a href="{% url 'drive_test:session_detail' session.session_ref %}" class="dt-sl-btn">View Session</a>
+  </div>
+
+  {% elif not has_data %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No KPI data available</div>
+    <p>This session does not contain sufficient measurement or service data to calculate the selected KPIs.</p>
+  </div>
+
+  {% elif load_error %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">Unable to load KPI analysis.</div>
+    <p>Please try again.</p>
+    <a href="{{ request.path }}?session={{ session.session_ref }}" class="dt-sl-btn">Retry</a>
+  </div>
+
+  {% else %}
+
+  <div class="dt-sd-header dt-ka-summary">
+    <div>
+      <h2 class="dt-sd-ref">{{ session.session_ref }}</h2>
+      <div class="dt-sd-sub">{{ session.operator.name }} &middot; {{ session.get_test_type_display }} &middot; {{ session.test_date|date:"d M Y" }}
+        <span class="dt-sl-badge dt-sl-badge-{{ session.status|lower }}">{{ session.status }}</span></div>
+    </div>
+    <div class="dt-ka-links">
+      {% if quality and quality.qr_score is not None %}
+      <div class="dt-ka-quality">
+        <span class="dt-st-sub">Data Quality</span>
+        <span class="dt-dq-band dt-dq-band-{{ quality.qr_band }}">{{ quality.qr_band_label }}</span>
+      </div>
+      {% endif %}
+      <a href="{% url 'drive_test:data_quality' %}?session={{ session.session_ref }}" class="dt-sl-btn">Data Quality</a>
+      <a href="{% url 'drive_test:gis' %}?session={{ session.session_ref }}" class="dt-sl-btn">View on GIS</a>
+      <a href="{% url 'drive_test:session_detail' session.session_ref %}" class="dt-sl-btn">Session Detail</a>
+    </div>
+  </div>
+
+  <!-- ── Overview ─────────────────────────────────────────── -->
+  <div class="dt-sd-kpis">
+    <div class="dt-sd-kpi"><span class="l">Measurements</span><span class="v">{{ kpi.measurements.total|intcomma }}</span>
+      <span class="s">{{ kpi.measurements.with_gps|intcomma }} with GPS &middot; {{ kpi.measurements.with_rssi|intcomma }} with RSSI</span></div>
+    <div class="dt-sd-kpi"><span class="l">Coverage</span>
+      <span class="v{% if kpi.signal.coverage.coverage_percent is None %} is-missing{% endif %}">{% if kpi.signal.coverage.coverage_percent is not None %}{{ kpi.signal.coverage.coverage_percent }}%{% else %}—{% endif %}</span>
+      <span class="s">{% if kpi.signal.rssi_sample_count %}{{ kpi.signal.coverage.covered_samples|intcomma }} of {{ kpi.signal.coverage.valid_samples|intcomma }} samples{% else %}No RSSI samples{% endif %}</span></div>
+    <div class="dt-sd-kpi"><span class="l">CSSR</span>
+      <span class="v{% if kpi.voice.cssr_percent is None %} is-missing{% endif %}">{% if kpi.voice.cssr_percent is not None %}{{ kpi.voice.cssr_percent }}%{% else %}—{% endif %}</span>
+      <span class="s">{% if kpi.voice.attempted %}{{ kpi.voice.attempted|intcomma }} call attempt{{ kpi.voice.attempted|pluralize }}{% else %}No call attempts{% endif %}</span></div>
+    <div class="dt-sd-kpi"><span class="l">DCR</span>
+      <span class="v{% if kpi.voice.dcr_percent is None %} is-missing{% endif %}">{% if kpi.voice.dcr_percent is not None %}{{ kpi.voice.dcr_percent }}%{% else %}—{% endif %}</span>
+      <span class="s">{% if kpi.voice.connected %}{{ kpi.voice.dropped|intcomma }} of {{ kpi.voice.connected|intcomma }} connected{% else %}No connected calls{% endif %}</span></div>
+    <div class="dt-sd-kpi"><span class="l">MOS</span>
+      <span class="v{% if kpi.voice.mean_mos is None %} is-missing{% endif %}">{{ kpi.voice.mean_mos|default:"—" }}</span>
+      <span class="s">{% if kpi.voice.mos_sample_count %}{{ kpi.voice.mos_sample_count|intcomma }} voice sample{{ kpi.voice.mos_sample_count|pluralize }}{% else %}No voice-quality samples available{% endif %}</span></div>
+    <div class="dt-sd-kpi"><span class="l">Average Speed</span>
+      <span class="v{% if kpi.mobility.mean_speed_kmh is None %} is-missing{% endif %}">{% if kpi.mobility.mean_speed_kmh is not None %}{{ kpi.mobility.mean_speed_kmh }} km/h{% else %}—{% endif %}</span>
+      <span class="s">{% if kpi.mobility.total_distance_km is not None %}{{ kpi.mobility.total_distance_km }} km travelled{% else %}No GPS/vehicle speed data{% endif %}</span></div>
+  </div>
+  <div class="dt-st-muted dt-ka-note">Average Speed is GPS/vehicle speed from the drive-test route, not data throughput.</div>
+
+  <!-- ── Signal & Coverage ────────────────────────────────── -->
+  <div class="dt-sd-cols">
+    <div class="dt-sl-panel dt-sd-panel">
+      <div class="dt-sd-sectiontitle">Signal &amp; Coverage</div>
+      <dl class="dt-sd-list">
+        <div><dt>Mean RSSI</dt><dd>{% if kpi.signal.mean_rssi is not None %}{{ kpi.signal.mean_rssi }} dBm{% else %}—{% endif %}</dd></div>
+        <div><dt>Min RSSI</dt><dd>{% if kpi.signal.min_rssi is not None %}{{ kpi.signal.min_rssi }} dBm{% else %}—{% endif %}</dd></div>
+        <div><dt>Max RSSI</dt><dd>{% if kpi.signal.max_rssi is not None %}{{ kpi.signal.max_rssi }} dBm{% else %}—{% endif %}</dd></div>
+        <div><dt>RSSI Samples</dt><dd>{{ kpi.signal.rssi_sample_count|intcomma }}</dd></div>
+      </dl>
+    </div>
+    <div class="dt-sl-panel dt-sd-panel">
+      <div class="dt-sd-sectiontitle">RSSI Distribution</div>
+      {% if kpi.signal.rssi_sample_count %}
+      {{ kpi.signal.rssi_distribution|json_script:"ka-rssi-data" }}
+      <div class="dt-sd-chart"><canvas id="ka-rssi-chart"></canvas></div>
+      {% else %}
+      <div class="dt-sd-empty">No RSSI data available for this session.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── Voice Performance ────────────────────────────────── -->
+  <div class="dt-sl-panel dt-sd-panel">
+    <div class="dt-sd-sectiontitle">Voice Performance</div>
+    {% if kpi.voice.total_calls %}
+    <dl class="dt-sd-list">
+      <div><dt>Call Attempts</dt><dd>{{ kpi.voice.attempted|intcomma }}</dd></div>
+      <div><dt>Successful Calls</dt><dd>{{ kpi.voice.connected|intcomma }}</dd></div>
+      <div><dt>Failed / Blocked Calls</dt><dd>{{ voice_failed|intcomma }}</dd></div>
+      <div><dt>CSSR</dt><dd>{% if kpi.voice.cssr_percent is not None %}{{ kpi.voice.cssr_percent }}%{% else %}—{% endif %}</dd></div>
+      <div><dt>Dropped Calls</dt><dd>{{ kpi.voice.dropped|intcomma }}</dd></div>
+      <div><dt>DCR</dt><dd>{% if kpi.voice.dcr_percent is not None %}{{ kpi.voice.dcr_percent }}%{% else %}—{% endif %}</dd></div>
+      <div><dt>Average Call Duration</dt><dd>{% if kpi.voice.mean_call_duration_s is not None %}{{ kpi.voice.mean_call_duration_s }} s{% else %}—{% endif %}</dd></div>
+      <div><dt>Average MOS</dt><dd>{% if kpi.voice.mean_mos is not None %}{{ kpi.voice.mean_mos }} ({{ kpi.voice.mos_sample_count|intcomma }} sample{{ kpi.voice.mos_sample_count|pluralize }}){% else %}— (no voice-quality samples available){% endif %}</dd></div>
+    </dl>
+    {% else %}
+    <div class="dt-sd-empty">No voice call records available for this session.</div>
+    {% endif %}
+  </div>
+
+  <!-- ── Mobility / Route ─────────────────────────────────── -->
+  <div class="dt-sl-panel dt-sd-panel">
+    <div class="dt-sd-sectiontitle">Mobility / Route</div>
+    <dl class="dt-sd-list">
+      <div><dt>Average Vehicle Speed</dt><dd>{% if kpi.mobility.mean_speed_kmh is not None %}{{ kpi.mobility.mean_speed_kmh }} km/h{% else %}—{% endif %}</dd></div>
+      <div><dt>Maximum Speed</dt><dd>{% if kpi.mobility.max_speed_kmh is not None %}{{ kpi.mobility.max_speed_kmh }} km/h{% else %}—{% endif %}</dd></div>
+      <div><dt>Total Distance</dt><dd>{% if kpi.mobility.total_distance_km is not None %}{{ kpi.mobility.total_distance_km }} km{% else %}—{% endif %}</dd></div>
+      <div><dt>Unique Cells</dt><dd>{{ kpi.network.unique_cells|intcomma }}</dd></div>
+    </dl>
+  </div>
+
+  <!-- ── Technology Distribution ──────────────────────────── -->
+  <div class="dt-sd-cols">
+    <div class="dt-sl-panel dt-sd-panel">
+      <div class="dt-sd-sectiontitle">Technology Distribution</div>
+      {% if tech_dist %}
+      {{ tech_dist|json_script:"ka-tech-data" }}
+      <div class="dt-dq-chart-wrap"><canvas id="ka-tech-chart" height="160"></canvas></div>
+      <dl class="dt-dq-legend">
+        {% for row in tech_dist %}
+        <div><span class="dt-dq-dot" style="background:{{ row.color }}"></span>{{ row.technology }}<span class="v">{{ row.count|intcomma }} ({{ row.pct }}%)</span></div>
+        {% endfor %}
+      </dl>
+      {% else %}
+      <div class="dt-sd-empty">No technology data available for this session.</div>
+      {% endif %}
+    </div>
+
+    <div class="dt-sl-panel dt-sd-panel">
+      <div class="dt-sd-sectiontitle">Technology KPI Breakdown</div>
+      {% if by_tech %}
+      <div class="dt-sl-scroll">
+        <table class="dt-sl-table">
+          <thead><tr><th>Technology</th><th class="dt-sl-num">Measurements</th><th class="dt-sl-num">Coverage</th><th class="dt-sl-num">CSSR</th><th class="dt-sl-num">DCR</th><th class="dt-sl-num">MOS</th></tr></thead>
+          <tbody>
+            {% for row in by_tech %}
+            <tr>
+              <td><span class="dt-sl-tech">{{ row.technology }}</span></td>
+              <td class="dt-sl-num">{{ row.measurements|intcomma }}</td>
+              <td class="dt-sl-num">{% if row.signal.coverage.coverage_percent is not None %}{{ row.signal.coverage.coverage_percent }}%{% else %}—{% endif %}</td>
+              <td class="dt-sl-num">{% if row.voice.cssr_percent is not None %}{{ row.voice.cssr_percent }}%{% else %}—{% endif %}</td>
+              <td class="dt-sl-num">{% if row.voice.dcr_percent is not None %}{{ row.voice.dcr_percent }}%{% else %}—{% endif %}</td>
+              <td class="dt-sl-num">{{ row.voice.mean_mos|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="dt-sd-empty">No technology data available for this session.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── Cell Performance ─────────────────────────────────── -->
+  <div class="dt-sl-panel dt-sl-tablepanel">
+    <div class="dt-sl-toolbar"><span class="dt-sl-toolbar-title">Cell Performance</span></div>
+    {% if by_cell %}
+    <div class="dt-sl-scroll">
+      <table class="dt-sl-table">
+        <thead><tr>
+          <th>Cell</th><th>Site</th><th>Technology</th><th class="dt-sl-num">Measurements</th>
+          <th class="dt-sl-num">Mean RSSI</th><th class="dt-sl-num">Calls</th><th class="dt-sl-num">CSSR</th>
+          <th class="dt-sl-num">DCR</th><th class="dt-sl-num">MOS</th>
+        </tr></thead>
+        <tbody>
+          {% for row in by_cell %}
+          <tr>
+            <td>{% if row.cell_id %}<a href="{% url 'drive_test:cell_detail' row.cell_id %}" class="dt-sl-link">{{ row.cell_code }}</a>{% else %}<span class="dt-st-sub">Unmatched</span>{% endif %}</td>
+            <td>{% if row.site_id %}<a href="{% url 'drive_test:site_detail' row.site_id %}" class="dt-sl-link">{{ row.site_name }}</a>{% else %}—{% endif %}</td>
+            <td>{% if row.technology %}<span class="dt-sl-tech">{{ row.technology }}</span>{% else %}—{% endif %}</td>
+            <td class="dt-sl-num">{{ row.measurements|intcomma }}</td>
+            <td class="dt-sl-num">{% if row.mean_rssi is not None %}{{ row.mean_rssi }} dBm{% else %}—{% endif %}</td>
+            <td class="dt-sl-num">{{ row.voice.attempted|intcomma }}</td>
+            <td class="dt-sl-num">{% if row.voice.cssr_percent is not None %}{{ row.voice.cssr_percent }}%{% else %}—{% endif %}</td>
+            <td class="dt-sl-num">{% if row.voice.dcr_percent is not None %}{{ row.voice.dcr_percent }}%{% else %}—{% endif %}</td>
+            <td class="dt-sl-num">{{ row.voice.mean_mos|default:"—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="dt-sd-empty">No matched or unmatched measurement records available for cell-level analysis.</div>
+    {% endif %}
+  </div>
+
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script src="{% static 'drive_test/js/kpi_analysis.js' %}"></script>
+{% endblock %}

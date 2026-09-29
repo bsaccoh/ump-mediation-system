@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ page_title }} | Drive Test | UMP{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/site_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/rules.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 dt-sl dt-st dt-rl">
+  <div class="dt-sl-header">
+    <div>
+      <h1>{% if threshold %}Edit Threshold{% else %}Add Threshold{% endif %}</h1>
+      <p>{% if threshold %}Update this threshold. Existing findings already generated from it are not changed.{% else %}Set a KPI threshold for an existing regulatory rule.{% endif %}</p>
+    </div>
+    <div><a href="{% if threshold %}{% url 'drive_test:threshold_detail' threshold.pk %}{% else %}{% url 'drive_test:rules_thresholds' %}?tab=thresholds{% endif %}" class="dt-sl-btn">Cancel</a></div>
+  </div>
+
+  {% if not form.fields.rule.queryset.exists %}
+  <div class="dt-fd-note">No regulatory rules exist yet. <a href="{% url 'drive_test:rule_create' %}">Create a rule</a> before adding a threshold.</div>
+  {% endif %}
+
+  <form method="post" class="dt-sl-panel dt-st-form" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="dt-st-alert">{% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}</div>
+    {% endif %}
+    <div class="dt-st-formgrid">
+      {% for field in form %}
+        <div class="{% if field.name == 'rule' %}full{% endif %}">
+          <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} *{% endif %}</label>
+          {{ field }}
+          {% for e in field.errors %}<div class="dt-st-err">{{ e }}</div>{% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+    <div class="dt-st-formactions">
+      <a href="{% if threshold %}{% url 'drive_test:threshold_detail' threshold.pk %}{% else %}{% url 'drive_test:rules_thresholds' %}?tab=thresholds{% endif %}" class="dt-sl-btn">Cancel</a>
+      <button type="submit" class="dt-sl-btn dt-sl-btn-primary">{% if threshold %}Save Changes{% else %}Create Threshold{% endif %}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

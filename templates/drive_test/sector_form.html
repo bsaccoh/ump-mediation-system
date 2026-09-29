@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ page_title }} | Drive Test | UMP{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/site_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/cell_list.css' %}">
+{% endblock %}
+
+{% block content %}
+{% url 'drive_test:sector_list' as list_url %}
+<div class="container-fluid py-3 dt-sl dt-st dt-ce">
+  <div class="dt-sl-header">
+    <div>
+      <h1>{% if sector %}Edit Sector{% else %}Add Sector{% endif %}</h1>
+      <p>{% if sector %}Update reference data for sector {{ sector.sector_id }}. Historical drive-test measurements and matches are not changed.{% else %}Add a sector under an existing site.{% endif %}</p>
+    </div>
+    <div><a href="{% if sector %}{% url 'drive_test:sector_detail' sector.pk %}{% else %}{{ list_url }}{% endif %}" class="dt-sl-btn">Cancel</a></div>
+  </div>
+
+  <form method="post" class="dt-sl-panel dt-st-form" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="dt-st-alert">{% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}</div>{% endif %}
+    <div class="dt-ce-group">
+      <div class="dt-ce-group-title">Hierarchy</div>
+      <div class="dt-ce-grid">
+        <div>{{ form.operator.label_tag }}{{ form.operator }}
+          {% if form.operator.field.disabled %}<div class="dt-st-help">The operator cannot be changed once a sector exists.</div>{% endif %}
+          {% for e in form.operator.errors %}<div class="dt-st-err">{{ e }}</div>{% endfor %}</div>
+        <div>{{ form.site_code.label_tag }}{{ form.site_code }}<div class="dt-st-help">Must be an existing site of this operator.</div>
+          {% for e in form.site_code.errors %}<div class="dt-st-err">{{ e }}</div>{% endfor %}</div>
+        <div>{{ form.sector_id.label_tag }}{{ form.sector_id }}
+          {% for e in form.sector_id.errors %}<div class="dt-st-err">{{ e }}</div>{% endfor %}</div>
+      </div>
+    </div>
+    <div class="dt-ce-group">
+      <div class="dt-ce-group-title">Antenna</div>
+      <div class="dt-ce-grid">
+        <div>{{ form.azimuth_deg.label_tag }}{{ form.azimuth_deg }}{% for e in form.azimuth_deg.errors %}<div class="dt-st-err">{{ e }}</div>{% endfor %}</div>
+        <div>{{ form.height_m.label_tag }}{{ form.height_m }}{% for e in form.height_m.errors %}<div class="dt-st-err">{{ e }}</div>{% endfor %}</div>
+        <div>{{ form.tilt_deg.label_tag }}{{ form.tilt_deg }}{% for e in form.tilt_deg.errors %}<div class="dt-st-err">{{ e }}</div>{% endfor %}</div>
+        <div>{{ form.electrical_tilt_deg.label_tag }}{{ form.electrical_tilt_deg }}{% for e in form.electrical_tilt_deg.errors %}<div class="dt-st-err">{{ e }}</div>{% endfor %}</div>
+        <div style="align-self:end"><label style="text-transform:none;letter-spacing:0;font-size:0.82rem"><input type="checkbox" name="is_active" {% if form.is_active.value %}checked{% endif %}> Active</label></div>
+      </div>
+    </div>
+    <div class="dt-st-formactions">
+      <a href="{% if sector %}{% url 'drive_test:sector_detail' sector.pk %}{% else %}{{ list_url }}{% endif %}" class="dt-sl-btn">Cancel</a>
+      <button type="submit" class="dt-sl-btn dt-sl-btn-primary">{% if sector %}Save Changes{% else %}Create Sector{% endif %}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% load humanize static %}
+
+{% block title %}Processing Monitor | Drive Test | UMP{% endblock %}
+{% block page_title %}Processing Monitor{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/processing.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 dt-sl dt-pm" id="dt-pm" data-has-active="{{ has_active_jobs|yesno:'1,0' }}">
+
+  <div class="dt-sl-header">
+    <div>
+      <h1>Processing Monitor</h1>
+      <p>Monitor drive-test ingestion, parsing, analysis and processing status.</p>
+    </div>
+    <div class="dt-pm-actions">
+      <label class="dt-pm-autorefresh" id="dt-pm-autorefresh" {% if not has_active_jobs %}hidden{% endif %}>
+        <input type="checkbox" id="dt-pm-autorefresh-toggle" checked> Auto-refresh
+      </label>
+      <a href="{{ request.get_full_path }}" class="dt-sl-btn"><i class="bi bi-arrow-clockwise"></i> Refresh</a>
+      <a href="{% url 'drive_test:session_upload' %}" class="dt-sl-btn dt-sl-btn-primary"><i class="bi bi-upload"></i> Upload Drive Test</a>
+    </div>
+  </div>
+
+  {% if not has_any %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No processing jobs found.</div>
+    <p>Upload a drive-test file to begin processing.</p>
+    <a href="{% url 'drive_test:session_upload' %}" class="dt-sl-btn dt-sl-btn-primary">Upload Drive Test</a>
+  </div>
+  {% else %}
+
+  <form method="get" class="dt-sl-panel dt-sl-filters">
+    <div class="dt-sl-field dt-sl-field-search">
+      <label for="p-q">Search</label>
+      <input id="p-q" type="text" name="q" value="{{ filters.q }}" placeholder="File, session or operator...">
+    </div>
+    <div class="dt-sl-field"><label for="p-op">Operator</label>
+      <select id="p-op" name="operator"><option value="">All Operators</option>
+        {% for op in operators %}<option value="{{ op.code }}" {% if filters.operator == op.code %}selected{% endif %}>{{ op.name }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="p-status">Status</label>
+      <select id="p-status" name="status"><option value="">All Statuses</option>
+        {% for v, l in status_choices %}<option value="{{ v }}" {% if filters.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="p-format">Parser / Format</label>
+      <select id="p-format" name="format"><option value="">All Formats</option>
+        {% for name in format_choices %}<option value="{{ name }}" {% if filters.format == name %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="p-from">Date From</label><input id="p-from" type="date" name="date_from" value="{{ filters.date_from }}"></div>
+    <div class="dt-sl-field"><label for="p-to">Date To</label><input id="p-to" type="date" name="date_to" value="{{ filters.date_to }}"></div>
+    {% if per_page != page_sizes.0 %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
+    <div class="dt-sl-actions">
+      <button type="submit" class="dt-sl-btn dt-sl-btn-primary">Search</button>
+      <a href="{% url 'drive_test:processing_monitor' %}" class="dt-sl-btn">Clear</a>
+    </div>
+  </form>
+
+  {% if load_error %}
+  <div class="dt-fd-note">Unable to load processing jobs. Please try again. If the problem persists, contact the system administrator.</div>
+  {% endif %}
+  {% for e in errors %}<div class="dt-fd-note">{{ e }}</div>{% endfor %}
+
+  <div class="dt-kpi-strip">
+    <a href="{% url 'drive_test:processing_monitor' %}" class="dt-kpi-tile dt-pm-kpi-link">
+      <div class="dt-kpi-tile-top"><span class="dt-kpi-tile-label">TOTAL JOBS</span>
+        <span class="dt-kpi-tile-icon dt-icon-neutral"><i class="bi bi-collection"></i></span></div>
+      <div class="dt-kpi-tile-value">{{ summary.total|default:0|intcomma }}</div>
+    </a>
+    <a href="?status=PARSING" class="dt-kpi-tile dt-pm-kpi-link">
+      <div class="dt-kpi-tile-top"><span class="dt-kpi-tile-label">PROCESSING</span>
+        <span class="dt-kpi-tile-icon dt-icon-warning"><i class="bi bi-hourglass-split"></i></span></div>
+      <div class="dt-kpi-tile-value">{{ summary.processing|default:0|intcomma }}</div>
+    </a>
+    <a href="?status=COMPLETED" class="dt-kpi-tile dt-pm-kpi-link">
+      <div class="dt-kpi-tile-top"><span class="dt-kpi-tile-label">COMPLETED</span>
+        <span class="dt-kpi-tile-icon dt-icon-success"><i class="bi bi-check-circle"></i></span></div>
+      <div class="dt-kpi-tile-value">{{ summary.completed|default:0|intcomma }}</div>
+    </a>
+    <a href="?status=FAILED" class="dt-kpi-tile dt-pm-kpi-link">
+      <div class="dt-kpi-tile-top"><span class="dt-kpi-tile-label">FAILED</span>
+        <span class="dt-kpi-tile-icon dt-icon-danger"><i class="bi bi-x-circle"></i></span></div>
+      <div class="dt-kpi-tile-value">{{ summary.failed|default:0|intcomma }}</div>
+    </a>
+    <a href="?status=RECEIVED" class="dt-kpi-tile dt-pm-kpi-link">
+      <div class="dt-kpi-tile-top"><span class="dt-kpi-tile-label">QUEUED</span>
+        <span class="dt-kpi-tile-icon dt-icon-info"><i class="bi bi-inbox"></i></span></div>
+      <div class="dt-kpi-tile-value">{{ summary.queued|default:0|intcomma }}</div>
+    </a>
+  </div>
+
+  {% if not files %}
+  <div class="dt-sl-panel dt-sl-empty">
+    {% if filters_active %}
+    <div class="dt-sl-empty-title">No processing jobs match the selected filters.</div>
+    <a href="{% url 'drive_test:processing_monitor' %}" class="dt-sl-btn">Clear Filters</a>
+    {% else %}
+    <div class="dt-sl-empty-title">No active processing jobs.</div>
+    {% endif %}
+  </div>
+  {% else %}
+
+  <div class="dt-chart-panel" style="margin-bottom:14px">
+    <div class="dt-chart-title">Processing Duration — Completed Jobs (This Page)</div>
+    <div style="height:140px"><canvas id="dt-pm-duration-chart"></canvas></div>
+    <div class="dt-chart-empty" id="dt-pm-duration-empty" hidden>No completed jobs on this page have a recorded duration.</div>
+  </div>
+  {{ duration_chart_json|json_script:"dt-pm-duration-data" }}
+
+  <div class="dt-sl-panel dt-sl-tablepanel">
+    <div class="dt-sl-toolbar">
+      <span class="dt-sl-toolbar-title">Processing Jobs</span>
+      <span class="dt-sl-toolbar-count">Showing {{ first_item }}&ndash;{{ last_item }} of {{ page_obj.paginator.count|intcomma }}</span>
+    </div>
+    <div class="dt-sl-scroll">
+      <table class="dt-sl-table">
+        <thead>
+          <tr>
+            <th>Job / Session</th>
+            <th>File</th>
+            <th>Operator</th>
+            <th>Device / Format</th>
+            <th>Started</th>
+            <th>Duration</th>
+            <th>Status</th>
+            <th>Current Stage</th>
+            <th class="dt-sl-num">Measurements</th>
+            <th class="dt-sl-num">Errors</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in files %}
+          <tr>
+            <td><a href="{% url 'drive_test:session_detail' f.session.session_ref %}" class="dt-sl-ref">{{ f.session.session_ref }}</a></td>
+            <td class="dt-pm-file" title="{{ f.original_filename }}">{{ f.original_filename }}</td>
+            <td>{{ f.session.operator.name }}</td>
+            <td>
+              {% if f.device_label %}{{ f.device_label }}{% else %}—{% endif %}
+              <div class="dt-pm-format">{{ f.parser_profile.name|default:f.detected_format|default:"—" }}</div>
+            </td>
+            <td class="dt-sl-nowrap">{% if f.processing_started_at %}{{ f.processing_started_at|date:"d M Y H:i" }}{% else %}—{% endif %}</td>
+            <td class="dt-sl-nowrap">{{ f.duration_label|default:"—" }}</td>
+            <td><span class="dt-sl-badge {{ f.badge_class }}">{{ f.get_status_display }}</span></td>
+            <td><span class="dt-sl-badge {{ f.badge_class }}">{{ f.stage_label }}</span></td>
+            <td class="dt-sl-num">{{ f.measurement_count|intcomma }}</td>
+            <td class="dt-sl-num">{% if f.invalid_count is not None %}{{ f.invalid_count|intcomma }}{% else %}—{% endif %}</td>
+            <td><a href="{% url 'drive_test:processing_detail' f.pk %}" class="dt-sl-link">View</a></td>
+          </tr>
+          {% if f.status == 'FAILED' and f.safe_error %}
+          <tr class="dt-pm-error-row">
+            <td colspan="11" class="dt-pm-error-cell">Reason: {{ f.safe_error }}</td>
+          </tr>
+          {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="dt-sl-footer">
+      <form method="get" class="dt-sl-perpage">
+        {% for k, v in request.GET.items %}{% if k != 'per_page' and k != 'page' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+        <label for="p-pp">Rows</label>
+        <select id="p-pp" name="per_page" onchange="this.form.submit()">
+          {% for n in page_sizes %}<option value="{{ n }}" {% if n == per_page %}selected{% endif %}>{{ n }}</option>{% endfor %}
+        </select>
+      </form>
+      {% if page_obj.has_other_pages %}
+      <nav aria-label="Job pages" class="dt-sl-pager">
+        {% if page_obj.has_previous %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">&lsaquo; Previous</a>
+        {% else %}<span class="disabled">&lsaquo; Previous</span>{% endif %}
+        {% for p in page_obj.paginator.page_range %}
+          {% if p == page_obj.number %}<span class="active">{{ p }}</span>
+          {% elif p >= page_obj.number|add:"-2" and p <= page_obj.number|add:"2" %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ p }}">{{ p }}</a>{% endif %}
+        {% endfor %}
+        {% if page_obj.has_next %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Next &rsaquo;</a>
+        {% else %}<span class="disabled">Next &rsaquo;</span>{% endif %}
+      </nav>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script src="{% static 'drive_test/js/charts.js' %}"></script>
+<script src="{% static 'drive_test/js/processing.js' %}"></script>
+{% endblock %}

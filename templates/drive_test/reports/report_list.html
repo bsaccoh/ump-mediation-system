@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% load humanize static %}
+
+{% block title %}Regulatory Reports | Drive Test | UMP{% endblock %}
+{% block page_title %}Regulatory Reports{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/reports.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 dt-sl dt-rp">
+
+  <div class="dt-sl-header">
+    <div>
+      <h1>Regulatory Reports</h1>
+      <p>Generate, review and export drive-test reports using verified measurements, configured regulatory rules and recorded findings.</p>
+    </div>
+    <div class="dt-rl-actions">
+      <a href="{% url 'drive_test:session_list' %}" class="dt-sl-btn">Session Reports</a>
+      {% if can_generate %}
+      <a href="{% url 'drive_test:report_generate' %}" class="dt-sl-btn dt-sl-btn-primary"><i class="bi bi-plus-lg"></i> Generate Report</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if not has_any %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No regulatory reports have been generated yet.</div>
+    <p>Generate a report from verified sessions, KPIs, findings and configured rules.</p>
+    {% if can_generate %}<a href="{% url 'drive_test:report_generate' %}" class="dt-sl-btn dt-sl-btn-primary">Generate Report</a>{% endif %}
+  </div>
+  {% else %}
+
+  <form method="get" class="dt-sl-panel dt-sl-filters">
+    <div class="dt-sl-field dt-sl-field-search">
+      <label for="p-q">Search</label>
+      <input id="p-q" type="text" name="q" value="{{ filters.q }}" placeholder="Report reference or title...">
+    </div>
+    <div class="dt-sl-field"><label for="p-type">Type</label>
+      <select id="p-type" name="type"><option value="">All Types</option>
+        {% for v, l in report_types %}<option value="{{ v }}" {% if filters.type == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="p-op">Operator</label>
+      <select id="p-op" name="operator"><option value="">All Operators</option>
+        {% for op in operators %}<option value="{{ op.code }}" {% if filters.operator == op.code %}selected{% endif %}>{{ op.name }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="p-status">Status</label>
+      <select id="p-status" name="status"><option value="">All</option>
+        {% for v, l in status_choices %}<option value="{{ v }}" {% if filters.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="p-from">Date From</label><input id="p-from" type="date" name="date_from" value="{{ filters.date_from }}"></div>
+    <div class="dt-sl-field"><label for="p-to">Date To</label><input id="p-to" type="date" name="date_to" value="{{ filters.date_to }}"></div>
+    {% if per_page != page_sizes.0 %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
+    <div class="dt-sl-actions">
+      <button type="submit" class="dt-sl-btn dt-sl-btn-primary">Search</button>
+      <a href="{% url 'drive_test:report_list' %}" class="dt-sl-btn">Clear</a>
+    </div>
+  </form>
+  {% for e in errors %}<div class="dt-fd-note">{{ e }}</div>{% endfor %}
+
+  {% if not reports %}
+  <div class="dt-sl-panel dt-sl-empty">
+    {% if filters_active %}
+    <div class="dt-sl-empty-title">No reports match the selected filters.</div>
+    <a href="{% url 'drive_test:report_list' %}" class="dt-sl-btn">Clear Filters</a>
+    {% else %}
+    <div class="dt-sl-empty-title">No regulatory reports have been generated yet.</div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="dt-sl-panel dt-sl-tablepanel">
+    <div class="dt-sl-toolbar">
+      <span class="dt-sl-toolbar-title">Generated Reports</span>
+      <span class="dt-sl-toolbar-count">Showing {{ first_item }}&ndash;{{ last_item }} of {{ page_obj.paginator.count|intcomma }}</span>
+    </div>
+    <div class="dt-sl-scroll">
+      <table class="dt-sl-table">
+        <thead><tr>
+          <th>Report</th><th>Type</th><th>Operator</th><th>Period</th>
+          <th class="dt-sl-num">Sessions</th><th class="dt-sl-num">Findings</th>
+          <th>Status</th><th>Created</th><th>Created By</th><th>Action</th>
+        </tr></thead>
+        <tbody>
+          {% for r in reports %}
+          <tr>
+            <td><a href="{% url 'drive_test:report_detail' r.report_ref %}" class="dt-sl-ref">{{ r.report_ref }}</a><div class="dt-pm-format">{{ r.title|default:"—" }}</div></td>
+            <td>{{ r.get_report_type_display }}</td>
+            <td>{{ r.operator.name|default:"All" }}</td>
+            <td class="dt-sl-nowrap">{% if r.date_from or r.date_to %}{{ r.date_from|date:"d M Y"|default:"—" }} &ndash; {{ r.date_to|date:"d M Y"|default:"—" }}{% else %}—{% endif %}</td>
+            <td class="dt-sl-num">{{ r.session_count|intcomma }}</td>
+            <td class="dt-sl-num">{{ r.finding_count|intcomma }}</td>
+            <td><span class="dt-sl-badge {% if r.status == 'COMPLETED' %}dt-sl-badge-completed{% else %}dt-sl-badge-failed{% endif %}">{{ r.get_status_display }}</span></td>
+            <td class="dt-sl-nowrap">{{ r.generated_at|date:"d M Y H:i" }}</td>
+            <td>{{ r.generated_by.username|default:"System" }}</td>
+            <td><a href="{% url 'drive_test:report_detail' r.report_ref %}" class="dt-sl-link">View</a>{% if r.file %}<span class="dt-sl-sep">|</span><a href="{% url 'drive_test:report_download' r.report_ref %}" class="dt-sl-link">Download</a>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="dt-sl-footer">
+      <form method="get" class="dt-sl-perpage">
+        {% for k, v in request.GET.items %}{% if k != 'per_page' and k != 'page' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+        <label for="p-pp">Rows</label>
+        <select id="p-pp" name="per_page" onchange="this.form.submit()">
+          {% for n in page_sizes %}<option value="{{ n }}" {% if n == per_page %}selected{% endif %}>{{ n }}</option>{% endfor %}
+        </select>
+      </form>
+      {% if page_obj.has_other_pages %}
+      <nav aria-label="Report pages" class="dt-sl-pager">
+        {% if page_obj.has_previous %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">&lsaquo; Previous</a>{% else %}<span class="disabled">&lsaquo; Previous</span>{% endif %}
+        {% for p in page_obj.paginator.page_range %}
+          {% if p == page_obj.number %}<span class="active">{{ p }}</span>
+          {% elif p >= page_obj.number|add:"-2" and p <= page_obj.number|add:"2" %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ p }}">{{ p }}</a>{% endif %}
+        {% endfor %}
+        {% if page_obj.has_next %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Next &rsaquo;</a>{% else %}<span class="disabled">Next &rsaquo;</span>{% endif %}
+      </nav>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

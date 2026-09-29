@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% load humanize static %}
+
+{% block title %}Audit Trail | Drive Test | UMP{% endblock %}
+{% block page_title %}Audit Trail{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/audit.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 dt-sl dt-ad">
+
+  <div class="dt-sl-header">
+    <div>
+      <h1>Audit Trail</h1>
+      <p>Track user actions, configuration changes and operational events across Drive Test.</p>
+    </div>
+    <div><a href="{{ request.path }}" class="dt-sl-btn"><i class="bi bi-arrow-clockwise"></i> Refresh</a></div>
+  </div>
+
+  {% if not has_any %}
+  <div class="dt-sl-panel dt-sl-empty">
+    <div class="dt-sl-empty-title">No audit events found</div>
+    <p>Actions performed across the Drive Test module<br>will appear here.</p>
+  </div>
+  {% else %}
+
+  <form method="get" class="dt-sl-panel dt-sl-filters">
+    <div class="dt-sl-field dt-sl-field-search">
+      <label for="a-q">Search</label>
+      <input id="a-q" type="text" name="q" value="{{ filters.q }}" placeholder="Description, object or user...">
+    </div>
+    <div class="dt-sl-field"><label for="a-user">User</label>
+      <select id="a-user" name="user"><option value="">All Users</option>
+        {% for u in users %}<option value="{{ u.username }}" {% if filters.user == u.username %}selected{% endif %}>{{ u.username }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="a-module">Module</label>
+      <select id="a-module" name="module"><option value="">All</option>
+        {% for m in module_choices %}<option value="{{ m }}" {% if filters.module == m %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="a-action">Action</label>
+      <select id="a-action" name="action"><option value="">All</option>
+        {% for v, l in action_choices %}<option value="{{ v }}" {% if filters.action == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="a-obj">Object Type</label>
+      <select id="a-obj" name="object_type"><option value="">All</option>
+        {% for t in object_type_choices %}<option value="{{ t }}" {% if filters.object_type == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+    <div class="dt-sl-field"><label for="a-from">Date From</label><input id="a-from" type="date" name="date_from" value="{{ filters.date_from }}"></div>
+    <div class="dt-sl-field"><label for="a-to">Date To</label><input id="a-to" type="date" name="date_to" value="{{ filters.date_to }}"></div>
+    {% if per_page != page_sizes.0 %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
+    <div class="dt-sl-actions">
+      <button type="submit" class="dt-sl-btn dt-sl-btn-primary">Search</button>
+      <a href="{% url 'drive_test:audit_trail' %}" class="dt-sl-btn">Clear</a>
+    </div>
+  </form>
+
+  {% if load_error %}
+  <div class="dt-fd-note">Unable to load audit events. Please try again. If the problem persists, contact the system administrator.</div>
+  {% endif %}
+  {% for e in errors %}<div class="dt-fd-note">{{ e }}</div>{% endfor %}
+
+  <div class="dt-sl-summary">
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Total Events</span><span class="dt-sl-stat-value">{{ summary.total|intcomma }}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Today</span><span class="dt-sl-stat-value">{{ summary.today|intcomma }}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">Configuration Changes</span><span class="dt-sl-stat-value">{{ summary.config_changes|intcomma }}</span></div>
+    <div class="dt-sl-stat"><span class="dt-sl-stat-label">User Actions</span><span class="dt-sl-stat-value">{{ summary.user_actions|intcomma }}</span></div>
+  </div>
+
+  {% if not entries %}
+  <div class="dt-sl-panel dt-sl-empty">
+    {% if filters_active %}
+    <div class="dt-sl-empty-title">No audit events match the selected filters.</div>
+    <a href="{% url 'drive_test:audit_trail' %}" class="dt-sl-btn">Clear Filters</a>
+    {% else %}
+    <div class="dt-sl-empty-title">No audit events recorded.</div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="dt-sl-panel dt-sl-tablepanel">
+    <div class="dt-sl-toolbar">
+      <span class="dt-sl-toolbar-title">Audit Events</span>
+      <span class="dt-sl-toolbar-count">Showing {{ first_item }}&ndash;{{ last_item }} of {{ page_obj.paginator.count|intcomma }}</span>
+    </div>
+    <div class="dt-sl-scroll">
+      <table class="dt-sl-table">
+        <thead><tr>
+          <th>Timestamp</th><th>User</th><th>Action</th><th>Module</th><th>Object</th>
+          <th>Description</th><th>Status</th><th>Action</th>
+        </tr></thead>
+        <tbody>
+          {% for e in entries %}
+          <tr>
+            <td class="dt-sl-nowrap">{{ e.timestamp|date:"d M Y H:i" }}</td>
+            <td>{{ e.user.username|default:"System" }}</td>
+            <td><span class="dt-sl-badge">{{ e.action_label }}</span></td>
+            <td>{{ e.module }}</td>
+            <td>{{ e.entity_type }}{% if e.entity_id %} &middot; {{ e.entity_id }}{% endif %}</td>
+            <td class="dt-ad-desc">{{ e.description }}</td>
+            <td>{% if e.status %}<span class="dt-sl-badge {% if e.status == 'FAILED' %}dt-sl-badge-failed{% elif e.status == 'SUCCESS' %}dt-sl-badge-completed{% endif %}">{{ e.status }}</span>{% else %}—{% endif %}</td>
+            <td><a href="{% url 'drive_test:audit_detail' e.id %}" class="dt-sl-link">View</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="dt-sl-footer">
+      <form method="get" class="dt-sl-perpage">
+        {% for k, v in request.GET.items %}{% if k != 'per_page' and k != 'page' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+        <label for="a-pp">Rows</label>
+        <select id="a-pp" name="per_page" onchange="this.form.submit()">
+          {% for n in page_sizes %}<option value="{{ n }}" {% if n == per_page %}selected{% endif %}>{{ n }}</option>{% endfor %}
+        </select>
+      </form>
+      {% if page_obj.has_other_pages %}
+      <nav aria-label="Audit pages" class="dt-sl-pager">
+        {% if page_obj.has_previous %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">&lsaquo; Previous</a>{% else %}<span class="disabled">&lsaquo; Previous</span>{% endif %}
+        {% for p in page_obj.paginator.page_range %}
+          {% if p == page_obj.number %}<span class="active">{{ p }}</span>
+          {% elif p >= page_obj.number|add:"-2" and p <= page_obj.number|add:"2" %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ p }}">{{ p }}</a>{% endif %}
+        {% endfor %}
+        {% if page_obj.has_next %}<a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Next &rsaquo;</a>{% else %}<span class="disabled">Next &rsaquo;</span>{% endif %}
+      </nav>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

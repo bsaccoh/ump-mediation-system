@@ -1,87 +1,174 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Upload Drive Test | UMP{% endblock %}
+{% block page_title %}Upload Drive Test{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'drive_test/css/design-system.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/drive_test.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/session_list.css' %}">
+<link rel="stylesheet" href="{% static 'drive_test/css/upload.css' %}?v=4">
+{% endblock %}
 
 {% block content %}
-<div class="container py-4" style="max-width: 720px;">
-  <div class="d-flex align-items-center mb-4">
-    <a href="{% url 'drive_test:dashboard' %}" class="btn btn-sm btn-outline-secondary me-3">
-      <i class="bi bi-arrow-left"></i>
-    </a>
-    <h1 class="h3 mb-0">Upload Drive Test</h1>
+<div class="container-fluid py-3 dt-sl dt-upload">
+
+  <div class="dt-sl-header">
+    <div>
+      <h1>Upload Drive Test</h1>
+      <p>Import and process drive-test measurement files</p>
+    </div>
+    <div>
+      <a href="{% url 'drive_test:session_list' %}" class="dt-sl-btn">Back to Sessions</a>
+    </div>
   </div>
 
   {% if errors %}
-  <div class="alert alert-danger">
-    <ul class="mb-0">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+  <div class="dt-upload-alert dt-upload-alert-bad">
+    {% for e in errors %}<div>{{ e }}</div>{% endfor %}
   </div>
   {% endif %}
 
-  <div class="card">
-    <div class="card-body">
-      <form method="post" enctype="multipart/form-data">
-        {% csrf_token %}
+  <form method="post" enctype="multipart/form-data" id="dt-up-form" novalidate
+        data-extensions="{{ supported_extensions|join:',' }}"
+        data-preview-url="{% url 'drive_test:session_upload_preview' %}"
+        data-max-bytes="{{ max_upload_bytes }}" data-max-label="{{ max_upload_label }}">
+    {% csrf_token %}
 
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Operator <span class="text-danger">*</span></label>
-          <select name="operator" class="form-select" required>
-            <option value="">— Select operator —</option>
-            {% for op in operators %}
-            <option value="{{ op.id }}">{{ op.name }}</option>
-            {% endfor %}
-          </select>
+    <!-- Upload zone -->
+    <div class="dt-sl-panel dt-upload-panel">
+      <div class="dt-upload-title">Upload Drive Test Files</div>
+      <input type="file" id="driveTestFile" multiple hidden
+             {% if supported_extensions %}accept="{{ supported_extensions|join:',' }}"{% endif %}>
+      <input type="file" id="driveTestFolder" webkitdirectory multiple hidden>
+
+      <div class="dt-upload-zone" id="dt-up-zone" tabindex="0" role="button" aria-label="Choose drive-test files">
+        <div class="dt-upload-empty" id="dt-up-empty">
+          <i class="bi bi-cloud-arrow-up dt-upload-icon"></i>
+          <div class="dt-upload-headline">Drag and drop files or a folder here</div>
+          <div class="dt-upload-or">or</div>
+          <button type="button" class="dt-sl-btn dt-sl-btn-primary" id="dt-up-browse">Browse Files</button>
+          <button type="button" class="dt-sl-btn" id="dt-up-browse-folder">Browse Folder</button>
         </div>
 
-        <div class="row g-3 mb-3">
-          <div class="col-md-6">
-            <label class="form-label fw-semibold">Test Date <span class="text-danger">*</span></label>
-            <input type="date" name="test_date" class="form-control" required
-                   value="{{ request.POST.test_date }}">
+        <div class="dt-upload-file" id="dt-up-file" hidden>
+          <i class="bi bi-file-earmark-binary dt-upload-file-icon"></i>
+          <div class="dt-upload-file-meta">
+            <div class="dt-upload-file-name" id="dt-up-file-name"></div>
+            <div class="dt-upload-file-sub"><span id="dt-up-file-size"></span> &middot; <span id="dt-up-file-ext"></span></div>
+            <div class="dt-upload-file-warn" id="dt-up-file-warn" hidden></div>
           </div>
-          <div class="col-md-6">
-            <label class="form-label fw-semibold">Test Type</label>
-            <select name="test_type" class="form-select">
-              <option value="outdoor">Outdoor Drive Test</option>
-              <option value="indoor">Indoor Walk Test</option>
-              <option value="benchmarking">Benchmarking</option>
-              <option value="regulatory">Regulatory Audit</option>
-              <option value="coverage">Coverage Survey</option>
-            </select>
-          </div>
+          <button type="button" class="dt-sl-btn" id="dt-up-remove">Remove</button>
         </div>
+      </div>
 
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Title</label>
-          <input type="text" name="title" class="form-control"
-                 placeholder="e.g. Freetown North — Q3 Coverage Audit"
-                 value="{{ request.POST.title }}">
-        </div>
+      <div class="dt-upload-queue" id="dt-up-queue" hidden>
+        <label class="dt-upload-group" id="dt-up-group-wrap">
+          <input type="checkbox" id="dt-up-group" checked> Add all files to one session
+          <span class="dt-upload-hint">Files for a different operator are uploaded separately.</span>
+        </label>
+        <div class="dt-sl-scroll dt-upload-queue-scroll"><table class="dt-sl-table" id="dt-up-queue-table"><tbody></tbody></table></div>
+      </div>
 
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Region</label>
-          <select name="region" class="form-select">
-            <option value="">— All / unspecified —</option>
-            {% for r in regions %}
-            <option value="{{ r.id }}">{{ r.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-
-        <div class="mb-4">
-          <label class="form-label fw-semibold">Drive Test File <span class="text-danger">*</span></label>
-          <input type="file" name="drive_test_file" class="form-control" required
-                 accept=".nemo,.rwd,.csv,.json,.xml,.bin,.log,.nmf">
-          <div class="form-text">Supported: NEMO, TEMS, Spirent, CSV, JSON. Max 500 MB.</div>
-        </div>
-
-        <div class="d-flex gap-2">
-          <button type="submit" class="btn btn-primary">
-            <i class="bi bi-upload me-2"></i>Upload &amp; Queue Processing
-          </button>
-          <a href="{% url 'drive_test:dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
-        </div>
-      </form>
+      <div class="dt-upload-formats">
+        Maximum file size: {{ max_upload_label }} per file.
+        {% if supported_extensions %}
+        Supported formats: {% for p in supported_parsers %}{{ p }}{% if not forloop.last %}, {% endif %}{% endfor %}
+        ({{ supported_extensions|join:", " }})
+        {% else %}
+        No drive-test parsers are currently configured.
+        {% endif %}
+      </div>
     </div>
-  </div>
+
+    <!-- Session details -->
+    <div class="dt-sl-panel dt-upload-panel">
+      <div class="dt-upload-title">Session Details <span class="dt-upload-optional">optional</span></div>
+      <div class="dt-upload-grid">
+        <div class="dt-sl-field">
+          <label for="dt-up-operator">Operator</label>
+          <select id="dt-up-operator" name="operator">
+            <option value="">Auto-detect</option>
+            {% for op in operators %}<option value="{{ op.id }}">{{ op.name }}</option>{% endfor %}
+          </select>
+          <div class="dt-upload-hint" id="dt-up-operator-hint">Detected from the file's SIM information when available.</div>
+        </div>
+        <div class="dt-sl-field">
+          <label for="dt-up-type">Test Type</label>
+          <select id="dt-up-type" name="test_type">
+            {% for value, label in test_types %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="dt-sl-field">
+          <label for="dt-up-title">Test Name</label>
+          <input id="dt-up-title" type="text" name="title" maxlength="200" placeholder="e.g. Freetown coverage test">
+        </div>
+        <div class="dt-sl-field">
+          <label for="dt-up-date">Test Date</label>
+          <input id="dt-up-date" type="date" name="test_date">
+          <div class="dt-upload-hint">Defaults to today when left empty.</div>
+        </div>
+        <div class="dt-sl-field dt-upload-span2">
+          <label for="dt-up-desc">Description</label>
+          <input id="dt-up-desc" type="text" name="description" placeholder="Optional notes">
+        </div>
+      </div>
+    </div>
+
+    <!-- File information -->
+    <div class="dt-sl-panel dt-upload-panel" id="dt-up-infopanel">
+      <div class="dt-upload-title">File Information</div>
+      <dl class="dt-upload-info">
+        <div><dt>File Name</dt><dd id="info-name">—</dd></div>
+        <div><dt>File Size</dt><dd id="info-size">—</dd></div>
+        <div><dt>File Format</dt><dd id="info-format">—</dd></div>
+        <div><dt>Parser</dt><dd id="info-parser">—</dd></div>
+        <div><dt>Device</dt><dd id="info-device">—</dd></div>
+        <div><dt>Technology</dt><dd id="info-tech">—</dd></div>
+        <div><dt>Operator</dt><dd id="info-operator">—</dd></div>
+        <div><dt>Operator Source</dt><dd id="info-opsource">—</dd></div>
+      </dl>
+    </div>
+
+    <!-- Progress / result (hidden until submit) -->
+    <div class="dt-sl-panel dt-upload-panel" id="dt-up-status" hidden aria-live="polite">
+      <div class="dt-upload-title" id="dt-up-status-title">Processing Drive Test</div>
+      <div class="dt-upload-bar" id="dt-up-bar" hidden><span id="dt-up-bar-fill"></span></div>
+
+      <!-- Live counters (shown while processing) -->
+      <div class="dt-upload-counters" id="dt-up-counters" hidden>
+        <div class="dt-upload-counter-card">
+          <div class="dt-upload-counter-num" id="dt-up-cnt-meas" data-current="0">0</div>
+          <div class="dt-upload-counter-label">Measurements</div>
+          <div class="dt-upload-counter-sub">records inserted</div>
+        </div>
+        <div class="dt-upload-counter-card">
+          <div class="dt-upload-counter-num" id="dt-up-cnt-findings" data-current="0">0</div>
+          <div class="dt-upload-counter-label">Findings</div>
+          <div class="dt-upload-counter-sub">issues identified</div>
+        </div>
+        <div class="dt-upload-counter-card dt-upload-counter-stage">
+          <div class="dt-upload-stage-icon" id="dt-up-stage-icon">
+            <span class="dt-upload-stage-spin"></span>
+          </div>
+          <div class="dt-upload-counter-label">Current Stage</div>
+          <div class="dt-upload-counter-sub" id="dt-up-stage-label">Initialising…</div>
+        </div>
+      </div>
+
+      <ul class="dt-upload-steps" id="dt-up-steps"></ul>
+      <div class="dt-upload-result" id="dt-up-result" hidden></div>
+    </div>
+
+    <div class="dt-upload-actions" id="dt-up-actions">
+      <a href="{% url 'drive_test:session_list' %}" class="dt-sl-btn" id="dt-up-cancel">Cancel</a>
+      <button type="submit" class="dt-sl-btn dt-sl-btn-primary" id="dt-up-submit" disabled>Upload &amp; Process</button>
+    </div>
+  </form>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'drive_test/js/upload.js' %}?v=4"></script>
 {% endblock %}
