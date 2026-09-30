@@ -79,11 +79,11 @@ def file_process(request, pk):
         messages.info(request, 'That file is already being processed.')
         return redirect('drive_test:campaign_detail', pk=dtf.campaign_id)
 
-    from core.tasks import enqueue_job
+    from drive_test.services.jobs import run_tracked
     from drive_test.tasks import process_drive_test_file
 
     DriveTestFile.objects.filter(pk=dtf.pk).update(status=FileStatus.QUEUED)
-    job = enqueue_job(
+    job = run_tracked(
         task=process_drive_test_file,
         job_type='drive_test.process_file',
         label=f'Process drive-test file {dtf.original_name}',

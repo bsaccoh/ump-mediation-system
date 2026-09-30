@@ -90,9 +90,9 @@ def campaign_detect(request, pk):
     if request.method != 'POST':
         return redirect('drive_test:event_list', pk=campaign.pk)
 
-    from core.tasks import enqueue_job
+    from drive_test.services.jobs import run_tracked
     from drive_test.tasks import detect_events_and_areas
-    enqueue_job(
+    run_tracked(
         task=detect_events_and_areas, job_type='drive_test.detect_events',
         label=f'Detect events for {campaign.name}', user=request.user,
         params={'campaign_id': campaign.pk}, args=(campaign.pk,),

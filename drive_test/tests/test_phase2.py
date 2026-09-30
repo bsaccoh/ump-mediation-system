@@ -144,3 +144,15 @@ class IngestTests(TestCase):
         dtf.refresh_from_db()
         self.assertEqual(dtf.status, FileStatus.FAILED)
         self.assertIsNone(dtf.quality_score)  # empty → None, not 0
+
+    def test_process_view_runs_without_broker(self):
+        # Regression: with USE_CELERY False (no Redis), the Process action must
+        # run synchronously and complete — never try to reach the broker.
+        from django.urls import reverse
+        self.client.force_login(self.user)
+        dtf = self._make_file()
+        resp = self.client.post(reverse('drive_test:file_process', args=[dtf.pk]))
+        self.assertEqual(resp.status_code, 302)
+        dtf.refresh_from_db()
+        self.assertEqual(dtf.status, FileStatus.COMPLETED)
+        self.assertEqual(dtf.sample_count, 3)

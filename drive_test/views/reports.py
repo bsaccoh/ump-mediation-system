@@ -50,9 +50,9 @@ def report_generate(request):
             status=ReportStatus.PENDING,
             generated_by=request.user,
         )
-        from core.tasks import enqueue_job
+        from drive_test.services.jobs import run_tracked
         from drive_test.tasks import generate_report_task
-        enqueue_job(task=generate_report_task, job_type='drive_test.generate_report',
+        run_tracked(task=generate_report_task, job_type='drive_test.generate_report',
                     label=f'Generate {report.get_report_type_display()} ({fmt})',
                     user=request.user, params={'report_id': report.pk}, args=(report.pk,))
         log_action(request.user, 'CREATE', 'drive_test.Report', report.pk,
