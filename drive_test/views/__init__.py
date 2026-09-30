@@ -14,6 +14,7 @@ from .events import (
     problem_area_list, campaign_detect,
 )
 from .comparison import comparison_view
+from .reports import report_list, report_generate, report_detail, report_download
 
 __all__ = [
     'dashboard', 'placeholder',
@@ -25,4 +26,5 @@ __all__ = [
     'analytics_index', 'campaign_analytics',
     'events_index', 'event_list', 'event_detail', 'event_set_status',
     'problem_area_list', 'campaign_detect', 'comparison_view',
+    'report_list', 'report_generate', 'report_detail', 'report_download',
 ]

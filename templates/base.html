@@ -376,7 +376,7 @@
                     <li><a class="nav-link {% if '/analytics/coverage' in request.path %}active{% endif %}" href="{% url 'drive_test:analytics_index' 'coverage' %}" title="Coverage"><i class="bi bi-broadcast"></i><span class="nav-link-text"> Coverage</span></a></li>
                     <li><a class="nav-link {% if '/drive-test/events' in request.path %}active{% endif %}" href="{% url 'drive_test:events_index' %}" title="Events"><i class="bi bi-exclamation-triangle"></i><span class="nav-link-text"> Events</span></a></li>
                     <li><a class="nav-link {% if '/drive-test/comparison' in request.path %}active{% endif %}" href="{% url 'drive_test:comparison' %}" title="Comparison"><i class="bi bi-bar-chart-steps"></i><span class="nav-link-text"> Comparison</span></a></li>
-                    <li><a class="nav-link {% if '/drive-test/reports' in request.path %}active{% endif %}" href="{% url 'drive_test:placeholder' 'reports' %}" title="Reports"><i class="bi bi-file-earmark-text"></i><span class="nav-link-text"> Reports</span></a></li>
+                    <li><a class="nav-link {% if '/drive-test/reports' in request.path %}active{% endif %}" href="{% url 'drive_test:report_list' %}" title="Reports"><i class="bi bi-file-earmark-text"></i><span class="nav-link-text"> Reports</span></a></li>
                 </ul>
             </li>
             {% endif %}

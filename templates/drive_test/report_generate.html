@@ -1,0 +1,57 @@
+{% extends "drive_test/_base.html" %}
+{% block title %}Generate Report | Drive Test{% endblock %}
+{% block page_title %}Generate Report{% endblock %}
+{% block dt_content %}
+<div class="dt-page-head">
+  <div class="dt-crumb"><a href="{% url 'drive_test:dashboard' %}">Drive Test</a> /
+    <a href="{% url 'drive_test:report_list' %}">Reports</a> / Generate</div>
+  <h1>Generate Report</h1>
+</div>
+
+<div class="dt-card" style="max-width:820px;"><div class="dt-card-body">
+  <form method="post">
+    {% csrf_token %}
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label small fw-semibold">Campaign</label>
+        <select name="campaign" class="form-select form-select-sm" required>
+          {% for c in campaigns %}<option value="{{ c.pk }}">{{ c.name }} — {{ c.operator.name|default:'—' }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small fw-semibold">Report type</label>
+        <select name="report_type" class="form-select form-select-sm">
+          {% for v, lbl in report_types %}<option value="{{ v }}">{{ lbl }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small fw-semibold">Format</label>
+        <select name="format" class="form-select form-select-sm">
+          {% for f in formats %}<option value="{{ f }}">{{ f|upper }}</option>{% endfor %}
+        </select>
+        <div class="form-text">PDF / XLSX for documents; CSV / GeoJSON / KML for exports.</div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small fw-semibold">Metric (for geo exports)</label>
+        <input name="metric" class="form-control form-control-sm" placeholder="e.g. rsrp">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small fw-semibold">Technology filter (optional)</label>
+        <input name="technology" class="form-control form-control-sm" placeholder="LTE / NR / UMTS / GSM">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small fw-semibold">Prepared by</label>
+        <input name="prepared_by" class="form-control form-control-sm">
+      </div>
+      <div class="col-12">
+        <label class="form-label small fw-semibold">Title (optional)</label>
+        <input name="title" class="form-control form-control-sm">
+      </div>
+    </div>
+    <div class="mt-4 d-flex gap-2">
+      <button class="dt-btn dt-btn-primary"><i class="bi bi-gear"></i> Generate</button>
+      <a class="dt-btn dt-btn-ghost" href="{% url 'drive_test:report_list' %}">Cancel</a>
+    </div>
+  </form>
+</div></div>
+{% endblock %}

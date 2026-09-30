@@ -30,6 +30,12 @@ urlpatterns = [
     path('events/<int:pk>/', views.event_detail, name='event_detail'),
     path('events/<int:pk>/status/', views.event_set_status, name='event_set_status'),
 
+    # Reports
+    path('reports/', views.report_list, name='report_list'),
+    path('reports/generate/', views.report_generate, name='report_generate'),
+    path('reports/<str:ref>/', views.report_detail, name='report_detail'),
+    path('reports/<str:ref>/download/', views.report_download, name='report_download'),
+
     # Choosers + comparison + JSON APIs
     path('map/', views.map_index, name='map_index'),
     path('events/', views.events_index, name='events_index'),

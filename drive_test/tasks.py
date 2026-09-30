@@ -13,6 +13,13 @@ def process_drive_test_file(file_id: int):
     return process_file(file_id)
 
 
+@tracked_task('drive_test.generate_report')
+def generate_report_task(report_id: int):
+    from drive_test.models import Report
+    from drive_test.services.reports import generate
+    return generate(Report.objects.get(pk=report_id))
+
+
 @tracked_task('drive_test.detect_events')
 def detect_events_and_areas(campaign_id: int):
     """Run the event engine then cluster the results into problem areas."""
