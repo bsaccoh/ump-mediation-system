@@ -59,6 +59,16 @@ CRUD pages with search (and CSV import where applicable) for:
 - **Regulatory (NatCA Compliance)** — NATCOM/NatCA periodic reports, Levy & USF computation, Retail revenue entry, Lawful Intercept (LEA), QoS/KPI snapshots, **Network Performance Monitoring (12 PM KPIs)**, and **Drive Test Management (11 Drive Test metrics)** with interactive Leaflet.js signal mapping & multi-format support (`.trp`, `.lpg`, `.nmf`, `.csv`, `.zip`, `.tar.gz`).
 - **Roaming** — inbound-roamer detection, per-partner roaming settlement files, disputes.
 
+## 7a. Drive Test Intelligence (`drive_test`)
+A telecom drive-test log analysis and network-intelligence module, integrated in the UMP shell. Projects → campaigns → uploaded logs, parsed and normalised into a canonical, RAT-agnostic sample store (GSM/UMTS/LTE/5G), then analysed, visualised and reported. Built in seven phases:
+- **Ingestion & processing** — confidence-based format detection with a pluggable parser registry (CSV/TSV, JSON, Excel, ZIP; vendor formats extend without caller changes); streaming parse → normalize → data-quality → bulk insert via `core.JobRecord` (sync fallback when no Celery worker); automatic profiling and content-hash dedup on upload.
+- **Map Analysis** — Leaflet map coloured by a selectable KPI (legend from DB thresholds), route track, layer stack, synchronised KPI timeline and sample inspector; server-decimated, column-oriented APIs behind a `GeoQueryService` seam (FloatField + bbox; PostGIS-swappable).
+- **Analytics** — per-RAT RF distributions (min/mean/median/p10/p50/p90/max), coverage classes + route distance, data performance, observed-cell aggregation; campaign `KpiResult` roll-ups.
+- **Intelligence** — threshold-driven event engine (contiguous breach runs → `Event`), ~275 m grid clustering into `ProblemArea`, and operator/technology/campaign comparison.
+- **Reporting** — Executive/Technical/Coverage/Comparison reports as PDF (reportlab) and Excel (openpyxl), plus CSV/GeoJSON/KML exports, with a chain-of-custody appendix; path-safe, audited downloads.
+- **AI Analyst** — an evidence-first, deterministic engine (Measured Fact → Observed Pattern → Possible Cause with evidence + confidence → Recommended Investigation), strictly from stored data; an optional Claude API narrative is available behind `DRIVE_TEST_AI_LLM_ENABLED` and only phrases the computed evidence, never inventing numbers.
+- Engineering-grade design system (tokens, dark/light, one colour-blind-aware signal scale); RBAC via `core.User` role flags; audit via `core.AuditLog`. Invariants throughout: no mock data, missing renders `—` (never 0), thresholds live in the DB, observed ≠ authoritative ≠ derived. Seed defaults: `python manage.py seed_drive_test_thresholds`.
+
 ## 8. Dashboards & Analytics
 - **Processing Volume** — files/records by operator, stream and service type (works in decode-only mode, sourced from `CDRFile`).
 - **KPI dashboard** — call records by type, incoming/outgoing/transit, data usage by technology (GB), subscriber growth, inter-operator traffic, call drop rate, international traffic trend; each chart has a per-chart date filter.

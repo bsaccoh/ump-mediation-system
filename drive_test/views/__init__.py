@@ -15,6 +15,7 @@ from .events import (
 )
 from .comparison import comparison_view
 from .reports import report_list, report_generate, report_detail, report_download
+from .ai import ai_analyst
 
 __all__ = [
     'dashboard', 'placeholder',
@@ -27,4 +28,5 @@ __all__ = [
     'events_index', 'event_list', 'event_detail', 'event_set_status',
     'problem_area_list', 'campaign_detect', 'comparison_view',
     'report_list', 'report_generate', 'report_detail', 'report_download',
+    'ai_analyst',
 ]

@@ -40,6 +40,7 @@ urlpatterns = [
     path('map/', views.map_index, name='map_index'),
     path('events/', views.events_index, name='events_index'),
     path('comparison/', views.comparison_view, name='comparison'),
+    path('ai-analyst/', views.ai_analyst, name='ai_analyst'),
     path('analytics/<str:section>/', views.analytics_index, name='analytics_index'),
     path('api/', include('drive_test.api.urls')),
 

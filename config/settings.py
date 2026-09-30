@@ -240,6 +240,14 @@ REST_FRAMEWORK = {
 # Tariff compliance classification is service-driven, not UI-driven.
 TARIFF_COMPLIANCE_TOLERANCE_PCT = os.environ.get('TARIFF_COMPLIANCE_TOLERANCE_PCT', '1.00')
 
+# Drive Test AI Analyst — the evidence engine is always available and
+# deterministic; the optional LLM narrative is off by default and only phrases
+# the pre-computed evidence (it never introduces new numbers).
+DRIVE_TEST_AI_LLM_ENABLED = os.environ.get('DRIVE_TEST_AI_LLM_ENABLED', 'False').lower() in (
+    '1', 'true', 'yes', 'on',
+)
+DRIVE_TEST_AI_MODEL = os.environ.get('DRIVE_TEST_AI_MODEL', 'claude-opus-5-5')
+
 # =============================================================================
 # CELERY (async task processing)
 # =============================================================================
