@@ -152,7 +152,10 @@ class AuditCaseServiceTests(TestCase):
         self.assertEqual(self.service.get_calculation_trace(case), [])
 
 
-@override_settings(STORAGES={'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'}})
+@override_settings(STORAGES={
+    'default': {'BACKEND': 'django.core.files.storage.InMemoryStorage'},
+    'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},
+})
 class AuditCaseViewTests(TestCase):
     def setUp(self):
         self.service = AuditCaseService()
@@ -299,7 +302,10 @@ class AuditCaseViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
 
-@override_settings(STORAGES={'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'}})
+@override_settings(STORAGES={
+    'default': {'BACKEND': 'django.core.files.storage.InMemoryStorage'},
+    'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},
+})
 class AuditCaseWorkspaceTests(TestCase):
     """Page 11: findings workflow, evidence linking, tariff/tax traceability,
     priority vs risk, regulatory decision, reopen reassignment, report history."""

@@ -70,7 +70,7 @@ class Tariff(models.Model):
         help_text='Destination country/operator/prefix (blank = all destinations)',
     )
 
-    rate = models.DecimalField(max_digits=12, decimal_places=2)
+    rate = models.DecimalField(max_digits=14, decimal_places=6)
     charging_unit = models.CharField(max_length=12, choices=ChargingUnit.choices)
     minimum_charge = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     rounding_rule = models.CharField(

@@ -1,0 +1,71 @@
+{% extends "drive_test/_base.html" %}
+{% load humanize dt_extras %}
+{% block title %}Comparison | Drive Test{% endblock %}
+{% block page_title %}Comparison{% endblock %}
+
+{% block dt_content %}
+<div class="dt-page-head">
+  <div class="dt-crumb"><a href="{% url 'drive_test:dashboard' %}">Drive Test Intelligence</a> / Comparison</div>
+  <h1>Comparison</h1>
+  <div class="dt-sub">Compare operators, technologies or campaigns on the same KPIs.</div>
+</div>
+
+<form method="get" class="dt-card mb-3"><div class="dt-card-body">
+  <div class="row g-3">
+    <div class="col-md-3">
+      <label class="form-label small fw-semibold">Compare by</label>
+      <select name="by" class="form-select form-select-sm">
+        <option value="operator" {% if by == 'operator' %}selected{% endif %}>Operator</option>
+        <option value="technology" {% if by == 'technology' %}selected{% endif %}>Technology</option>
+        <option value="campaign" {% if by == 'campaign' %}selected{% endif %}>Campaign</option>
+      </select>
+    </div>
+    <div class="col-md-7">
+      <label class="form-label small fw-semibold">Campaigns</label>
+      <select name="campaign" class="form-select form-select-sm" multiple size="5">
+        {% for c in campaigns %}
+          <option value="{{ c.pk }}" {% if c.pk in selected %}selected{% endif %}>{{ c.name }} — {{ c.operator.name|default:'—' }} ({{ c.sample_count|intcomma }})</option>
+        {% endfor %}
+      </select>
+      <div class="form-text">Select one or more campaigns to compare across.</div>
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+      <button class="dt-btn dt-btn-primary"><i class="bi bi-bar-chart"></i> Compare</button>
+    </div>
+  </div>
+</div></form>
+
+{% if table %}
+  {% if table.dimensions %}
+  <div class="dt-card"><div class="dt-card-head"><h2>KPIs by {{ dimensions_label }}</h2></div>
+    <div class="dt-table-wrap" style="border:0;">
+      <table class="dt-table">
+        <thead><tr><th>Metric</th>{% for d in table.dimensions %}<th class="num">{{ d }}</th>{% endfor %}</tr></thead>
+        <tbody>
+          {% for m in table.metrics %}
+            <tr>
+              <td>{{ m.label }}{% if m.unit %} <span class="dt-sub">({{ m.unit }})</span>{% endif %}</td>
+              {% for d in table.dimensions %}
+                <td class="num">{% with v=m.values|dictget:d %}{% if v is None %}<span class="dt-na">—</span>{% else %}{{ v }}{% endif %}{% endwith %}</td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+          <tr>
+            <td><strong>Events</strong></td>
+            {% for d in table.dimensions %}<td class="num">{{ table.events|dictget:d|default:0|intcomma }}</td>{% endfor %}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+    <div class="dt-card"><div class="dt-empty"><p>No {{ dimensions_label|lower }} data in the selected campaigns.</p></div></div>
+  {% endif %}
+{% else %}
+  <div class="dt-card"><div class="dt-empty">
+    <div class="dt-empty-icon"><i class="bi bi-bar-chart"></i></div>
+    <h3>Select campaigns to compare</h3>
+    <p>Pick a dimension and one or more campaigns above, then Compare.</p>
+  </div></div>
+{% endif %}
+{% endblock %}

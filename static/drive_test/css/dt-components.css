@@ -1,0 +1,143 @@
+/* =============================================================================
+   Drive Test Intelligence — components
+   Built only on tokens from dt-tokens.css. Enterprise, dense, readable.
+   ========================================================================== */
+
+.dt-app { color: var(--dt-text); font-family: var(--dt-font); font-size: var(--dt-fs-base); }
+
+/* --- Page header ---------------------------------------------------------- */
+.dt-page-head { margin-bottom: var(--dt-space-5); }
+.dt-page-head h1 { font-size: var(--dt-fs-xl); font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+.dt-page-head .dt-sub { color: var(--dt-text-muted); font-size: var(--dt-fs-sm); margin-top: 2px; }
+
+/* --- Breadcrumb ----------------------------------------------------------- */
+.dt-crumb { font-size: var(--dt-fs-xs); color: var(--dt-text-faint); margin-bottom: var(--dt-space-2);
+  text-transform: uppercase; letter-spacing: 0.08em; }
+.dt-crumb a { color: var(--dt-text-muted); text-decoration: none; }
+.dt-crumb a:hover { color: var(--dt-accent); }
+
+/* --- Card ----------------------------------------------------------------- */
+.dt-card { background: var(--dt-surface); border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius); box-shadow: var(--dt-shadow-sm); }
+.dt-card + .dt-card { margin-top: var(--dt-space-4); }
+.dt-card-head { display: flex; align-items: center; justify-content: space-between;
+  padding: var(--dt-space-3) var(--dt-space-4); border-bottom: 1px solid var(--dt-border); }
+.dt-card-head h2 { font-size: var(--dt-fs-md); font-weight: 600; margin: 0; }
+.dt-card-body { padding: var(--dt-space-4); }
+
+/* --- KPI cards / stat row ------------------------------------------------- */
+.dt-stat-row { display: grid; gap: var(--dt-space-3);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.dt-stat { background: var(--dt-surface); border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius); padding: var(--dt-space-3) var(--dt-space-4);
+  box-shadow: var(--dt-shadow-sm); }
+.dt-stat .dt-stat-label { font-size: var(--dt-fs-xs); color: var(--dt-text-muted);
+  text-transform: uppercase; letter-spacing: 0.06em; }
+.dt-stat .dt-stat-value { font-size: var(--dt-fs-2xl); font-weight: 700; line-height: 1.1;
+  font-variant-numeric: tabular-nums; font-family: var(--dt-font-mono); }
+.dt-stat .dt-stat-unit { font-size: var(--dt-fs-sm); color: var(--dt-text-faint); font-weight: 500; }
+.dt-stat .dt-stat-sub { font-size: var(--dt-fs-xs); color: var(--dt-text-muted); margin-top: 2px; }
+/* Missing is never zero. */
+.dt-na { color: var(--dt-text-faint); font-family: var(--dt-font); font-weight: 500; }
+
+/* --- Data table ----------------------------------------------------------- */
+.dt-table-wrap { overflow-x: auto; border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius); background: var(--dt-surface); }
+table.dt-table { width: 100%; border-collapse: collapse; font-size: var(--dt-fs-sm); }
+table.dt-table thead th { position: sticky; top: 0; background: var(--dt-surface-2);
+  color: var(--dt-text-muted); text-align: left; font-weight: 600; font-size: var(--dt-fs-xs);
+  text-transform: uppercase; letter-spacing: 0.04em; padding: var(--dt-cell-pad-y) var(--dt-cell-pad-x);
+  border-bottom: 1px solid var(--dt-border); white-space: nowrap; }
+table.dt-table tbody td { padding: var(--dt-cell-pad-y) var(--dt-cell-pad-x);
+  border-bottom: 1px solid var(--dt-border); height: var(--dt-row-height); }
+table.dt-table tbody tr:hover { background: var(--dt-surface-2); }
+table.dt-table .num { text-align: right; font-family: var(--dt-font-mono);
+  font-variant-numeric: tabular-nums; }
+table.dt-table a { color: var(--dt-accent); text-decoration: none; }
+table.dt-table a:hover { text-decoration: underline; }
+
+/* --- Badges --------------------------------------------------------------- */
+.dt-badge { display: inline-flex; align-items: center; gap: 4px; font-size: var(--dt-fs-xs);
+  font-weight: 600; padding: 2px 8px; border-radius: 999px; line-height: 1.5;
+  border: 1px solid transparent; white-space: nowrap; }
+.dt-badge.status-draft      { background: var(--dt-surface-2); color: var(--dt-text-muted); border-color: var(--dt-border-strong); }
+.dt-badge.status-active     { background: var(--dt-accent-soft); color: var(--dt-accent-strong); }
+.dt-badge.status-processing { background: #fef3c7; color: var(--dt-warning); }
+.dt-badge.status-completed  { background: #dcfce7; color: var(--dt-success); }
+.dt-badge.status-archived   { background: var(--dt-surface-2); color: var(--dt-text-faint); }
+.dt-badge.status-failed     { background: #fee2e2; color: var(--dt-danger); }
+.dt-badge.status-duplicate  { background: #f1f5f9; color: var(--dt-text-muted); }
+
+.dt-sev { display: inline-flex; align-items: center; gap: 5px; font-size: var(--dt-fs-xs);
+  font-weight: 600; }
+.dt-sev::before { content: ""; width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dt-sev.critical::before { background: var(--dt-sev-critical); }
+.dt-sev.high::before     { background: var(--dt-sev-high); }
+.dt-sev.medium::before   { background: var(--dt-sev-medium); }
+.dt-sev.low::before      { background: var(--dt-sev-low); }
+
+/* --- Provenance badge (Observed / Authoritative / Derived) ---------------- */
+.dt-prov { font-size: var(--dt-fs-xs); font-weight: 600; padding: 1px 6px; border-radius: 4px;
+  text-transform: uppercase; letter-spacing: 0.04em; color: #fff; }
+.dt-prov.observed      { background: var(--dt-prov-observed); }
+.dt-prov.authoritative { background: var(--dt-prov-authoritative); }
+.dt-prov.derived       { background: var(--dt-prov-derived); }
+
+/* --- Signal chips --------------------------------------------------------- */
+.dt-signal { display: inline-flex; align-items: center; gap: 5px; font-size: var(--dt-fs-xs); font-weight: 600; }
+.dt-signal::before { content: ""; width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.dt-signal.excellent::before { background: var(--dt-signal-excellent); }
+.dt-signal.good::before      { background: var(--dt-signal-good); }
+.dt-signal.fair::before      { background: var(--dt-signal-fair); }
+.dt-signal.poor::before      { background: var(--dt-signal-poor); }
+.dt-signal.critical::before  { background: var(--dt-signal-critical); }
+.dt-signal.none::before      { background: var(--dt-signal-none); }
+
+/* --- Filter bar ----------------------------------------------------------- */
+.dt-filter-bar { display: flex; flex-wrap: wrap; gap: var(--dt-space-2); align-items: end;
+  background: var(--dt-surface); border: 1px solid var(--dt-border); border-radius: var(--dt-radius);
+  padding: var(--dt-space-3); margin-bottom: var(--dt-space-4); }
+.dt-filter-bar .dt-field { display: flex; flex-direction: column; gap: 3px; }
+.dt-filter-bar label { font-size: var(--dt-fs-xs); color: var(--dt-text-muted); font-weight: 600; }
+.dt-filter-bar select, .dt-filter-bar input {
+  font-size: var(--dt-fs-sm); padding: 5px 8px; border: 1px solid var(--dt-border-strong);
+  border-radius: var(--dt-radius-sm); background: var(--dt-surface); color: var(--dt-text); }
+
+/* --- Buttons -------------------------------------------------------------- */
+.dt-btn { display: inline-flex; align-items: center; gap: 6px; font-size: var(--dt-fs-sm);
+  font-weight: 600; padding: 6px 14px; border-radius: var(--dt-radius-sm); border: 1px solid transparent;
+  cursor: pointer; text-decoration: none; transition: background .15s, border-color .15s; }
+.dt-btn-primary { background: var(--dt-accent); color: #fff; }
+.dt-btn-primary:hover { background: var(--dt-accent-strong); color: #fff; }
+.dt-btn-ghost { background: transparent; color: var(--dt-text); border-color: var(--dt-border-strong); }
+.dt-btn-ghost:hover { background: var(--dt-surface-2); }
+
+/* --- Tabs ----------------------------------------------------------------- */
+.dt-tabs { display: flex; gap: var(--dt-space-4); border-bottom: 1px solid var(--dt-border);
+  margin-bottom: var(--dt-space-4); }
+.dt-tabs a { padding: var(--dt-space-2) 2px; font-size: var(--dt-fs-sm); font-weight: 600;
+  color: var(--dt-text-muted); text-decoration: none; border-bottom: 2px solid transparent; }
+.dt-tabs a.active { color: var(--dt-accent); border-bottom-color: var(--dt-accent); }
+
+/* --- Progress ------------------------------------------------------------- */
+.dt-progress { height: 6px; background: var(--dt-surface-2); border-radius: 999px; overflow: hidden; }
+.dt-progress > span { display: block; height: 100%; background: var(--dt-accent); transition: width .3s; }
+
+/* --- Empty / loading / error states -------------------------------------- */
+.dt-empty { text-align: center; padding: var(--dt-space-6) var(--dt-space-4); color: var(--dt-text-muted); }
+.dt-empty .dt-empty-icon { font-size: 2rem; color: var(--dt-text-faint); margin-bottom: var(--dt-space-2); }
+.dt-empty h3 { font-size: var(--dt-fs-md); font-weight: 600; color: var(--dt-text); margin: 0 0 4px; }
+.dt-empty p { font-size: var(--dt-fs-sm); margin: 0 0 var(--dt-space-4); }
+.dt-error { border-left: 3px solid var(--dt-danger); background: var(--dt-surface);
+  padding: var(--dt-space-3) var(--dt-space-4); border-radius: var(--dt-radius-sm); color: var(--dt-danger); }
+.dt-skeleton { background: linear-gradient(90deg, var(--dt-surface-2) 25%, var(--dt-border) 37%, var(--dt-surface-2) 63%);
+  background-size: 400% 100%; animation: dt-shimmer 1.3s ease infinite; border-radius: var(--dt-radius-sm); }
+@keyframes dt-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+
+/* --- Dropzone ------------------------------------------------------------- */
+.dt-dropzone { border: 2px dashed var(--dt-border-strong); border-radius: var(--dt-radius-lg);
+  padding: var(--dt-space-6); text-align: center; color: var(--dt-text-muted);
+  background: var(--dt-surface-2); transition: border-color .15s, background .15s; cursor: pointer; }
+.dt-dropzone.dragover { border-color: var(--dt-accent); background: var(--dt-accent-soft); }
+.dt-dropzone .dt-dz-icon { font-size: 2.2rem; color: var(--dt-text-faint); }
+.dt-dropzone .dt-dz-formats { font-size: var(--dt-fs-xs); color: var(--dt-text-faint); margin-top: var(--dt-space-2); }

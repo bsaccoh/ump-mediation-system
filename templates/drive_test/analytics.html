@@ -1,0 +1,152 @@
+{% extends "drive_test/_base.html" %}
+{% load humanize %}
+
+{% block title %}Analytics | {{ campaign.name }}{% endblock %}
+{% block page_title %}Analytics{% endblock %}
+
+{% block dt_extra_css %}
+<style>
+  .dt-hist .row { display: grid; grid-template-columns: 90px 1fr 120px; gap: 10px; align-items: center; margin-bottom: 4px; }
+  .dt-hist .lbl { font-size: var(--dt-fs-xs); color: var(--dt-text-muted); }
+  .dt-hist .bar { height: 16px; border-radius: 3px; background: var(--dt-surface-2); overflow: hidden; }
+  .dt-hist .bar > span { display: block; height: 100%; }
+  .dt-hist .val { font-family: var(--dt-font-mono); font-size: var(--dt-fs-xs); text-align: right; color: var(--dt-text-muted); }
+  .dt-statgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px,1fr)); gap: 8px; margin-bottom: 12px; }
+  .dt-statgrid .s { background: var(--dt-surface-2); border-radius: var(--dt-radius-sm); padding: 6px 8px; }
+  .dt-statgrid .s .k { font-size: var(--dt-fs-xs); color: var(--dt-text-muted); }
+  .dt-statgrid .s .v { font-family: var(--dt-font-mono); font-size: var(--dt-fs-sm); font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block dt_content %}
+<div class="dt-page-head">
+  <div class="dt-crumb">
+    <a href="{% url 'drive_test:dashboard' %}">Drive Test</a> /
+    <a href="{% url 'drive_test:campaign_detail' campaign.pk %}">{{ campaign.name }}</a> / Analytics
+  </div>
+  <h1>Analytics <span class="dt-sub">{{ campaign.name }} · {{ sample_count|intcomma }} samples</span></h1>
+</div>
+
+<div class="dt-tabs">
+  {% for key, label in sections %}
+    <a href="{% url 'drive_test:campaign_analytics_section' campaign.pk key %}{% if technology %}?technology={{ technology }}{% endif %}"
+       class="{% if key == section %}active{% endif %}">{{ label }}</a>
+  {% endfor %}
+</div>
+
+{% if technologies %}
+<form method="get" class="dt-filter-bar">
+  <div class="dt-field">
+    <label>Technology</label>
+    <select name="technology" onchange="this.form.submit()">
+      <option value="">All</option>
+      {% for t in technologies %}<option value="{{ t }}" {% if t == technology %}selected{% endif %}>{{ t }}</option>{% endfor %}
+    </select>
+  </div>
+</form>
+{% endif %}
+
+{% if section == 'rf' or section == 'data' %}
+  {% if reports %}
+    {% for r in reports %}
+      <div class="dt-card mb-3">
+        <div class="dt-card-head"><h2>{{ r.label }}{% if r.unit %} <span class="dt-sub">({{ r.unit }})</span>{% endif %}</h2>
+          {% if not r.stats.sufficient %}<span class="dt-badge status-draft">Insufficient samples</span>{% endif %}
+        </div>
+        <div class="dt-card-body">
+          <div class="dt-statgrid">
+            <div class="s"><div class="k">Count</div><div class="v">{{ r.stats.count|intcomma }}</div></div>
+            <div class="s"><div class="k">Min</div><div class="v">{{ r.stats.min }}</div></div>
+            <div class="s"><div class="k">Mean</div><div class="v">{{ r.stats.mean }}</div></div>
+            <div class="s"><div class="k">Median</div><div class="v">{{ r.stats.median }}</div></div>
+            <div class="s"><div class="k">P10</div><div class="v">{{ r.stats.p10 }}</div></div>
+            <div class="s"><div class="k">P90</div><div class="v">{{ r.stats.p90 }}</div></div>
+            <div class="s"><div class="k">Max</div><div class="v">{{ r.stats.max }}</div></div>
+            <div class="s"><div class="k">Std</div><div class="v">{{ r.stats.std }}</div></div>
+          </div>
+          {% if r.histogram %}
+          <div class="dt-hist">
+            {% for h in r.histogram %}
+              <div class="row">
+                <span class="lbl">{{ h.label }}</span>
+                <span class="bar"><span style="width:{{ h.pct }}%;background:var(--dt-signal-{{ h.color }})"></span></span>
+                <span class="val">{{ h.count|intcomma }} · {{ h.pct }}%</span>
+              </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    {% include "drive_test/_analytics_empty.html" with msg="No metrics available for this selection." %}
+  {% endif %}
+
+{% elif section == 'coverage' %}
+  {% if coverage.metric %}
+    <div class="dt-stat-row mb-4">
+      <div class="dt-stat"><div class="dt-stat-label">Coverage metric</div><div class="dt-stat-value" style="font-size:var(--dt-fs-lg)">{{ coverage.label }}</div></div>
+      <div class="dt-stat"><div class="dt-stat-label">Route distance</div><div class="dt-stat-value" style="font-size:var(--dt-fs-lg)">{{ coverage.total_distance_km }}<span class="dt-stat-unit"> km</span></div></div>
+      <div class="dt-stat"><div class="dt-stat-label">Mean</div><div class="dt-stat-value" style="font-size:var(--dt-fs-lg)">{{ coverage.stats.mean }}<span class="dt-stat-unit"> {{ coverage.unit }}</span></div></div>
+      <div class="dt-stat"><div class="dt-stat-label">Samples</div><div class="dt-stat-value" style="font-size:var(--dt-fs-lg)">{{ coverage.stats.count|intcomma }}</div></div>
+    </div>
+    <div class="dt-card">
+      <div class="dt-card-head"><h2>Coverage classes ({{ coverage.label }})</h2></div>
+      <div class="dt-card-body dt-hist">
+        {% for h in coverage.histogram %}
+          <div class="row" style="grid-template-columns:90px 1fr 170px;">
+            <span class="lbl">{{ h.label }}</span>
+            <span class="bar"><span style="width:{{ h.pct }}%;background:var(--dt-signal-{{ h.color }})"></span></span>
+            <span class="val">{{ h.pct }}% · ~{{ h.distance_km }} km</span>
+          </div>
+        {% endfor %}
+        {% if coverage.distance_is_estimate %}<p class="dt-sub mt-2">Per-class distance is <em>estimated</em> from sample share of the route length.</p>{% endif %}
+      </div>
+    </div>
+  {% else %}
+    {% include "drive_test/_analytics_empty.html" with msg="No coverage metric available in this campaign's data." %}
+  {% endif %}
+
+{% elif section == 'cells' %}
+  {% if cells %}
+    <div class="dt-table-wrap">
+      <table class="dt-table">
+        <thead><tr><th>Cell ID</th><th>Tech</th><th class="num">Samples</th><th class="num">Avg RSRP</th>
+          <th class="num">Avg SINR</th><th class="num">Avg RSCP</th><th class="num">Avg SS-RSRP</th><th>First seen</th><th>Last seen</th></tr></thead>
+        <tbody>
+          {% for c in cells %}
+            <tr>
+              <td>{{ c.cell_id }}</td><td>{{ c.technology }}</td>
+              <td class="num">{{ c.samples|intcomma }}</td>
+              <td class="num">{% if c.avg_rsrp is None %}<span class="dt-na">—</span>{% else %}{{ c.avg_rsrp }}{% endif %}</td>
+              <td class="num">{% if c.avg_sinr is None %}<span class="dt-na">—</span>{% else %}{{ c.avg_sinr }}{% endif %}</td>
+              <td class="num">{% if c.avg_rscp is None %}<span class="dt-na">—</span>{% else %}{{ c.avg_rscp }}{% endif %}</td>
+              <td class="num">{% if c.avg_ss_rsrp is None %}<span class="dt-na">—</span>{% else %}{{ c.avg_ss_rsrp }}{% endif %}</td>
+              <td>{{ c.first_seen|date:'Y-m-d H:i' }}</td>
+              <td>{{ c.last_seen|date:'Y-m-d H:i' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    {% include "drive_test/_analytics_empty.html" with msg="No observed serving-cell identifiers in this campaign's samples." %}
+  {% endif %}
+
+{% elif section == 'voice' %}
+  {% if voice.has_data %}
+    <div class="dt-stat-row">
+      <div class="dt-stat"><div class="dt-stat-label">Attempts</div><div class="dt-stat-value">{{ voice.attempts }}</div></div>
+      <div class="dt-stat"><div class="dt-stat-label">Blocks</div><div class="dt-stat-value">{{ voice.blocks }}</div></div>
+      <div class="dt-stat"><div class="dt-stat-label">Drops</div><div class="dt-stat-value">{{ voice.drops }}</div></div>
+      <div class="dt-stat"><div class="dt-stat-label">CSSR</div><div class="dt-stat-value">{% if voice.cssr is None %}<span class="dt-na">—</span>{% else %}{{ voice.cssr }}<span class="dt-stat-unit">%</span>{% endif %}</div></div>
+      <div class="dt-stat"><div class="dt-stat-label">DCR</div><div class="dt-stat-value">{% if voice.dcr is None %}<span class="dt-na">—</span>{% else %}{{ voice.dcr }}<span class="dt-stat-unit">%</span>{% endif %}</div></div>
+    </div>
+  {% else %}
+    {% include "drive_test/_analytics_empty.html" with msg="This campaign's logs carry no voice call events. Voice KPIs appear when a log with call events is ingested." %}
+  {% endif %}
+
+{% elif section == 'handover' %}
+  {% include "drive_test/_analytics_empty.html" with msg="Handover analysis is populated by the event engine (Phase 5) and message-bearing logs. Nothing to show yet." %}
+{% endif %}
+{% endblock %}

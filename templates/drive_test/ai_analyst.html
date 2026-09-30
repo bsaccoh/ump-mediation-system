@@ -1,0 +1,112 @@
+{% extends "drive_test/_base.html" %}
+{% load humanize %}
+
+{% block title %}AI Analyst | Drive Test{% endblock %}
+{% block page_title %}AI Analyst{% endblock %}
+
+{% block dt_extra_css %}
+<style>
+  .dt-ai-layer { border-left: 3px solid var(--dt-border-strong); padding: 4px 0 4px 14px; margin-bottom: var(--dt-space-4); }
+  .dt-ai-layer.fact { border-color: var(--dt-prov-observed); }
+  .dt-ai-layer.pattern { border-color: var(--dt-accent); }
+  .dt-ai-layer.cause { border-color: var(--dt-prov-derived); }
+  .dt-ai-layer.rec { border-color: var(--dt-success); }
+  .dt-ai-layer h3 { font-size: var(--dt-fs-xs); text-transform: uppercase; letter-spacing: .08em; color: var(--dt-text-muted); margin: 0 0 6px; }
+  .dt-ai-cause { background: var(--dt-surface-2); border-radius: var(--dt-radius-sm); padding: 8px 10px; margin-bottom: 6px; }
+  .dt-ai-cause .ev { font-size: var(--dt-fs-xs); color: var(--dt-text-muted); }
+</style>
+{% endblock %}
+
+{% block dt_content %}
+<div class="dt-page-head">
+  <div class="dt-crumb"><a href="{% url 'drive_test:dashboard' %}">Drive Test Intelligence</a> / AI Analyst</div>
+  <h1>AI Analyst</h1>
+  <div class="dt-sub">Evidence-based analysis from measured data. Causes are hypotheses to investigate, never asserted as fact.</div>
+</div>
+
+<form method="get" class="dt-filter-bar">
+  <div class="dt-field">
+    <label>Campaign</label>
+    <select name="campaign" required>
+      <option value="">Select…</option>
+      {% for c in campaigns %}
+        <option value="{{ c.pk }}" {% if campaign and c.pk == campaign.pk %}selected{% endif %}>{{ c.name }} ({{ c.sample_count|intcomma }})</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="dt-field" style="flex:1;min-width:240px;">
+    <label>Question (optional)</label>
+    <input name="question" value="{{ question }}" placeholder="e.g. Why is LTE performance poor on this route?">
+  </div>
+  <button class="dt-btn dt-btn-primary"><i class="bi bi-robot"></i> Analyse</button>
+</form>
+
+{% if not llm_enabled and campaign %}
+  <p class="dt-sub mb-3"><i class="bi bi-info-circle"></i> LLM narrative is disabled; showing the deterministic evidence engine. Set <code>DRIVE_TEST_AI_LLM_ENABLED=true</code> to enable narrative phrasing.</p>
+{% endif %}
+
+{% if analysis %}
+  {% if analysis.has_data %}
+    {% if narrative %}
+      <div class="dt-card mb-4"><div class="dt-card-head"><h2><i class="bi bi-robot"></i> Narrative</h2></div>
+        <div class="dt-card-body"><p style="white-space:pre-wrap;margin:0;">{{ narrative }}</p></div>
+      </div>
+    {% endif %}
+
+    <div class="dt-card"><div class="dt-card-body">
+      <div class="dt-ai-layer fact">
+        <h3>Measured Data</h3>
+        <div class="dt-stat-row">
+          {% for f in analysis.facts %}
+            <div class="dt-stat">
+              <div class="dt-stat-label">{{ f.label }}</div>
+              <div class="dt-stat-value" style="font-size:var(--dt-fs-lg)">{% if f.value is None %}<span class="dt-na">—</span>{% else %}{{ f.value }}{% endif %}<span class="dt-stat-unit"> {{ f.unit }}</span></div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="dt-ai-layer pattern">
+        <h3>Observed Patterns</h3>
+        <ul class="mb-0">{% for p in analysis.patterns %}<li>{{ p }}</li>{% endfor %}</ul>
+      </div>
+
+      <div class="dt-ai-layer cause">
+        <h3>Possible Contributing Factors</h3>
+        {% if analysis.causes %}
+          {% for c in analysis.causes %}
+            <div class="dt-ai-cause">
+              <strong>{{ c.cause }}</strong> <span class="dt-badge status-draft">confidence: {{ c.confidence }}</span>
+              <div class="ev">Evidence: {{ c.evidence|join:"; " }}</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <p class="dt-sub mb-0">No contributing factors stand out from the aggregate statistics.</p>
+        {% endif %}
+      </div>
+
+      <div class="dt-ai-layer rec">
+        <h3>Recommended Investigation</h3>
+        {% if analysis.recommendations %}
+          <ul class="mb-0">{% for r in analysis.recommendations %}<li>{{ r }}</li>{% endfor %}</ul>
+        {% else %}
+          <p class="dt-sub mb-0">No specific investigation indicated.</p>
+        {% endif %}
+      </div>
+
+      <p class="dt-sub mb-0" style="border-top:1px solid var(--dt-border);padding-top:10px;">{{ analysis.note }}</p>
+    </div></div>
+  {% else %}
+    <div class="dt-card"><div class="dt-empty">
+      <div class="dt-empty-icon"><i class="bi bi-robot"></i></div>
+      <h3>Nothing to analyse</h3><p>{{ analysis.note }}</p>
+    </div></div>
+  {% endif %}
+{% elif not campaign %}
+  <div class="dt-card"><div class="dt-empty">
+    <div class="dt-empty-icon"><i class="bi bi-robot"></i></div>
+    <h3>Select a campaign</h3>
+    <p>Choose a processed campaign to get an evidence-based analysis of its network performance.</p>
+  </div></div>
+{% endif %}
+{% endblock %}

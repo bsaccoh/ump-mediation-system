@@ -1,0 +1,131 @@
+/* =============================================================================
+   Drive Test Intelligence — design tokens
+   -----------------------------------------------------------------------------
+   The single source of truth for colour, spacing, type, radius and elevation.
+   Every drive-test screen and script reads these; no component redefines a hex.
+   Dark mode is honoured both automatically (prefers-color-scheme) and via an
+   explicit [data-theme] override so it can follow the app's own theme toggle.
+   ========================================================================== */
+
+:root {
+  /* --- Brand / accent (aligned to the UMP sidebar indigo) ----------------- */
+  --dt-accent:            #1a56db;
+  --dt-accent-strong:     #0d47a1;
+  --dt-accent-soft:       #e8f0fe;
+
+  /* --- Surfaces & text (light) ------------------------------------------- */
+  --dt-bg:                #f4f6fa;
+  --dt-surface:           #ffffff;
+  --dt-surface-2:         #f8fafc;
+  --dt-border:            #e2e8f0;
+  --dt-border-strong:     #cbd5e1;
+  --dt-text:              #1e293b;
+  --dt-text-muted:        #64748b;
+  --dt-text-faint:        #94a3b8;
+
+  /* --- Status ------------------------------------------------------------- */
+  --dt-info:              #1a56db;
+  --dt-success:           #15803d;
+  --dt-warning:           #b45309;
+  --dt-danger:            #b91c1c;
+
+  /* --- Severity (event/finding) ------------------------------------------ */
+  --dt-sev-critical:      #b91c1c;
+  --dt-sev-high:          #ea580c;
+  --dt-sev-medium:        #b45309;
+  --dt-sev-low:           #0369a1;
+
+  /* --- Signal RAG scale (5-class RdYlGn — the RF convention) --------------
+     Always paired with a text label so it does not rely on colour alone. */
+  --dt-signal-excellent:  #1a9850;
+  --dt-signal-good:       #91cf60;
+  --dt-signal-fair:       #fee08b;
+  --dt-signal-poor:       #fc8d59;
+  --dt-signal-critical:   #d73027;
+  --dt-signal-none:       #9ca3af;   /* no service / no data */
+
+  /* --- Provenance badges -------------------------------------------------- */
+  --dt-prov-observed:     #0369a1;
+  --dt-prov-authoritative:#7c3aed;
+  --dt-prov-derived:      #b45309;
+
+  /* --- Typography --------------------------------------------------------- */
+  --dt-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --dt-font-mono: "SFMono-Regular", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+  --dt-fs-xs:   0.72rem;
+  --dt-fs-sm:   0.8rem;
+  --dt-fs-base: 0.875rem;
+  --dt-fs-md:   1rem;
+  --dt-fs-lg:   1.25rem;
+  --dt-fs-xl:   1.6rem;
+  --dt-fs-2xl:  2.1rem;
+
+  /* --- Spacing / radius / elevation -------------------------------------- */
+  --dt-space-1: 4px;
+  --dt-space-2: 8px;
+  --dt-space-3: 12px;
+  --dt-space-4: 16px;
+  --dt-space-5: 24px;
+  --dt-space-6: 32px;
+  --dt-radius:      8px;
+  --dt-radius-sm:   5px;
+  --dt-radius-lg:   12px;
+  --dt-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --dt-shadow:    0 1px 3px rgba(15, 23, 42, 0.10), 0 1px 2px rgba(15, 23, 42, 0.06);
+  --dt-shadow-lg: 0 10px 25px rgba(15, 23, 42, 0.12);
+
+  /* --- Data-table density ------------------------------------------------- */
+  --dt-row-height: 36px;
+  --dt-cell-pad-y: 6px;
+  --dt-cell-pad-x: 10px;
+}
+
+/* Dark mode — automatic, unless an explicit light theme is forced. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --dt-accent:        #5b8def;
+    --dt-accent-strong: #3b6fd4;
+    --dt-accent-soft:   #1e2a44;
+
+    --dt-bg:            #0f172a;
+    --dt-surface:       #1e293b;
+    --dt-surface-2:     #172033;
+    --dt-border:        #334155;
+    --dt-border-strong: #475569;
+    --dt-text:          #e2e8f0;
+    --dt-text-muted:    #94a3b8;
+    --dt-text-faint:    #64748b;
+
+    --dt-prov-observed:      #38bdf8;
+    --dt-prov-authoritative: #a78bfa;
+    --dt-prov-derived:       #fbbf24;
+
+    --dt-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --dt-shadow:    0 1px 3px rgba(0, 0, 0, 0.5);
+    --dt-shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* Dark mode — explicit override (follows an app theme toggle). */
+:root[data-theme="dark"] {
+  --dt-accent:        #5b8def;
+  --dt-accent-strong: #3b6fd4;
+  --dt-accent-soft:   #1e2a44;
+
+  --dt-bg:            #0f172a;
+  --dt-surface:       #1e293b;
+  --dt-surface-2:     #172033;
+  --dt-border:        #334155;
+  --dt-border-strong: #475569;
+  --dt-text:          #e2e8f0;
+  --dt-text-muted:    #94a3b8;
+  --dt-text-faint:    #64748b;
+
+  --dt-prov-observed:      #38bdf8;
+  --dt-prov-authoritative: #a78bfa;
+  --dt-prov-derived:       #fbbf24;
+
+  --dt-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --dt-shadow:    0 1px 3px rgba(0, 0, 0, 0.5);
+  --dt-shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.6);
+}

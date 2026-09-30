@@ -354,6 +354,34 @@
             </li>
             {% endif %}
 
+            <!-- ── DRIVE TEST INTELLIGENCE ── -->
+            {% if request.user.is_superuser or request.user.is_staff or request.user.is_analyst or request.user.is_regulator or request.user.is_regulatory_admin or request.user.is_auditor or request.user.is_operator %}
+            <li class="nav-section-label">Drive Test Intelligence</li>
+            <li class="nav-item">
+                <a class="nav-link nav-dropdown-toggle {% if '/drive-test/' in request.path %}{% else %}collapsed{% endif %}"
+                   data-bs-toggle="collapse" href="#driveTestMenu" role="button" title="Drive Test Intelligence"
+                   aria-expanded="{% if '/drive-test/' in request.path %}true{% else %}false{% endif %}">
+                    <i class="bi bi-reception-4"></i>
+                    <span class="nav-text">Drive Test</span>
+                    <i class="bi bi-chevron-down chevron"></i>
+                </a>
+                <ul class="nav-sub collapse {% if '/drive-test/' in request.path %}show{% endif %}" id="driveTestMenu">
+                    <li><a class="nav-link {% if request.path == '/drive-test/' %}active{% endif %}" href="{% url 'drive_test:dashboard' %}" title="Dashboard"><i class="bi bi-speedometer2"></i><span class="nav-link-text"> Dashboard</span></a></li>
+                    <li><a class="nav-link {% if '/drive-test/projects' in request.path %}active{% endif %}" href="{% url 'drive_test:project_list' %}" title="Projects"><i class="bi bi-folder"></i><span class="nav-link-text"> Projects</span></a></li>
+                    <li><a class="nav-link {% if '/drive-test/campaigns' in request.path %}active{% endif %}" href="{% url 'drive_test:campaign_list' %}" title="Campaigns"><i class="bi bi-flag"></i><span class="nav-link-text"> Campaigns</span></a></li>
+                    <li><a class="nav-link {% if '/drive-test/files' in request.path %}active{% endif %}" href="{% url 'drive_test:file_list' %}" title="Import Logs"><i class="bi bi-upload"></i><span class="nav-link-text"> Import Logs</span></a></li>
+                    <li><a class="nav-link {% if '/drive-test/processing' in request.path %}active{% endif %}" href="{% url 'drive_test:processing_monitor' %}" title="Processing"><i class="bi bi-cpu"></i><span class="nav-link-text"> Processing</span></a></li>
+                    <li><a class="nav-link {% if '/drive-test/map' in request.path or '/analysis/' in request.path %}active{% endif %}" href="{% url 'drive_test:map_index' %}" title="Map Analysis"><i class="bi bi-geo-alt"></i><span class="nav-link-text"> Map Analysis</span></a></li>
+                    <li><a class="nav-link {% if '/analytics/rf' in request.path %}active{% endif %}" href="{% url 'drive_test:analytics_index' 'rf' %}" title="RF Analysis"><i class="bi bi-reception-4"></i><span class="nav-link-text"> RF Analysis</span></a></li>
+                    <li><a class="nav-link {% if '/analytics/coverage' in request.path %}active{% endif %}" href="{% url 'drive_test:analytics_index' 'coverage' %}" title="Coverage"><i class="bi bi-broadcast"></i><span class="nav-link-text"> Coverage</span></a></li>
+                    <li><a class="nav-link {% if '/drive-test/events' in request.path %}active{% endif %}" href="{% url 'drive_test:events_index' %}" title="Events"><i class="bi bi-exclamation-triangle"></i><span class="nav-link-text"> Events</span></a></li>
+                    <li><a class="nav-link {% if '/drive-test/comparison' in request.path %}active{% endif %}" href="{% url 'drive_test:comparison' %}" title="Comparison"><i class="bi bi-bar-chart-steps"></i><span class="nav-link-text"> Comparison</span></a></li>
+                    <li><a class="nav-link {% if '/drive-test/ai-analyst' in request.path %}active{% endif %}" href="{% url 'drive_test:ai_analyst' %}" title="AI Analyst"><i class="bi bi-robot"></i><span class="nav-link-text"> AI Analyst</span></a></li>
+                    <li><a class="nav-link {% if '/drive-test/reports' in request.path %}active{% endif %}" href="{% url 'drive_test:report_list' %}" title="Reports"><i class="bi bi-file-earmark-text"></i><span class="nav-link-text"> Reports</span></a></li>
+                </ul>
+            </li>
+            {% endif %}
+
             <!-- ── CONFIGURATION ── -->
             <li class="nav-section-label">Configuration</li>
 
@@ -563,7 +591,7 @@
                 {% endif %}
                 <span class="text-muted small me-1" title="Last Login" style="font-size: 0.75rem;"><i class="bi bi-clock-history"></i> {{ user.last_login|date:"M d, Y H:i" }}</span>
                 <span class="text-muted"><i class="bi bi-person-circle"></i> {{ user.username }}</span>
-                <a href="{% url 'logout' %}" class="btn btn-sm btn-outline-secondary">Logout</a>
+                <form method="post" action="{% url 'logout' %}" style="display:inline">{% csrf_token %}<button type="submit" class="btn btn-sm btn-outline-secondary">Logout</button></form>
                 {% endif %}
             </div>
         </div>

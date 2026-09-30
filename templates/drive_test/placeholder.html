@@ -1,0 +1,21 @@
+{% extends "drive_test/_base.html" %}
+
+{% block title %}{{ title }} | Drive Test{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block dt_content %}
+<div class="dt-crumb"><a href="{% url 'drive_test:dashboard' %}">Drive Test Intelligence</a> / {{ title }}</div>
+<div class="dt-card">
+  <div class="dt-empty">
+    <div class="dt-empty-icon"><i class="bi bi-cone-striped"></i></div>
+    <h3>{{ title }}</h3>
+    <p>
+      This module is planned for
+      {% if phase %}Phase {{ phase }}{% else %}a later phase{% endif %}
+      of the Drive Test Intelligence build. It is intentionally not shown until
+      it works against real data.
+    </p>
+    <a class="dt-btn dt-btn-ghost" href="{% url 'drive_test:dashboard' %}">Back to dashboard</a>
+  </div>
+</div>
+{% endblock %}

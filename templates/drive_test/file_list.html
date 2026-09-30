@@ -1,0 +1,47 @@
+{% extends "drive_test/_base.html" %}
+{% load humanize %}
+
+{% block title %}Import Logs | Drive Test{% endblock %}
+{% block page_title %}Import Logs{% endblock %}
+
+{% block dt_content %}
+<div class="dt-page-head">
+  <div class="dt-crumb"><a href="{% url 'drive_test:dashboard' %}">Drive Test Intelligence</a> / Import Logs</div>
+  <h1>Import Logs</h1>
+  <div class="dt-sub">Every uploaded drive-test file across all campaigns.</div>
+</div>
+
+{% if files %}
+<div class="dt-table-wrap">
+  <table class="dt-table">
+    <thead>
+      <tr><th>File</th><th>Campaign</th><th>Format</th><th class="num">Size</th>
+        <th class="num">Samples</th><th>Status</th><th>Uploaded by</th><th>Uploaded</th></tr>
+    </thead>
+    <tbody>
+      {% for f in files %}
+        <tr>
+          <td>{{ f.original_name }}</td>
+          <td><a href="{% url 'drive_test:campaign_detail' f.campaign.pk %}">{{ f.campaign.name }}</a></td>
+          <td>{{ f.detected_format|default:'—' }}</td>
+          <td class="num">{{ f.size_bytes|filesizeformat }}</td>
+          <td class="num">{% if f.sample_count is None %}<span class="dt-na">—</span>{% else %}{{ f.sample_count|intcomma }}{% endif %}</td>
+          <td><span class="dt-badge status-{{ f.status|lower }}">{{ f.get_status_display }}</span></td>
+          <td>{{ f.uploaded_by.username|default:'—' }}</td>
+          <td>{{ f.uploaded_at|date:'Y-m-d H:i' }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="dt-card">
+  <div class="dt-empty">
+    <div class="dt-empty-icon"><i class="bi bi-inbox"></i></div>
+    <h3>No files imported yet</h3>
+    <p>Open a campaign and upload drive-test logs to see them here.</p>
+    <a class="dt-btn dt-btn-primary" href="{% url 'drive_test:campaign_list' %}">Go to Campaigns</a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

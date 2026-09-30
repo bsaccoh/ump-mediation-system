@@ -54,11 +54,11 @@ INSTALLED_APPS = [
     'processing',
     'reference',
     'dashboard',
-    'api',
     'portals',
     'scripts',
     'businesslogic',
     'regulatory',
+    'drive_test',
 ]
 
 MIDDLEWARE = [
@@ -240,6 +240,14 @@ REST_FRAMEWORK = {
 # Tariff compliance classification is service-driven, not UI-driven.
 TARIFF_COMPLIANCE_TOLERANCE_PCT = os.environ.get('TARIFF_COMPLIANCE_TOLERANCE_PCT', '1.00')
 
+# Drive Test AI Analyst — the evidence engine is always available and
+# deterministic; the optional LLM narrative is off by default and only phrases
+# the pre-computed evidence (it never introduces new numbers).
+DRIVE_TEST_AI_LLM_ENABLED = os.environ.get('DRIVE_TEST_AI_LLM_ENABLED', 'False').lower() in (
+    '1', 'true', 'yes', 'on',
+)
+DRIVE_TEST_AI_MODEL = os.environ.get('DRIVE_TEST_AI_MODEL', 'claude-opus-5-5')
+
 # =============================================================================
 # CELERY (async task processing)
 # =============================================================================
@@ -391,8 +399,8 @@ SERVICE_POLL_INTERVAL = int(os.environ.get('SERVICE_POLL_INTERVAL', '10'))
 # File upload
 FILE_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024  # 100MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024
-DATA_UPLOAD_MAX_NUMBER_FILES = 1000  # Support bulk drive test folder uploads (up to 1000 files)
-DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000  # 1000 files × 2 fields (file + relative_path) + form fields
+DATA_UPLOAD_MAX_NUMBER_FILES = 1000
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -445,6 +453,13 @@ LOGGING = {
             'backupCount': 5,
             'formatter': 'service',
         },
+        'file_drive_test': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(LOG_DIR, 'drive_test.log'),
+            'maxBytes': 50 * 1024 * 1024,
+            'backupCount': 5,
+            'formatter': 'service',
+        },
     },
     'loggers': {
         'mediation.collector': {
@@ -464,6 +479,11 @@ LOGGING = {
         },
         'mediation.api': {
             'handlers': ['console', 'file_api'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+        'drive_test': {
+            'handlers': ['console', 'file_drive_test'],
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },

@@ -1,0 +1,40 @@
+{% extends "drive_test/_base.html" %}
+{% block title %}Reports | Drive Test{% endblock %}
+{% block page_title %}Reports{% endblock %}
+{% block dt_content %}
+<div class="dt-page-head d-flex justify-content-between align-items-start flex-wrap gap-2">
+  <div>
+    <div class="dt-crumb"><a href="{% url 'drive_test:dashboard' %}">Drive Test Intelligence</a> / Reports</div>
+    <h1>Reports</h1>
+    <div class="dt-sub">Generated report artifacts and exports.</div>
+  </div>
+  <a class="dt-btn dt-btn-primary" href="{% url 'drive_test:report_generate' %}"><i class="bi bi-plus-lg"></i> Generate Report</a>
+</div>
+
+{% if reports %}
+<div class="dt-table-wrap"><table class="dt-table">
+  <thead><tr><th>Ref</th><th>Type</th><th>Campaign</th><th>Format</th><th>Status</th><th>By</th><th>Generated</th><th></th></tr></thead>
+  <tbody>
+    {% for r in reports %}
+      <tr>
+        <td><a href="{% url 'drive_test:report_detail' r.ref %}">{{ r.ref }}</a></td>
+        <td>{{ r.get_report_type_display }}</td>
+        <td>{{ r.campaign.name|default:'—' }}</td>
+        <td>{{ r.artifact_format|upper|default:'—' }}</td>
+        <td><span class="dt-badge status-{% if r.status == 'READY' %}completed{% elif r.status == 'FAILED' %}failed{% elif r.status == 'GENERATING' %}processing{% else %}draft{% endif %}">{{ r.get_status_display }}</span></td>
+        <td>{{ r.generated_by.username|default:'—' }}</td>
+        <td>{{ r.generated_at|date:'Y-m-d H:i' }}</td>
+        <td>{% if r.status == 'READY' %}<a href="{% url 'drive_test:report_download' r.ref %}"><i class="bi bi-download"></i></a>{% endif %}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<div class="dt-card"><div class="dt-empty">
+  <div class="dt-empty-icon"><i class="bi bi-file-earmark-text"></i></div>
+  <h3>No reports yet</h3>
+  <p>Generate an executive or technical report, or a geospatial export, from a campaign's processed data.</p>
+  <a class="dt-btn dt-btn-primary" href="{% url 'drive_test:report_generate' %}"><i class="bi bi-plus-lg"></i> Generate Report</a>
+</div></div>
+{% endif %}
+{% endblock %}

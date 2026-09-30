@@ -168,9 +168,24 @@ def enqueue_job(*, task, job_type: str, label: str, user=None,
             job.celery_task_id = async_result.id
             job.save(update_fields=['celery_task_id'])
     except Exception as exc:
-        job.status = JobRecord.Status.FAILURE
-        job.error_message = f'Failed to enqueue: {exc}'
-        job.finished_at = timezone.now()
-        job.save(update_fields=['status', 'error_message', 'finished_at'])
-        raise
+        # Broker unavailable (e.g. Redis not running) — run synchronously
+        broker_errors = ('ConnectionError', 'RedisError', 'OperationalError',
+                         'AMQPConnectionError', 'KombuError')
+        if type(exc).__name__ in broker_errors or 'redis' in str(exc).lower() or 'broker' in str(exc).lower():
+            logger.warning('Broker unavailable (%s) — running task synchronously', exc)
+            try:
+                task(job.pk, *args, **(kwargs or {}))
+            except Exception as sync_exc:
+                job.refresh_from_db()
+                if job.status not in (JobRecord.Status.FAILURE, JobRecord.Status.SUCCESS):
+                    job.status = JobRecord.Status.FAILURE
+                    job.error_message = str(sync_exc)
+                    job.finished_at = timezone.now()
+                    job.save(update_fields=['status', 'error_message', 'finished_at'])
+        else:
+            job.status = JobRecord.Status.FAILURE
+            job.error_message = f'Failed to enqueue: {exc}'
+            job.finished_at = timezone.now()
+            job.save(update_fields=['status', 'error_message', 'finished_at'])
+            raise
     return job
